@@ -689,7 +689,7 @@ const handleUpdateConfig = async (value: number | null) => {
     // 立即重拉 session，让新 matchHistoryCount 立刻生效（无需等下局）
     await requestSessionData()
     message.success('设置已保存，已刷新当前对局数据')
-  } catch (e) {
+  } catch {
     message.error('保存失败')
   }
 }

@@ -270,7 +270,7 @@ const handleUpdate = async (value: number | null) => {
   try {
     await putConfigByIpc('matchHistoryCount', value)
     message.success('设置已保存，下次获取数据时生效')
-  } catch (e) {
+  } catch {
     message.error('保存失败')
   }
 }
@@ -279,7 +279,7 @@ const handleReportingUpdate = async (value: boolean) => {
   try {
     await putConfigByIpc(CONFIG_KEYS.errorReportingEnabled, value)
     message.success('设置已保存，重启后生效')
-  } catch (e) {
+  } catch {
     message.error('保存失败')
   }
 }
@@ -288,7 +288,7 @@ const handleAiUseNotesUpdate = async (value: boolean) => {
   try {
     await putConfigByIpc(CONFIG_KEYS.aiUsePlayerNotes, value)
     message.success('设置已保存')
-  } catch (e) {
+  } catch {
     message.error('保存失败')
   }
 }
@@ -297,7 +297,7 @@ const handleDashscopeKeyUpdate = async () => {
   try {
     await putConfigByIpc(CONFIG_KEYS.dashscopeApiKey, dashscopeKey.value.trim())
     message.success('设置已保存')
-  } catch (e) {
+  } catch {
     message.error('保存失败')
   }
 }
@@ -312,7 +312,7 @@ const handleProviderUpdate = async (value: AiProviderKind) => {
     await putConfigByIpc(CONFIG_KEYS.aiModel, aiModel.value.trim())
     await putConfigByIpc(CONFIG_KEYS.aiApiKey, aiApiKey.value.trim())
     message.success('设置已保存')
-  } catch (e) {
+  } catch {
     message.error('保存失败')
   }
 }
@@ -321,7 +321,7 @@ const handleBaseUrlUpdate = async () => {
   try {
     await putConfigByIpc(CONFIG_KEYS.aiBaseUrl, aiBaseUrl.value.trim())
     message.success('设置已保存')
-  } catch (e) {
+  } catch {
     message.error('保存失败')
   }
 }
@@ -330,7 +330,7 @@ const handleModelUpdate = async () => {
   try {
     await putConfigByIpc(CONFIG_KEYS.aiModel, aiModel.value.trim())
     message.success('设置已保存')
-  } catch (e) {
+  } catch {
     message.error('保存失败')
   }
 }
@@ -339,7 +339,7 @@ const handleOpenaiKeyUpdate = async () => {
   try {
     await putConfigByIpc(CONFIG_KEYS.aiApiKey, aiApiKey.value.trim())
     message.success('设置已保存')
-  } catch (e) {
+  } catch {
     message.error('保存失败')
   }
 }

@@ -24,6 +24,7 @@ vi.mock('@renderer/composables/useGrowthReport', () => ({
 
 /** 分时曲线 mock：状态可由测试注入 */
 const curveState = vi.hoisted(() => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- vitest 1.x 的 vi.hoisted 不支持 async factory，require 是同步取 vue 的唯一方式（vitest 4 升级后可换 await import）
   const { ref } = require('vue') as typeof import('vue')
   return {
     curve: ref<import('@renderer/components/record/minuteCurve').AggregatedMinuteCurve | null>(

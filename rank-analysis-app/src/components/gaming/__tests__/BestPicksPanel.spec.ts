@@ -14,6 +14,7 @@ import type { DualPick } from '@renderer/services/counterIntel'
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }))
 
 const composableMock = vi.hoisted(() => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- vi.hoisted 工厂先于所有 import 执行,无法引用 ESM 绑定;vue 的 CJS require 是此处唯一可行解
   const { ref } = require('vue') as typeof import('vue')
   return {
     picks: ref<DualPick[]>([]),
