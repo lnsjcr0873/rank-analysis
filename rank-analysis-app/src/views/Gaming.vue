@@ -252,7 +252,6 @@
 <script lang="ts" setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { invoke } from '@tauri-apps/api/core'
 import { getConfigByIpc, putConfigByIpc } from '@renderer/services/ipc'
 import { SettingsOutline, SparklesOutline } from '@vicons/ionicons5'
 import { useMessage } from 'naive-ui'
@@ -280,12 +279,10 @@ import {
   type OpggTier
 } from '@renderer/services/opgg'
 import { useOpggTier } from '@renderer/composables/useOpggTier'
+import { useBestPickCandidates } from '@renderer/composables/useBestPickCandidates'
 import { buildRuleDraft } from '@renderer/services/bpRuleDraft'
-import { normalizeLcuPosition } from '@renderer/services/counterIntel'
 import { getChampionName, loadChampionNames } from '@renderer/services/ai/champion-names'
-import type { Position, PickRule, BanRule } from '@renderer/types/rules'
-import type { ChampSelect, Subteam } from '@renderer/types/domain/gaming'
-import type { championOption } from '@renderer/types/domain/champion'
+import type { PickRule, BanRule } from '@renderer/types/rules'
 
 /** 选人阶段 stepper 的四步定义，顺序与展示文案固定 */
 const STAGE_STEPS: Array<{ key: string; label: string }> = [
@@ -313,154 +310,26 @@ const density = computed<'normal' | 'compact'>(() =>
   sessionData.isMultiTeam ? 'compact' : 'normal'
 )
 
-const expectedSubteamSize = computed(() => (sessionData.isMultiTeam ? 2 : 5))
-
-const orderedSubteams = computed(() => {
-  // 我方排第一格；其它按 subteamId 升序
-  const my = sessionData.subteams.find(s => s.subteamId === sessionData.mySubteamId)
-  const others = sessionData.subteams
-    .filter(s => s.subteamId !== sessionData.mySubteamId)
-    .sort((a, b) => a.subteamId - b.subteamId)
-  return my ? [my, ...others] : others
-})
-
-/**
- * 推荐条落列规则：敌方已锁 ≥2 → 显示在敌方列（对位视角）；敌方未锁/不足但
- * 我方队友已亮 ≥1 → 显示在我方列（纯协同视角）。两态互斥，避免面板重复。
- */
-const panelForColumn = (st: Subteam): boolean => {
-  if (st.subteamId === sessionData.mySubteamId) {
-    return enemyLockedIds.value.length < 2 && teammatePickedIds.value.length >= 1
-  }
-  return enemyLockedIds.value.length >= 2
-}
-
-/**
- * 我方已亮队友英雄 id（含 intent/picking/locked，排除 ban 态与我自己）：
- * 协同推荐以「队友预选/锁定」为锚（场景：辅助预选 X → 推荐协同最优 AD）。
- */
-const teammatePickedIds = computed(() => {
-  const my = orderedSubteams.value.find(s => s.subteamId === sessionData.mySubteamId)
-  return (
-    my?.players
-      .filter(
-        p =>
-          p.championId > 0 &&
-          p.pickState !== 'banning' &&
-          p.summoner.puuid !== mySummonerPuuid.value
-      )
-      .map(p => p.championId) ?? []
-  )
-})
-
-/** 我本局分路（LCU 命名 top/jungle/...；空 = 位置未知，不过滤候选池） */
-const teammatesMyPosition = computed(() => {
-  const pos = myPosition.value
-  // 大小写不敏感校验：LCU 下发的是小写，直接 positionToOpgg 会漏判
-  return pos && normalizeLcuPosition(pos) ? pos : ''
-})
-
 /** 当前对局对应的 OP.GG 数据模式（ARAM 队列走 aram，其余走 ranked） */
 const opggMode = computed(() => queueIdToOpggMode(sessionData.queueId))
 
-/** 我方已亮出的英雄 id 列表（用于敌方情报卡的克制提示，过滤未选中的 0/负值） */
-const myChampionIds = computed(
-  () =>
-    orderedSubteams.value
-      .find(s => s.subteamId === sessionData.mySubteamId)
-      ?.players.map(p => p.championId)
-      .filter(id => id > 0) ?? []
-)
-
-/**
- * P2 候选池：全量英雄列表（get_champion_options 一次性拉取，懒加载）。
- * 只依赖后端命令，与 loadChampionNames 各自独立、无冲突。
- */
-const allChampionIds = ref<number[]>([])
-let championOptionsLoaded = false
-
-/** 候选池懒加载：仅 ranked && ChampSelect 且敌方锁定 ≥1 时才首次拉取 */
-async function ensureChampionOptions(): Promise<void> {
-  if (championOptionsLoaded) return
-  try {
-    const options = await invoke<championOption[]>('get_champion_options')
-    allChampionIds.value = options.map(o => o.value)
-    championOptionsLoaded = true
-  } catch (e) {
-    console.warn('[gaming] 候选池拉取失败:', e)
-  }
-}
-
-/** 敌方已锁英雄 id（>0 即已锁定；敌方 intent 恒 0 无需区分 pickState） */
-const enemyLockedIds = computed(
-  () =>
-    orderedSubteams.value
-      .filter(s => s.subteamId !== sessionData.mySubteamId)
-      .flatMap(s => s.players.map(p => p.championId))
-      .filter(id => id > 0) ?? []
-)
-
-/** 推荐隐藏规则：ranked 队列 && 选人阶段 && 候选池已就绪 */
-const showBestPicks = computed(
-  () =>
-    opggMode.value === 'ranked' &&
-    sessionData.phase === 'ChampSelect' &&
-    allChampionIds.value.length > 0
-)
-
-/**
- * 候选集：全量池排除 双方 ban / 我方已亮（含 intent、picking、locked）/
- * 敌方已锁——被占用或被禁的英雄不参与「最优应对」推荐。
- */
-const bestPickCandidates = computed(() => {
-  if (allChampionIds.value.length === 0) return []
-  const taken = new Set<number>([
-    ...myBans.value,
-    ...theirBans.value,
-    ...myChampionIds.value,
-    ...enemyLockedIds.value
-  ])
-  return allChampionIds.value.filter(id => !taken.has(id))
-})
-
-// 选人阶段敌方锁定后触发候选池懒加载（数据源就绪后 watch 重算推荐）
-watch(
-  () => [sessionData.phase, enemyLockedIds.value.length] as const,
-  ([phase, n]) => {
-    if (phase === 'ChampSelect' && n > 0) void ensureChampionOptions()
-  },
-  { immediate: true }
-)
-
-/**
- * 最后一次选人期快照。
- *
- * 离开选人期后后端不再下发 champSelect，sessionData.champSelect 会被 undefined 覆盖，
- * 但 ban 条与阶段条要留着供对局中/赛后回看，故前端自留一份。
- */
-const lastChampSelect = ref<ChampSelect | undefined>(undefined)
-
-// 新一局进入选人期时，新的 champSelect 数据还没到达——这个窗口里若不清掉快照，
-// 横幅会误显示上一局的 ban（比什么都不显示更糟：用户会以为那是本局的）。
-// phase 一变成 ChampSelect 立即清空，等新数据到达后由下面的 watch 重新填入。
-watch(
-  () => sessionData.phase,
-  (newVal, oldVal) => {
-    if (newVal === 'ChampSelect' && oldVal !== 'ChampSelect') {
-      lastChampSelect.value = undefined
-    }
-  }
-)
-
-watch(
-  () => sessionData.champSelect,
-  cs => {
-    if (cs !== undefined) lastChampSelect.value = cs
-  }
-)
-
-/** 展示用 champSelect：实时数据优先，选人期结束后回退到最后一次快照，供离开选人期后继续展示阶段/ban 条 */
-const displayChampSelect = computed(() => sessionData.champSelect ?? lastChampSelect.value)
+// 选人期「最优应对推荐条」候选计算（快照/排序/占用/候选池懒加载/落列规则，行为等价搬移）
+const bestPicks = useBestPickCandidates({ sessionData, mySummonerPuuid, opggMode })
+const {
+  displayChampSelect,
+  expectedSubteamSize,
+  orderedSubteams,
+  myPosition,
+  myBans,
+  theirBans,
+  teammatePickedIds,
+  teammatesMyPosition,
+  myChampionIds,
+  enemyLockedIds,
+  showBestPicks,
+  bestPickCandidates,
+  panelForColumn
+} = bestPicks
 
 /** 选人阶段结构化视图的 stage 字段（''=未知，驱动 stepper 是否展示） */
 const champSelectStage = computed(() => displayChampSelect.value?.stage ?? '')
@@ -468,9 +337,7 @@ const champSelectStage = computed(() => displayChampSelect.value?.stage ?? '')
 const currentStageIndex = computed(() =>
   STAGE_STEPS.findIndex(s => s.key === champSelectStage.value)
 )
-/** 我方 / 敌方已 ban 英雄 id 列表，非选人期或无 ban 数据时为空数组 */
-const myBans = computed(() => displayChampSelect.value?.myBans ?? [])
-const theirBans = computed(() => displayChampSelect.value?.theirBans ?? [])
+
 /** 任一方存在 ban 记录才展示 ban 条整块 */
 const hasBans = computed(() => myBans.value.length > 0 || theirBans.value.length > 0)
 
@@ -512,17 +379,6 @@ watch(opggMode, m => getOpggStatus(m).then(s => (opggStatus.value = s)), { immed
 const bp = useBpDecision(() => sessionData.phase)
 
 const router = useRouter()
-
-/** 我的分路，取自会话里标着「我」的那名玩家；ARAM 等无分路模式为 null */
-const myPosition = computed<Position | null>(() => {
-  const me = orderedSubteams.value
-    .flatMap(s => s.players)
-    .find(p => p.summoner.puuid === mySummonerPuuid.value)
-  const p = me?.assignedPosition?.toLowerCase()
-  return p === 'top' || p === 'jungle' || p === 'middle' || p === 'bottom' || p === 'utility'
-    ? p
-    : null
-})
 
 const showConfig = ref(false)
 const matchCount = ref(4)
