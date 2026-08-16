@@ -30,7 +30,7 @@
     "pinia": "^4.0.3",
     "vue": "^3.4.15",
     "vue-draggable-plus": "^0.6.0",
-    "vue-router": "^4.2.5"
+    "vue-router": "^5.2.0"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.11.4",
