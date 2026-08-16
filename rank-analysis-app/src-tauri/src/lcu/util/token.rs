@@ -18,8 +18,8 @@
 
 use regex::Regex;
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::LazyLock;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 /// LCU 命令行参数解析的正则：`--key`、`--key=value`、`--key="value with spaces"`。
 /// 编译一次，避免 `auth_resolver` 高频调用时重复 `Regex::new`。
@@ -345,7 +345,7 @@ mod platform {
         use winapi::um::handleapi::{CloseHandle, INVALID_HANDLE_VALUE};
         use winapi::um::processthreadsapi::{OpenProcess, TerminateProcess};
         use winapi::um::tlhelp32::{
-            CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
+            CreateToolhelp32Snapshot, PROCESSENTRY32W, Process32FirstW, Process32NextW,
             TH32CS_SNAPPROCESS,
         };
         use winapi::um::winbase::QueryFullProcessImageNameW;

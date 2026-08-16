@@ -294,8 +294,8 @@ pub async fn cloud_push_config(puuid: String) -> Result<(), String> {
 
 /// 前端做"云端 vs 本地"内容比对用的本地快照(云同步口径,已过滤,无敏感键)
 #[tauri::command]
-pub async fn get_cloud_config_snapshot(
-) -> Result<std::collections::HashMap<String, crate::config::Value>, String> {
+pub async fn get_cloud_config_snapshot()
+-> Result<std::collections::HashMap<String, crate::config::Value>, String> {
     Ok(crate::config::config_snapshot(true).await)
 }
 

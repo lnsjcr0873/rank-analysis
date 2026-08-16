@@ -623,10 +623,9 @@ pub fn map_sgp_to_match_history(raw: &Value, platform_id: &str, my_puuid: &str) 
                 map_id,
                 queue_id,
                 platform_id: plat,
-                participant_identities: vec![all_identities
-                    .get(me_idx)
-                    .cloned()
-                    .unwrap_or_default()],
+                participant_identities: vec![
+                    all_identities.get(me_idx).cloned().unwrap_or_default(),
+                ],
                 participants: vec![all_participants.get(me_idx).cloned().unwrap_or_default()],
             });
         }

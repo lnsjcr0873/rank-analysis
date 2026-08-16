@@ -1,7 +1,7 @@
-use base64::{engine::general_purpose, Engine as _};
+use base64::{Engine as _, engine::general_purpose};
 use futures_util::{SinkExt, StreamExt};
-use reqwest::header::{HeaderValue, AUTHORIZATION};
-use serde_json::{json, Value};
+use reqwest::header::{AUTHORIZATION, HeaderValue};
+use serde_json::{Value, json};
 
 use tauri::AppHandle;
 use tokio::net::TcpStream;

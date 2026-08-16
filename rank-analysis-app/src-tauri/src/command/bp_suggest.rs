@@ -8,7 +8,7 @@
 //! 纯统计无 AI；聚合全部是纯函数，方便单测。
 //! 主玩分路不用国服不可信的 lane 字段，改用常用英雄的 OP.GG 主分路加权众数。
 
-use crate::config::{get_config, Value};
+use crate::config::{Value, get_config};
 use crate::lcu::api::match_history::{Game, MatchHistory};
 use crate::lcu::api::summoner::Summoner;
 use crate::opgg::data::OpggSnapshot;

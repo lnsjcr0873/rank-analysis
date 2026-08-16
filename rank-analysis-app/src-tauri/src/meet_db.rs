@@ -17,7 +17,7 @@
 use crate::command::user_tag::OneGamePlayer;
 use crate::lcu::api::match_history::Game;
 use crate::paths::{data_file, ensure_parent_dir};
-use rusqlite::{params, Connection};
+use rusqlite::{Connection, params};
 use std::sync::{LazyLock, Mutex};
 
 /// 库文件相对配置目录的文件名。

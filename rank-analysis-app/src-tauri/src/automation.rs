@@ -32,7 +32,7 @@ use tokio::sync::watch;
 use tokio::task::JoinHandle;
 use tokio::time::interval;
 
-use crate::config::{extract_bool, get_config, register_on_change_callback, Value};
+use crate::config::{Value, extract_bool, get_config, register_on_change_callback};
 use crate::constant::game::{CHAMPSELECT, LOBBY, MATCHMAKING, READYCHECK};
 use crate::lcu::api::champion_select::{get_champion_select_session, post_accept_match};
 use crate::lcu::api::lobby::Lobby;
@@ -279,8 +279,10 @@ async fn start_match_automation() {
         if cur_state != LOBBY {
             log::warn!(
                 "Not in lobby, skipping. cur_state: {:?} (len={}), LOBBY constant: {:?} (len={}), equal: {}",
-                cur_state, cur_state.len(),
-                LOBBY, LOBBY.len(),
+                cur_state,
+                cur_state.len(),
+                LOBBY,
+                LOBBY.len(),
                 cur_state == LOBBY
             );
             continue;
@@ -1504,10 +1506,9 @@ mod tests {
         let mut map = HashMap::new();
         map.insert(
             "value".to_string(),
-            Value::List(vec![serde_json::from_value::<Value>(pick_rule_json(
-                "r1", 99, true,
-            ))
-            .unwrap()]),
+            Value::List(vec![
+                serde_json::from_value::<Value>(pick_rule_json("r1", 99, true)).unwrap(),
+            ]),
         );
         let v = Value::Map(map);
         let rules = parse_pick_rules_value(&v);

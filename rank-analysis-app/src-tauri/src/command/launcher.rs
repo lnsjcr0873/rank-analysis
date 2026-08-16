@@ -156,12 +156,12 @@ fn is_login_client_autostart(data: &str) -> bool {
 /// 跳过，待下次提权运行时再清。
 #[cfg(target_os = "windows")]
 pub fn purge_login_client_autostart() {
+    use winreg::RegKey;
     use winreg::enums::{
         HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_QUERY_VALUE, KEY_SET_VALUE, KEY_WOW64_32KEY,
         KEY_WOW64_64KEY,
     };
     use winreg::types::FromRegValue;
-    use winreg::RegKey;
 
     // HKLM 需分别查 64/32 位视图（后者即 WOW6432Node）；HKCU 的 Run 键不受
     // WOW64 重定向影响，查一次即可。

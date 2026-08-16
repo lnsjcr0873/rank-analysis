@@ -169,11 +169,7 @@ pub fn strip_wiki_markup(raw: &str) -> String {
 fn heading_champion_name(line: &str) -> Option<String> {
     let inner = line.trim().trim_matches('=').trim();
     let name = strip_wiki_markup(inner);
-    if name.is_empty() {
-        None
-    } else {
-        Some(name)
-    }
+    if name.is_empty() { None } else { Some(name) }
 }
 
 /// 解析补丁页 wikitext 的 Champions 段。

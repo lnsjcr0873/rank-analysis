@@ -583,10 +583,11 @@ mod tests {
     fn default_path_should_be_absolute_and_scoped() {
         let p = default_path("global", "emerald_plus", 34, "TOP");
         assert!(p.is_absolute());
-        assert!(p
-            .to_str()
-            .unwrap()
-            .contains("opgg_intel_global_emerald_plus_34_TOP.json"));
+        assert!(
+            p.to_str()
+                .unwrap()
+                .contains("opgg_intel_global_emerald_plus_34_TOP.json")
+        );
     }
 
     #[test]

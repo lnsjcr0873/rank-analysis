@@ -367,11 +367,7 @@ pub fn extract_string(value: &Value) -> Option<String> {
         },
         _ => None,
     }?;
-    if s.is_empty() {
-        None
-    } else {
-        Some(s)
-    }
+    if s.is_empty() { None } else { Some(s) }
 }
 
 /// 同步读取布尔配置（启动期专用）。

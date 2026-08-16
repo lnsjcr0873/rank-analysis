@@ -356,7 +356,7 @@ const handleIntelUpdate = async (value: boolean) => {
   try {
     await putConfigByIpc(CONFIG_KEYS.opggEnabled, value)
     message.success('设置已保存')
-  } catch (e) {
+  } catch {
     message.error('保存失败')
   }
 }

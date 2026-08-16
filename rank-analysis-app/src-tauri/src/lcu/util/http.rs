@@ -4,10 +4,10 @@
 //! 认证失败时自动刷新并重试一次。图片接口支持 Base64 或二进制返回。
 
 use crate::lcu::util::token::get_auth;
-use base64::engine::general_purpose;
 use base64::Engine;
+use base64::engine::general_purpose;
 use reqwest::{Client, StatusCode};
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 use std::sync::{LazyLock, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 use tokio::sync::Semaphore;
