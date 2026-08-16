@@ -242,9 +242,13 @@ describe('BpSuggestModal', () => {
     const p1 = addBtn.trigger('click')
     const p2 = convertBtn.trigger('click')
     await Promise.all([p1, p2])
-    await new Promise(r => setTimeout(r, 30))
-
-    expect(poolState).toHaveLength(2)
+    // 轮询等待两次串行写入落定——固定 30ms sleep 在并行测试负载下会竞态（vitest 3 暴露）
+    await vi.waitFor(
+      () => {
+        expect(poolState).toHaveLength(2)
+      },
+      { timeout: 2000 }
+    )
     expect(poolState).toEqual(expect.arrayContaining([86, 157]))
     const lastCall = vi.mocked(putConfigByIpc).mock.calls.at(-1)
     expect(lastCall?.[1]).toEqual(expect.arrayContaining([86, 157]))
