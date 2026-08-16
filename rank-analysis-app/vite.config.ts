@@ -10,7 +10,7 @@ export default defineConfig(() => ({
 
   resolve: {
     alias: {
-      '@renderer': resolve(__dirname, './src')
+      '@renderer': resolve(import.meta.dirname, './src')
     }
   },
 
@@ -29,12 +29,18 @@ export default defineConfig(() => ({
     },
     rollupOptions: {
       input: {
-        main: resolve(__dirname, 'index.html')
+        main: resolve(import.meta.dirname, 'index.html')
       },
       output: {
-        manualChunks: {
-          vendor: ['vue', 'vue-router', 'pinia'],
-          ui: ['naive-ui']
+        // Vite 8(Rolldown)要求 manualChunks 为函数;等价于原对象形式
+        // (vendor: vue/vue-router/pinia,ui: naive-ui)
+        manualChunks(id: string) {
+          const m = id.match(/node_modules\/((@[^/]+\/)?[^/]+)/)
+          if (!m) return
+          const pkg = m[1]
+          if (pkg === 'naive-ui') return 'ui'
+          if (pkg === 'vue' || pkg === 'vue-router' || pkg === 'pinia') return 'vendor'
+          return undefined
         }
       }
     },
