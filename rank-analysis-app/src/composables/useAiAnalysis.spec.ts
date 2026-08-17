@@ -12,7 +12,8 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { defineComponent, nextTick } from 'vue'
 import { mount } from '@vue/test-utils'
 import type { StreamCallbacks } from '@renderer/services/ai'
-import { useAiAnalysis, toErrorMessage, type AiAnalysisOptions } from './useAiAnalysis'
+import { errorMessage } from '@renderer/utils/error'
+import { useAiAnalysis, type AiAnalysisOptions } from './useAiAnalysis'
 
 const messageStub = { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() }
 vi.mock('naive-ui', () => ({ useMessage: () => messageStub }))
@@ -33,7 +34,7 @@ function makeOptions(over: Partial<AiAnalysisOptions<string>> = {}): AiAnalysisO
       captured = cb
       return neverSettled
     }) as AiAnalysisOptions<string>['generate'],
-    onFail: e => '失败: ' + toErrorMessage(e),
+    onFail: e => '失败: ' + errorMessage(e),
     ...over
   }
 }
@@ -178,19 +179,5 @@ describe('useAiAnalysis', () => {
     await new Promise<void>(r => setTimeout(r, 0))
 
     expect(aiCachePut).toHaveBeenCalledWith('key-abc', 'patch-9.9', '最终')
-  })
-
-  describe('toErrorMessage', () => {
-    it('Error 取 message', () => {
-      expect(toErrorMessage(new Error('boom'))).toBe('boom')
-    })
-    it('字符串透传', () => {
-      expect(toErrorMessage('模型超时')).toBe('模型超时')
-    })
-    it('其余给兜底文案', () => {
-      expect(toErrorMessage(null)).toBe('未知错误')
-      expect(toErrorMessage(42)).toBe('未知错误')
-      expect(toErrorMessage('')).toBe('未知错误')
-    })
   })
 })

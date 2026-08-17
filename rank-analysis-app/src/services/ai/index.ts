@@ -4,6 +4,7 @@
  * - 单场战绩复盘（analyzeMatchDetailWithAI/Stream）— 转发到 matchDetail 双阶段流水线
  */
 
+import { errorMessage } from '@renderer/utils/error'
 import type { Game } from '@renderer/types/domain/match'
 import type { SessionData } from '@renderer/types/domain/gaming'
 import type { OpggMode } from '@renderer/services/opgg'
@@ -84,9 +85,9 @@ export async function analyzeGameWithAIStream(
     // DEFAULT_SYSTEM_PROMPT 带"所有结论都必须绑定数据证据"反幻觉指令，
     // 与 prompt 内纪律区配套（旧的弱版 IN_GAME_SYSTEM_PROMPT 已淘汰）。
     await requestAIContentStream(prompt, callbacks, DEFAULT_SYSTEM_PROMPT)
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('AI analysis error:', error)
-    callbacks.onError(error.message || '网络请求失败')
+    callbacks.onError(errorMessage(error, '网络请求失败'))
   }
 }
 
@@ -127,9 +128,9 @@ export async function analyzeChampSelectWithAIStream(
     // 用 stream.ts 的 DEFAULT_SYSTEM_PROMPT（含"所有结论都必须绑定数据证据"的反幻觉指令），
     // 与选人期 prompt 里的分析纪律硬规则配套；不沿用对局中的 IN_GAME_SYSTEM_PROMPT。
     await requestAIContentStream(prompt, callbacks, DEFAULT_SYSTEM_PROMPT)
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Champ select AI analysis error:', error)
-    callbacks.onError(error.message || '网络请求失败')
+    callbacks.onError(errorMessage(error, '网络请求失败'))
   }
 }
 
@@ -148,9 +149,9 @@ export async function analyzeLiveGameWithAIStream(
   try {
     const prompt = buildLiveGamePrompt(snapshot, extras)
     await requestAIContentStream(prompt, callbacks, DEFAULT_SYSTEM_PROMPT)
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Live game AI analysis error:', error)
-    callbacks.onError(error.message || '网络请求失败')
+    callbacks.onError(errorMessage(error, '网络请求失败'))
   }
 }
 
@@ -169,9 +170,9 @@ export async function analyzeGrowthReportWithAIStream(
   try {
     const prompt = buildGrowthReportPrompt(recent, curveInsights)
     await requestAIContentStream(prompt, callbacks, DEFAULT_SYSTEM_PROMPT)
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Growth report AI analysis error:', error)
-    callbacks.onError(error.message || '网络请求失败')
+    callbacks.onError(errorMessage(error, '网络请求失败'))
   }
 }
 
@@ -209,9 +210,9 @@ export async function analyzeMatchDetailWithAIStream(
       callbacks.onChunk(out.fallbackMarkdown)
       callbacks.onDone()
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Match detail AI stream analysis error:', error)
-    callbacks.onError(error.message || '网络请求失败')
+    callbacks.onError(errorMessage(error, '网络请求失败'))
   }
 }
 

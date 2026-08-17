@@ -19,13 +19,6 @@ import { useMessage } from 'naive-ui'
 import type { StreamCallbacks } from '@renderer/services/ai'
 import { aiCacheGet, aiCachePut, dataPatch } from '@renderer/services/ai/shared/cache'
 
-/** 把 unknown 错误压成一行文案（Error 取 message；字符串透传；其余给兜底） */
-export function toErrorMessage(e: unknown): string {
-  if (e instanceof Error) return e.message || '未知错误'
-  if (typeof e === 'string' && e) return e
-  return '未知错误'
-}
-
 export interface AiAnalysisOptions<TInput> {
   /**
    * 前置守卫：返回非空文案 = 拦截本次生成并以 message.warning 提示；
@@ -61,7 +54,7 @@ export interface AiAnalysisOptions<TInput> {
  * const ai = useAiAnalysis<RecentData>({
  *   guardWarning: r => ((r.samples ?? 0) <= 0 ? '样本不足' : null),
  *   generate: (r, cb) => analyzeGrowthReportWithAIStream(r, cb),
- *   onFail: e => '成长报告生成失败: ' + toErrorMessage(e)
+ *   onFail: e => '成长报告生成失败: ' + errorMessage(e)
  * })
  * await ai.run(recent)
  * ```

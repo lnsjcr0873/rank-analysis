@@ -9,7 +9,8 @@
 import { computed, type ComputedRef, type Ref } from 'vue'
 import { analyzeGrowthReportWithAIStream } from '@renderer/services/ai'
 import { renderAnalysisReport } from '@renderer/services/ai/matchDetail/renderReport'
-import { toErrorMessage, useAiAnalysis } from './useAiAnalysis'
+import { errorMessage } from '@renderer/utils/error'
+import { useAiAnalysis } from './useAiAnalysis'
 import type { MinuteCurveInsights } from '@renderer/components/record/minuteCurve'
 import type { RecentData } from '@renderer/types/domain/analysis'
 
@@ -28,7 +29,7 @@ export function useGrowthReport(): {
       (input.recent.samples ?? 0) <= 0 ? '近 20 场暂无有效样本，无法生成成长报告' : null,
     generate: (input, callbacks) =>
       analyzeGrowthReportWithAIStream(input.recent, callbacks, input.curveInsights),
-    onFail: e => '成长报告生成失败: ' + toErrorMessage(e)
+    onFail: e => '成长报告生成失败: ' + errorMessage(e)
   })
   const renderedResult = computed(() => renderAnalysisReport(ai.result.value))
 

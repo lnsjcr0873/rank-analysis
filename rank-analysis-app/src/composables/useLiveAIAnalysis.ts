@@ -23,6 +23,7 @@ import {
   type Ref
 } from 'vue'
 import { useMessage } from 'naive-ui'
+import { errorMessage } from '@renderer/utils/error'
 import { analyzeLiveGameWithAIStream, type StreamCallbacks } from '@renderer/services/ai'
 import { renderAnalysisReport } from '@renderer/services/ai/matchDetail/renderReport'
 import { getLiveGameData, type LiveGameSnapshot } from '@renderer/services/liveGame'
@@ -168,8 +169,8 @@ export function useLiveAIAnalysis(
         myGameName: summoner?.gameName ?? '',
         recommendedItems: recommended ?? undefined
       })
-    } catch (e: any) {
-      message.error('对局中分析出错: ' + (e?.message || '未知错误'))
+    } catch (e: unknown) {
+      message.error('对局中分析出错: ' + errorMessage(e))
       loading.value = false
     }
   }

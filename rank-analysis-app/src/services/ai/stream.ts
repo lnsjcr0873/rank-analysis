@@ -7,6 +7,7 @@
  */
 
 import { invoke, Channel } from '@tauri-apps/api/core'
+import { errorMessage } from '../../utils/error'
 import { getConfigByIpc } from '../ipc'
 import { CONFIG_KEYS } from '../configKeys'
 import type { AIAnalysisResult, AiUsage, StreamCallbacks } from './types'
@@ -139,8 +140,8 @@ export async function requestAIContentStream(
       },
       onEvent: channel
     })
-  } catch (error: any) {
-    settle(() => callbacks.onError(error?.message || String(error) || '流式请求失败'))
+  } catch (error: unknown) {
+    settle(() => callbacks.onError(errorMessage(error, '流式请求失败')))
   }
 }
 
