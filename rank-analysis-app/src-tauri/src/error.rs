@@ -110,7 +110,7 @@ impl Serialize for AppError {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut s = serializer.serialize_struct("AppError", 2)?;
         s.serialize_field("code", self.code())?;
-        s.serialize_field("message", self.to_string())?;
+        s.serialize_field("message", &self.to_string())?;
         s.end()
     }
 }
