@@ -84,14 +84,14 @@ pub struct ChampionOption {
 /// # 返回值
 ///
 /// - `Ok(Vec<ChampionOption>)`: 英雄选项列表
-/// - `Err(String)`: 获取失败时的错误信息
+/// - `Err(AppError)`: 错误（当前无失败路径，将来内部异常以 `INTERNAL` 返回）
 ///
 /// # 过滤规则
 ///
 /// - 排除名称包含"末日人机"的英雄（特殊模式英雄）
 /// - 使用 `CHAMPION_MAP` 获取英雄昵称
 #[tauri::command]
-pub fn get_champion_options() -> Result<Vec<ChampionOption>, String> {
+pub fn get_champion_options() -> Result<Vec<ChampionOption>, crate::error::AppError> {
     let mut options = vec![];
     for (id, item) in asset::CHAMPION_CACHE.read().unwrap().iter() {
         let champion = item.clone();

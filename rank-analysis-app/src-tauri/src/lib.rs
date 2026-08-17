@@ -4,6 +4,7 @@ pub mod cn_patch_notes;
 pub mod command;
 pub mod config;
 pub mod constant;
+pub mod error;
 pub mod fandom;
 pub mod game_state_monitor;
 pub mod knowledge;
