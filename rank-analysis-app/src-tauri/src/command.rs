@@ -117,8 +117,11 @@ pub async fn get_live_game_data() -> Result<Option<LiveGameSnapshot>, String> {
 /// # 返回值
 ///
 /// - `Ok(Summoner)`: 成功获取当前召唤师信息
-/// - `Err(String)`: 获取失败（如客户端未登录），返回错误信息
+/// - `Err(AppError)`: 获取失败，按 `code` 分支：
+///   `LCU_NOT_RUNNING`（客户端未运行）/ `TOKEN_EXPIRED`（认证失效，可提权重启）/ `INTERNAL`
 #[tauri::command]
-pub async fn get_my_summoner() -> Result<Summoner, String> {
-    Summoner::get_my_summoner().await
+pub async fn get_my_summoner() -> Result<Summoner, crate::error::AppError> {
+    Summoner::get_my_summoner()
+        .await
+        .map_err(crate::error::AppError::from_lcu_string)
 }

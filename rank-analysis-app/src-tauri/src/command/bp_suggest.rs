@@ -8,7 +8,7 @@
 //! 纯统计无 AI；聚合全部是纯函数，方便单测。
 //! 主玩分路不用国服不可信的 lane 字段，改用常用英雄的 OP.GG 主分路加权众数。
 
-use crate::config::{get_config, Value};
+use crate::config::{Value, get_config};
 use crate::lcu::api::match_history::{Game, MatchHistory};
 use crate::lcu::api::summoner::Summoner;
 use crate::opgg::data::OpggSnapshot;
@@ -151,10 +151,10 @@ fn derive_main_position(
         let Some(metas) = snap.champions.get(champ_id) else {
             continue;
         };
-        if let Some(main) = metas.iter().find(|m| m.is_main_position) {
-            if !main.position.is_empty() {
-                *votes.entry(main.position.as_str()).or_insert(0) += games;
-            }
+        if let Some(main) = metas.iter().find(|m| m.is_main_position)
+            && !main.position.is_empty()
+        {
+            *votes.entry(main.position.as_str()).or_insert(0) += games;
         }
     }
     // 平票时 HashMap 遍历序不确定；次级 tie-break 用 position 字典序（取较小者），

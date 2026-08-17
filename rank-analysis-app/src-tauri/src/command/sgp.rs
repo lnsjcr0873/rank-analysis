@@ -149,9 +149,11 @@ mod tests {
             .find(|r| r.value == "TJ100")
             .expect("含 TJ100");
         assert_eq!(tj100.label, "联盟四区");
-        assert!(regions
-            .iter()
-            .any(|r| r.value == "HN10" && r.label == "黑色玫瑰"));
+        assert!(
+            regions
+                .iter()
+                .any(|r| r.value == "HN10" && r.label == "黑色玫瑰")
+        );
         // 官方习惯顺序：艾欧尼亚打头、腾讯区后接国际区、韩国收尾
         assert_eq!(regions.first().unwrap().value, "HN1");
         assert_eq!(regions.first().unwrap().label, "艾欧尼亚");

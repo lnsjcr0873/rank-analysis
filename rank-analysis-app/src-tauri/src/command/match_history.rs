@@ -19,6 +19,16 @@ use crate::lcu::api::{
     summoner::Summoner,
 };
 
+/// 战绩查询错误归一：索引参数非法（core 的既定文案）→ `Unsupported`；
+/// 其余按 LCU 层归类（未运行 / 认证失效 / 内部错误）。
+fn map_history_err(e: String) -> crate::error::AppError {
+    if e == "索引不能为负数" || e == "开始索引不能大于结束索引" {
+        crate::error::AppError::Unsupported(e)
+    } else {
+        crate::error::AppError::from_lcu_string(e)
+    }
+}
+
 /// 根据 PUUID 获取对局记录并增强详情与中文信息。
 ///
 /// # 参数
@@ -30,7 +40,8 @@ use crate::lcu::api::{
 /// # 返回值
 ///
 /// - `Ok(MatchHistory)`: 增强后的对局记录
-/// - `Err(String)`: 查询失败时的错误信息
+/// - `Err(AppError)`: 查询失败，按 `code` 分支——索引参数非法 `UNSUPPORTED`、
+///   LCU 未运行 `LCU_NOT_RUNNING` / 认证失效 `TOKEN_EXPIRED` / 其余 `INTERNAL`
 ///
 /// # 增强内容
 ///
@@ -42,12 +53,16 @@ pub async fn get_match_history_by_puuid(
     puuid: String,
     beg_index: i32,
     end_index: i32,
-) -> Result<MatchHistory, String> {
-    let mut match_history =
-        MatchHistory::get_match_history_by_puuid(&puuid, beg_index, end_index).await?;
-    match_history.enrich_game_detail().await?;
-    match_history.enrich_info_cn()?;
-    match_history.calculate()?;
+) -> Result<MatchHistory, crate::error::AppError> {
+    let mut match_history = MatchHistory::get_match_history_by_puuid(&puuid, beg_index, end_index)
+        .await
+        .map_err(map_history_err)?;
+    match_history
+        .enrich_game_detail()
+        .await
+        .map_err(map_history_err)?;
+    match_history.enrich_info_cn().map_err(map_history_err)?;
+    match_history.calculate().map_err(map_history_err)?;
     match_history.beg_index = beg_index;
     match_history.end_index = end_index;
     Ok(match_history)
@@ -65,6 +80,9 @@ pub async fn get_match_history_by_puuid(
 ///
 /// - `Ok(MatchHistory)`: 增强后的对局记录
 /// - `Err(String)`: 查询失败时的错误信息
+///
+/// （T11 二批命令：暂仍返回 String，把 puuid 版命令的类型化错误拍平为
+/// message；迁移时一并改为 `AppError`）
 #[tauri::command]
 pub async fn get_match_history_by_name(
     name: String,
@@ -72,7 +90,9 @@ pub async fn get_match_history_by_name(
     end_index: i32,
 ) -> Result<MatchHistory, String> {
     let puuid = Summoner::get_summoner_by_name(&name).await?.puuid;
-    get_match_history_by_puuid(puuid, beg_index, end_index).await
+    get_match_history_by_puuid(puuid, beg_index, end_index)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// 根据对局 ID 获取对局详情。

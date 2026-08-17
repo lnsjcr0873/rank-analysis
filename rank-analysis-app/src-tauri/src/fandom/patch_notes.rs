@@ -169,11 +169,7 @@ pub fn strip_wiki_markup(raw: &str) -> String {
 fn heading_champion_name(line: &str) -> Option<String> {
     let inner = line.trim().trim_matches('=').trim();
     let name = strip_wiki_markup(inner);
-    if name.is_empty() {
-        None
-    } else {
-        Some(name)
-    }
+    if name.is_empty() { None } else { Some(name) }
 }
 
 /// 解析补丁页 wikitext 的 Champions 段。
@@ -187,17 +183,17 @@ pub fn parse_patch_champions(wikitext: &str) -> HashMap<String, ChampionPatchNot
 
     let flush = |current: &mut Option<(String, Vec<String>)>,
                  result: &mut HashMap<String, ChampionPatchNote>| {
-        if let Some((name, lines)) = current.take() {
-            if !lines.is_empty() {
-                result.insert(
-                    normalize_champion_name(&name),
-                    ChampionPatchNote {
-                        champion: name,
-                        direction: aggregate_direction(&lines),
-                        lines,
-                    },
-                );
-            }
+        if let Some((name, lines)) = current.take()
+            && !lines.is_empty()
+        {
+            result.insert(
+                normalize_champion_name(&name),
+                ChampionPatchNote {
+                    champion: name,
+                    direction: aggregate_direction(&lines),
+                    lines,
+                },
+            );
         }
     };
 
@@ -218,12 +214,12 @@ pub fn parse_patch_champions(wikitext: &str) -> HashMap<String, ChampionPatchNot
             current = heading_champion_name(trimmed).map(|n| (n, Vec::new()));
             continue;
         }
-        if let Some((_, lines)) = current.as_mut() {
-            if let Some(item) = trimmed.strip_prefix('*') {
-                let text = strip_wiki_markup(item.trim_start_matches('*').trim());
-                if !text.is_empty() {
-                    lines.push(text);
-                }
+        if let Some((_, lines)) = current.as_mut()
+            && let Some(item) = trimmed.strip_prefix('*')
+        {
+            let text = strip_wiki_markup(item.trim_start_matches('*').trim());
+            if !text.is_empty() {
+                lines.push(text);
             }
         }
     }
@@ -322,17 +318,17 @@ pub async fn get_or_fetch(patch: &str) -> Arc<PatchNotesSnapshot> {
         .unwrap_or(0);
     let mut guard = SNAPSHOT.lock().await;
 
-    if let Some(snap) = guard.as_ref() {
-        if is_valid(snap, patch, now) {
-            return snap.clone();
-        }
+    if let Some(snap) = guard.as_ref()
+        && is_valid(snap, patch, now)
+    {
+        return snap.clone();
     }
-    if let Some(disk) = load_from_path(&default_path()) {
-        if is_valid(&disk, patch, now) {
-            let arc = Arc::new(disk);
-            *guard = Some(arc.clone());
-            return arc;
-        }
+    if let Some(disk) = load_from_path(&default_path())
+        && is_valid(&disk, patch, now)
+    {
+        let arc = Arc::new(disk);
+        *guard = Some(arc.clone());
+        return arc;
     }
 
     let snapshot = match fetch_patch_wikitext(patch).await {

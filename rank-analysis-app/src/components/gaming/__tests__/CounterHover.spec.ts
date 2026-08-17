@@ -17,6 +17,7 @@ vi.mock('naive-ui', async importOriginal => {
 })
 
 const composableMock = vi.hoisted(() => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- vitest 1.x 的 vi.hoisted 不支持 async factory，require 是同步取 vue 的唯一方式（vitest 4 升级后可换 await import）
   const { ref } = require('vue') as typeof import('vue')
   return {
     intel: ref<import('@renderer/services/counterIntel').ChampionIntel | null>(null),

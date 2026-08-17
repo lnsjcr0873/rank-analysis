@@ -31,12 +31,12 @@ type InvokeMock = { mockImplementation: (fn: InvokeLike) => void } & ReturnType<
 
 /** 已持久化的跨区收集成果（模拟上次收集落库），默认空数组 = 无已存数据 */
 const { savedCollected } = vi.hoisted(() => ({
-  savedCollected: vi.fn<[], Game[]>(() => [])
+  savedCollected: vi.fn<() => Game[]>(() => [])
 }))
 
 /** routeQuery 由 vi.hoisted 声明：mock 工厂与用例内都能安全引用；region 可选（本地模式用例置空） */
 const { routeQuery } = vi.hoisted(() => ({
-  routeQuery: vi.fn<[], { name: string; region?: string }>(() => ({
+  routeQuery: vi.fn<() => { name: string; region?: string }>(() => ({
     name: 'Tester#0001',
     region: 'HN10'
   }))

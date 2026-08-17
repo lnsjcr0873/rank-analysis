@@ -1,6 +1,6 @@
 //! OP.GG 内部 API 客户端：响应解析（HTTP 拉取见 `fetch_mode`，Task 3 添加）。
 
-use crate::opgg::data::{normalize_position, ChampionMeta, LaneCounter, OpggSnapshot};
+use crate::opgg::data::{ChampionMeta, LaneCounter, OpggSnapshot, normalize_position};
 use reqwest::Client;
 use serde::Deserialize;
 use std::collections::HashMap;

@@ -89,10 +89,10 @@ fn select_meta(
     position: Option<&str>,
 ) -> Option<ChampionMeta> {
     let metas = snap.champions.get(&champion_id)?;
-    if let Some(pos) = position {
-        if let Some(m) = metas.iter().find(|m| m.position == pos) {
-            return Some(m.clone());
-        }
+    if let Some(pos) = position
+        && let Some(m) = metas.iter().find(|m| m.position == pos)
+    {
+        return Some(m.clone());
     }
     metas
         .iter()
@@ -140,19 +140,21 @@ where
     let tier_ok = |snap: &OpggSnapshot| mode != "ranked" || snap.tier == tier;
 
     // 1. 内存 fresh
-    if let Some(snap) = mem_cache.get(mode).await {
-        if cache::is_fresh(&snap, now) && tier_ok(&snap) {
-            return Ok((snap, false));
-        }
+    if let Some(snap) = mem_cache.get(mode).await
+        && cache::is_fresh(&snap, now)
+        && tier_ok(&snap)
+    {
+        return Ok((snap, false));
     }
 
     // 2. 磁盘 fresh（跨重启复用）
-    if let Some(disk) = disk_load(mode) {
-        if cache::is_fresh(&disk, now) && tier_ok(&disk) {
-            let arc = Arc::new(disk);
-            mem_cache.insert(mode.to_string(), arc.clone()).await;
-            return Ok((arc, false));
-        }
+    if let Some(disk) = disk_load(mode)
+        && cache::is_fresh(&disk, now)
+        && tier_ok(&disk)
+    {
+        let arc = Arc::new(disk);
+        mem_cache.insert(mode.to_string(), arc.clone()).await;
+        return Ok((arc, false));
     }
 
     // 3. HTTP 拉取
@@ -214,12 +216,18 @@ pub async fn ensure_opgg_snapshot(
 }
 
 /// 更新（或确保）某模式的 OP.GG 数据，返回数据状态。
+///
+/// # 错误
+/// - `Err(AppError)`: 按 `code` 分支——非法模式 `UNSUPPORTED`、
+///   上游 OP.GG 非 2xx `UPSTREAM_HTTP`、其余 `INTERNAL`。
 #[tauri::command]
 pub async fn update_opgg_data(
     mode: String,
     state: State<'_, AppState>,
-) -> Result<OpggStatus, String> {
-    let (snap, stale) = ensure_opgg_snapshot(&state, &mode).await?;
+) -> Result<OpggStatus, crate::error::AppError> {
+    let (snap, stale) = ensure_opgg_snapshot(&state, &mode)
+        .await
+        .map_err(crate::error::AppError::from_upstream_string)?;
     Ok(snapshot_status(&snap, stale))
 }
 

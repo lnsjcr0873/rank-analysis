@@ -1311,10 +1311,12 @@ mod tests {
         assert_eq!(data.subteams[0].subteam_id, 1);
         assert_eq!(data.subteams[1].subteam_id, 2);
         assert_eq!(data.my_subteam_id, 1);
-        assert!(data.subteams[0]
-            .players
-            .iter()
-            .any(|p| p.summoner.puuid == "ally-1"));
+        assert!(
+            data.subteams[0]
+                .players
+                .iter()
+                .any(|p| p.summoner.puuid == "ally-1")
+        );
     }
 
     /// 造 10 条"上一局残留"的 selections（我在后五，模拟上一局在红色方）。
@@ -1576,10 +1578,12 @@ mod tests {
             ..Default::default()
         };
         build_classic_subteams(&mut session, &mut data, "enemy-7");
-        assert!(data.subteams[0]
-            .players
-            .iter()
-            .any(|p| p.summoner.puuid == "enemy-7"));
+        assert!(
+            data.subteams[0]
+                .players
+                .iter()
+                .any(|p| p.summoner.puuid == "enemy-7")
+        );
         assert_eq!(data.my_subteam_id, 1);
     }
 
@@ -1752,10 +1756,12 @@ mod tests {
         assert_eq!(data.subteams.len(), 12);
         // 我方排第一
         assert_eq!(data.my_subteam_id, 1);
-        assert!(data.subteams[0]
-            .players
-            .iter()
-            .any(|p| p.summoner.puuid == "paired-1-0"));
+        assert!(
+            data.subteams[0]
+                .players
+                .iter()
+                .any(|p| p.summoner.puuid == "paired-1-0")
+        );
         assert_eq!(data.subteams[0].players.len(), 2);
         // 4 个完整对（含我方）+ 8 个单人
         let pair_count = data

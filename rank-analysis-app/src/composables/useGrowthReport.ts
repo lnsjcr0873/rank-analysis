@@ -6,12 +6,16 @@
  *
  * @module composables/useGrowthReport
  */
-import { computed, ref, type ComputedRef, type Ref } from 'vue'
-import { useMessage } from 'naive-ui'
-import { analyzeGrowthReportWithAIStream, type StreamCallbacks } from '@renderer/services/ai'
+import { computed, type ComputedRef, type Ref } from 'vue'
+import { analyzeGrowthReportWithAIStream } from '@renderer/services/ai'
 import { renderAnalysisReport } from '@renderer/services/ai/matchDetail/renderReport'
+import { errorMessage } from '@renderer/utils/error'
+import { useAiAnalysis } from './useAiAnalysis'
 import type { MinuteCurveInsights } from '@renderer/components/record/minuteCurve'
 import type { RecentData } from '@renderer/types/domain/analysis'
+
+/** 生成入参：样本数据 + 可选分时曲线洞察 */
+type GrowthInput = { recent: RecentData; curveInsights?: MinuteCurveInsights | null }
 
 export function useGrowthReport(): {
   loading: Ref<boolean>
@@ -19,46 +23,26 @@ export function useGrowthReport(): {
   renderedResult: ComputedRef<string>
   generate: (recent: RecentData, curveInsights?: MinuteCurveInsights | null) => Promise<void>
 } {
-  const message = useMessage()
-  const loading = ref(false)
-  const result = ref('')
-  const renderedResult = computed(() => renderAnalysisReport(result.value))
+  // 状态机走通用模板；本 composable 只保留业务差异（守卫文案/失败措辞/渲染派生）
+  const ai = useAiAnalysis<GrowthInput>({
+    guardWarning: input =>
+      (input.recent.samples ?? 0) <= 0 ? '近 20 场暂无有效样本，无法生成成长报告' : null,
+    generate: (input, callbacks) =>
+      analyzeGrowthReportWithAIStream(input.recent, callbacks, input.curveInsights),
+    onFail: e => '成长报告生成失败: ' + errorMessage(e)
+  })
+  const renderedResult = computed(() => renderAnalysisReport(ai.result.value))
 
   async function generate(
     recent: RecentData,
     curveInsights?: MinuteCurveInsights | null
   ): Promise<void> {
-    if (loading.value) return
-    if ((recent.samples ?? 0) <= 0) {
-      message.warning('近 20 场暂无有效样本，无法生成成长报告')
-      return
-    }
-    loading.value = true
-    result.value = ''
-
-    try {
-      const callbacks: StreamCallbacks = {
-        onChunk: chunk => {
-          result.value += chunk
-        },
-        onDone: () => {
-          loading.value = false
-        },
-        onError: error => {
-          message.error('成长报告生成失败: ' + error)
-          loading.value = false
-        }
-      }
-      await analyzeGrowthReportWithAIStream(recent, callbacks, curveInsights)
-    } catch (e: any) {
-      message.error('成长报告生成失败: ' + (e?.message || '未知错误'))
-      loading.value = false
-    }
+    await ai.run({ recent, curveInsights })
   }
 
   return {
-    loading,
-    result,
+    loading: ai.loading,
+    result: ai.result,
     renderedResult,
     generate
   }

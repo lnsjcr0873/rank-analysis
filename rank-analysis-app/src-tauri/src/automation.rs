@@ -32,7 +32,7 @@ use tokio::sync::watch;
 use tokio::task::JoinHandle;
 use tokio::time::interval;
 
-use crate::config::{extract_bool, get_config, register_on_change_callback, Value};
+use crate::config::{Value, extract_bool, get_config, register_on_change_callback};
 use crate::constant::game::{CHAMPSELECT, LOBBY, MATCHMAKING, READYCHECK};
 use crate::lcu::api::champion_select::{get_champion_select_session, post_accept_match};
 use crate::lcu::api::lobby::Lobby;
@@ -279,8 +279,10 @@ async fn start_match_automation() {
         if cur_state != LOBBY {
             log::warn!(
                 "Not in lobby, skipping. cur_state: {:?} (len={}), LOBBY constant: {:?} (len={}), equal: {}",
-                cur_state, cur_state.len(),
-                LOBBY, LOBBY.len(),
+                cur_state,
+                cur_state.len(),
+                LOBBY,
+                LOBBY.len(),
                 cur_state == LOBBY
             );
             continue;
@@ -1050,37 +1052,34 @@ async fn apply_bp_decision(
                     && a.champion_id > 0
             })
             .map(|a| a.champion_id);
-        if let Some(locked_id) = locked {
-            if let Some(target) = decision.target.as_ref() {
-                if target.champion_id != locked_id
-                    && session.bench_champions.contains(&target.champion_id)
-                {
-                    let can_swap = {
-                        let mut guard = last_bench_swap().lock().unwrap_or_else(|e| e.into_inner());
-                        match *guard {
-                            Some(at) if at.elapsed() >= BENCH_SWAP_COOLDOWN => {
-                                *guard = Some(std::time::Instant::now());
-                                true
-                            }
-                            Some(_) => false,
-                            None => {
-                                *guard = Some(std::time::Instant::now());
-                                true
-                            }
-                        }
-                    };
-                    if can_swap {
-                        log::info!(
-                            "BP bench swap: locked {} -> target {}",
-                            locked_id,
-                            target.champion_id
-                        );
-                        crate::lcu::api::champion_select::swap_bench_champion(target.champion_id)
-                            .await?;
+        if let Some(locked_id) = locked
+            && let Some(target) = decision.target.as_ref()
+            && target.champion_id != locked_id
+            && session.bench_champions.contains(&target.champion_id)
+        {
+            let can_swap = {
+                let mut guard = last_bench_swap().lock().unwrap_or_else(|e| e.into_inner());
+                match *guard {
+                    Some(at) if at.elapsed() >= BENCH_SWAP_COOLDOWN => {
+                        *guard = Some(std::time::Instant::now());
+                        true
                     }
-                    return Ok(());
+                    Some(_) => false,
+                    None => {
+                        *guard = Some(std::time::Instant::now());
+                        true
+                    }
                 }
+            };
+            if can_swap {
+                log::info!(
+                    "BP bench swap: locked {} -> target {}",
+                    locked_id,
+                    target.champion_id
+                );
+                crate::lcu::api::champion_select::swap_bench_champion(target.champion_id).await?;
             }
+            return Ok(());
         }
     }
 
@@ -1504,10 +1503,9 @@ mod tests {
         let mut map = HashMap::new();
         map.insert(
             "value".to_string(),
-            Value::List(vec![serde_json::from_value::<Value>(pick_rule_json(
-                "r1", 99, true,
-            ))
-            .unwrap()]),
+            Value::List(vec![
+                serde_json::from_value::<Value>(pick_rule_json("r1", 99, true)).unwrap(),
+            ]),
         );
         let v = Value::Map(map);
         let rules = parse_pick_rules_value(&v);

@@ -12,7 +12,7 @@ use moka::future::Cache;
 use std::sync::{Arc, LazyLock};
 
 use crate::lcu::api::match_history::MatchHistory;
-use crate::pugg::aggregate::{aggregate_build_stats, BuildStats};
+use crate::pugg::aggregate::{BuildStats, aggregate_build_stats};
 
 /// 聚合结果缓存：`puuid:champion_id:mode:position` → BuildStats（无 TTL，容量 500）。
 static BUILD_STATS_CACHE: LazyLock<Cache<String, Arc<BuildStats>>> =

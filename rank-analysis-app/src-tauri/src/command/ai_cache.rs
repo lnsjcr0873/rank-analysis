@@ -66,10 +66,10 @@ fn load_entries(path: &Path) -> Vec<AiCacheEntry> {
 /// 整表写回（父目录不存在则先创建）。
 fn save_entries(path: &Path, entries: &[AiCacheEntry]) -> Result<(), String> {
     let json = serde_json::to_string(entries).map_err(|e| e.to_string())?;
-    if let Some(dir) = path.parent() {
-        if !dir.as_os_str().is_empty() {
-            std::fs::create_dir_all(dir).map_err(|e| format!("mkdir {}: {}", dir.display(), e))?;
-        }
+    if let Some(dir) = path.parent()
+        && !dir.as_os_str().is_empty()
+    {
+        std::fs::create_dir_all(dir).map_err(|e| format!("mkdir {}: {}", dir.display(), e))?;
     }
     std::fs::write(path, json).map_err(|e| format!("write {}: {}", path.display(), e))
 }

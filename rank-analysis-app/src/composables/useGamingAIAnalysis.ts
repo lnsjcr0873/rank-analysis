@@ -28,6 +28,7 @@ import {
   type Ref
 } from 'vue'
 import { useMessage } from 'naive-ui'
+import { errorMessage } from '@renderer/utils/error'
 import {
   analyzeChampSelectWithAIStream,
   analyzeGameWithAIStream,
@@ -134,8 +135,8 @@ export function useGamingAIAnalysis(
           opggMode: toValue(opggMode)
         })
       }
-    } catch (e: any) {
-      message.error('AI 分析出错: ' + (e?.message || '未知错误'))
+    } catch (e: unknown) {
+      message.error('AI 分析出错: ' + errorMessage(e))
       state.loading.value = false
     }
   }

@@ -18,10 +18,10 @@ use crate::lcu::{api::game_detail::GameDetail, util::http::lcu_get};
 /// 斗魂竞技场（CHERRY）历经多个 queueId 变种（1700/1710/1810/1820 ...），
 /// 与其逐个枚举追新，不如以 LCU 给的 `gameMode == "CHERRY"` 作为权威兜底。
 pub(crate) fn resolve_queue_name_cn(queue_id: i32, game_mode: &str) -> String {
-    if let Ok(id) = u32::try_from(queue_id) {
-        if let Some(s) = crate::lcu::api::game_queue::queue_name(id) {
-            return s;
-        }
+    if let Ok(id) = u32::try_from(queue_id)
+        && let Some(s) = crate::lcu::api::game_queue::queue_name(id)
+    {
+        return s;
     }
     // queueId 未收录时按 gameMode 兜底——新变种层出不穷，宁可给个模式级名字
     // 也不要在卡片上顶着刺眼的"未知"。

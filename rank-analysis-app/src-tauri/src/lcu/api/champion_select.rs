@@ -325,12 +325,11 @@ pub async fn get_champion_select_session() -> Result<SelectSession, String> {
         let cache = SELECT_CACHE.lock().unwrap();
 
         // 检查缓存是否在1秒内
-        if let Some(last_fetch_time) = cache.last_fetch_time {
-            if last_fetch_time.elapsed() <= Duration::from_secs(1) {
-                if let Some(ref session) = cache.last_session {
-                    return Ok(session.clone());
-                }
-            }
+        if let Some(last_fetch_time) = cache.last_fetch_time
+            && last_fetch_time.elapsed() <= Duration::from_secs(1)
+            && let Some(ref session) = cache.last_session
+        {
+            return Ok(session.clone());
         }
     }
 

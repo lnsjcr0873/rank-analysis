@@ -39,10 +39,10 @@ pub async fn get_phase() -> Result<String, String> {
         let cache = PHASE_CACHE.lock().unwrap();
 
         // 检查缓存是否在2秒内
-        if let Some(last_fetch_time) = cache.last_fetch_time {
-            if last_fetch_time.elapsed() <= Duration::from_millis(2000) {
-                return Ok(cache.last_phase.clone());
-            }
+        if let Some(last_fetch_time) = cache.last_fetch_time
+            && last_fetch_time.elapsed() <= Duration::from_millis(2000)
+        {
+            return Ok(cache.last_phase.clone());
         }
     }
 

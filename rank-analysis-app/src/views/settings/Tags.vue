@@ -203,7 +203,7 @@ async function fetchModes() {
     const res: any = await invoke('get_game_modes')
     // Filter out "All" (0) if not needed, or keep it.
     modeOptions.value = res.filter((m: any) => m.value !== 0)
-  } catch (e) {
+  } catch {
     message.error('加载游戏模式失败')
   }
 }
@@ -212,7 +212,7 @@ async function fetchChampions() {
   try {
     const res: any = await invoke('get_champion_options')
     championOptions.value = res
-  } catch (e) {
+  } catch {
     message.error('加载英雄列表失败')
   }
 }
@@ -278,7 +278,7 @@ async function saveTag() {
   const tagToSave = { ...currentTag.value }
 
   // Update list
-  let newTags = [...tags.value]
+  const newTags = [...tags.value]
   const idx = newTags.findIndex(t => t.id === tagToSave.id)
   if (idx >= 0) {
     newTags[idx] = tagToSave

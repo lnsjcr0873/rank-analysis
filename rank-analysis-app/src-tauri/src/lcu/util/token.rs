@@ -18,8 +18,8 @@
 
 use regex::Regex;
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::LazyLock;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 /// LCU 命令行参数解析的正则：`--key`、`--key=value`、`--key="value with spaces"`。
 /// 编译一次，避免 `auth_resolver` 高频调用时重复 `Regex::new`。
@@ -216,11 +216,12 @@ pub fn get_auth_detailed() -> Result<(String, String), AuthError> {
     }
 
     // 兜底：缓存 pid 仍在存活进程里时再试一次。
-    if cached_pid > 0 && pids.contains(&cached_pid) {
-        if let Ok(auth) = try_auth_from_pid(cached_pid) {
-            log::info!("使用缓存 PID {} 命中", cached_pid);
-            return Ok(auth);
-        }
+    if cached_pid > 0
+        && pids.contains(&cached_pid)
+        && let Ok(auth) = try_auth_from_pid(cached_pid)
+    {
+        log::info!("使用缓存 PID {} 命中", cached_pid);
+        return Ok(auth);
     }
 
     if saw_access_denied {
@@ -251,14 +252,13 @@ pub fn get_auth() -> Result<(String, String), String> {
 pub fn get_client_install_root() -> Option<std::path::PathBuf> {
     let pids = platform::find_pids_by_name("LeagueClientUx").ok()?;
     for pid in pids {
-        if let Ok(exe_path) = platform::read_image_path(pid) {
-            if let Some(root) = std::path::Path::new(&exe_path)
+        if let Ok(exe_path) = platform::read_image_path(pid)
+            && let Some(root) = std::path::Path::new(&exe_path)
                 .parent() // <root>\LeagueClient
                 .and_then(|p| p.parent())
-            // <root>
-            {
-                return Some(root.to_path_buf());
-            }
+        // <root>
+        {
+            return Some(root.to_path_buf());
         }
     }
     None
@@ -295,10 +295,11 @@ pub fn get_riot_client_auth() -> Result<(String, String), String> {
                 _ => {}
             }
         }
-        if let (Some(t), Some(p)) = (token, port) {
-            if !t.is_empty() && !p.is_empty() {
-                return Ok((t, p));
-            }
+        if let (Some(t), Some(p)) = (token, port)
+            && !t.is_empty()
+            && !p.is_empty()
+        {
+            return Ok((t, p));
         }
     }
     Err("命令行中未找到 riotclient-auth-token / riotclient-app-port".to_string())
@@ -345,7 +346,7 @@ mod platform {
         use winapi::um::handleapi::{CloseHandle, INVALID_HANDLE_VALUE};
         use winapi::um::processthreadsapi::{OpenProcess, TerminateProcess};
         use winapi::um::tlhelp32::{
-            CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
+            CreateToolhelp32Snapshot, PROCESSENTRY32W, Process32FirstW, Process32NextW,
             TH32CS_SNAPPROCESS,
         };
         use winapi::um::winbase::QueryFullProcessImageNameW;

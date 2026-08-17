@@ -368,19 +368,19 @@ where
     Fut: std::future::Future<Output = Result<(Vec<CounterItem>, Vec<SynergyItem>), String>>,
 {
     // 1. 内存 fresh
-    if let Some(intel) = mem_cache.get(key).await {
-        if is_fresh(&intel, now) {
-            return Ok((intel, false));
-        }
+    if let Some(intel) = mem_cache.get(key).await
+        && is_fresh(&intel, now)
+    {
+        return Ok((intel, false));
     }
 
     // 2. 磁盘 fresh（跨重启复用）
-    if let Some(intel) = disk_load(key) {
-        if is_fresh(&intel, now) {
-            let arc = Arc::new(intel);
-            mem_cache.insert(key.to_string(), arc.clone()).await;
-            return Ok((arc, false));
-        }
+    if let Some(intel) = disk_load(key)
+        && is_fresh(&intel, now)
+    {
+        let arc = Arc::new(intel);
+        mem_cache.insert(key.to_string(), arc.clone()).await;
+        return Ok((arc, false));
     }
 
     // 3. HTTP 拉取
@@ -583,10 +583,11 @@ mod tests {
     fn default_path_should_be_absolute_and_scoped() {
         let p = default_path("global", "emerald_plus", 34, "TOP");
         assert!(p.is_absolute());
-        assert!(p
-            .to_str()
-            .unwrap()
-            .contains("opgg_intel_global_emerald_plus_34_TOP.json"));
+        assert!(
+            p.to_str()
+                .unwrap()
+                .contains("opgg_intel_global_emerald_plus_34_TOP.json")
+        );
     }
 
     #[test]

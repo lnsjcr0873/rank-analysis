@@ -46,7 +46,7 @@ const sanitizedDescription = computed(() => {
   if (!props.description) return ''
 
   // 只保留 font 标签的 color 属性，其他标签都移除
-  let sanitized = props.description
+  const sanitized = props.description
     // 保留 font 标签及其 color 属性
     .replace(/<font\s+color=["']([^"']*)["']\s*>/gi, '<span style="color:$1">')
     .replace(/<\/font>/gi, '</span>')

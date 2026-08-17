@@ -81,11 +81,13 @@ pub async fn get_all_tag_configs() -> Result<Vec<TagConfig>, String> {
 /// # 返回值
 ///
 /// - `Ok(())`: 保存成功
-/// - `Err(String)`: 保存失败时的错误信息
+/// - `Err(AppError)`: 保存失败（写配置 IO 异常，`INTERNAL`）
 #[tauri::command]
-pub async fn save_tag_configs(configs: Vec<TagConfig>) -> Result<(), String> {
+pub async fn save_tag_configs(configs: Vec<TagConfig>) -> Result<(), crate::error::AppError> {
     let val = tags_to_value(&configs);
-    config::put_config("userTags".to_string(), val).await
+    config::put_config("userTags".to_string(), val)
+        .await
+        .map_err(crate::error::AppError::Internal)
 }
 
 // --- Foundational Types ---

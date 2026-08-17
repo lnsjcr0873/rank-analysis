@@ -1,7 +1,7 @@
-use base64::{engine::general_purpose, Engine as _};
+use base64::{Engine as _, engine::general_purpose};
 use futures_util::{SinkExt, StreamExt};
-use reqwest::header::{HeaderValue, AUTHORIZATION};
-use serde_json::{json, Value};
+use reqwest::header::{AUTHORIZATION, HeaderValue};
+use serde_json::{Value, json};
 
 use tauri::AppHandle;
 use tokio::net::TcpStream;
@@ -105,17 +105,17 @@ impl LcuListener {
                                     continue;
                                 }
 
-                                if let Ok(parsed) = serde_json::from_str::<Value>(&text) {
-                                    if let Some(array) = parsed.as_array() {
-                                        // 确保是事件类型 (opcode 8)
-                                        // 格式通常为: [8, "OnJsonApiEvent", { ...data... }]
-                                        if array.len() >= 3
-                                            && array[0] == json!(8)
-                                            && array[1] == "OnJsonApiEvent"
-                                        {
-                                            let event_data = &array[2];
-                                            self.handle_event(event_data).await;
-                                        }
+                                if let Ok(parsed) = serde_json::from_str::<Value>(&text)
+                                    && let Some(array) = parsed.as_array()
+                                {
+                                    // 确保是事件类型 (opcode 8)
+                                    // 格式通常为: [8, "OnJsonApiEvent", { ...data... }]
+                                    if array.len() >= 3
+                                        && array[0] == json!(8)
+                                        && array[1] == "OnJsonApiEvent"
+                                    {
+                                        let event_data = &array[2];
+                                        self.handle_event(event_data).await;
                                     }
                                 }
                             }
@@ -147,10 +147,10 @@ impl LcuListener {
             let data = event.get("data");
 
             // 如果是 phase 变化事件，更新缓存
-            if uri == "/lol-gameflow/v1/gameflow-phase" {
-                if let Some(phase) = data.and_then(|d| d.as_str()) {
-                    crate::lcu::api::phase::update_phase_cache(phase.to_string());
-                }
+            if uri == "/lol-gameflow/v1/gameflow-phase"
+                && let Some(phase) = data.and_then(|d| d.as_str())
+            {
+                crate::lcu::api::phase::update_phase_cache(phase.to_string());
             }
 
             // 分发事件

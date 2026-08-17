@@ -15,9 +15,11 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     // logger 此刻尚未安装，结论先带回来，等 set_boxed_logger 之后再补打。
     let migration = rank_analysis_lib::migrate::migrate_legacy_data();
 
-    // 初始化日志，默认 info 级别，可通过 RUST_LOG 环境变量覆盖
+    // 初始化日志，默认 info 级别，可通过 RUST_LOG 环境变量覆盖。
+    // set_var 在 edition 2024 下为 unsafe——此处是 main 单线程起步段
+    // （尚未 spawn 任何线程/运行时），满足其安全契约。
     if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var("RUST_LOG", "info");
+        unsafe { std::env::set_var("RUST_LOG", "info") };
     }
 
     // 配置日志格式，显示时间、级别、文件名、行号和消息。先 build 不 init，
