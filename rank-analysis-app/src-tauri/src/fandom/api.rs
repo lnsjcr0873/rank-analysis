@@ -62,24 +62,23 @@ pub async fn fetch_aram_balance_data()
         match pair {
             Ok((_name, champ_data)) => {
                 let id: Option<i32> = champ_data.get("id").ok();
-                if let Some(champ_id) = id {
-                    if let Ok(stats) = champ_data.get::<_, LuaTable>("stats") {
-                        if let Ok(aram) = stats.get::<_, LuaTable>("aram") {
-                            let balance = AramBalanceData {
-                                dmg_dealt: aram.get("dmg_dealt").ok().or(Some(1.0)),
-                                dmg_taken: aram.get("dmg_taken").ok().or(Some(1.0)),
-                                healing: aram.get("healing").ok(),
-                                shielding: aram.get("shielding").ok(),
-                                ability_haste: aram.get("ability_haste").ok(),
-                                mana_regen: aram.get("mana_regen").ok(),
-                                energy_regen: aram.get("energy_regen").ok(),
-                                attack_speed: aram.get("attack_speed").ok(),
-                                movement_speed: aram.get("movement_speed").ok(),
-                                tenacity: aram.get("tenacity").ok(),
-                            };
-                            results.insert(champ_id, balance);
-                        }
-                    }
+                if let Some(champ_id) = id
+                    && let Ok(stats) = champ_data.get::<_, LuaTable>("stats")
+                    && let Ok(aram) = stats.get::<_, LuaTable>("aram")
+                {
+                    let balance = AramBalanceData {
+                        dmg_dealt: aram.get("dmg_dealt").ok().or(Some(1.0)),
+                        dmg_taken: aram.get("dmg_taken").ok().or(Some(1.0)),
+                        healing: aram.get("healing").ok(),
+                        shielding: aram.get("shielding").ok(),
+                        ability_haste: aram.get("ability_haste").ok(),
+                        mana_regen: aram.get("mana_regen").ok(),
+                        energy_regen: aram.get("energy_regen").ok(),
+                        attack_speed: aram.get("attack_speed").ok(),
+                        movement_speed: aram.get("movement_speed").ok(),
+                        tenacity: aram.get("tenacity").ok(),
+                    };
+                    results.insert(champ_id, balance);
                 }
             }
             Err(e) => {

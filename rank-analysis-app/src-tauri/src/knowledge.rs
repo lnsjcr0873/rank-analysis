@@ -116,10 +116,10 @@ fn load_from_path(path: &Path) -> Option<KnowledgeSnapshot> {
 }
 
 fn save_to_path(snapshot: &KnowledgeSnapshot, path: &Path) {
-    if let Ok(json) = serde_json::to_string(snapshot) {
-        if let Err(e) = std::fs::write(path, json) {
-            log::warn!("knowledge cache write {}: {}", path.display(), e);
-        }
+    if let Ok(json) = serde_json::to_string(snapshot)
+        && let Err(e) = std::fs::write(path, json)
+    {
+        log::warn!("knowledge cache write {}: {}", path.display(), e);
     }
 }
 
@@ -163,18 +163,18 @@ pub async fn get_or_fetch() -> Arc<KnowledgeSnapshot> {
         .unwrap_or(0);
     let mut guard = SNAPSHOT.lock().await;
 
-    if let Some(snap) = guard.as_ref() {
-        if now - snap.checked_at < TTL_SECS {
-            return snap.clone();
-        }
+    if let Some(snap) = guard.as_ref()
+        && now - snap.checked_at < TTL_SECS
+    {
+        return snap.clone();
     }
     let disk = load_from_path(&default_path());
-    if let Some(d) = disk.as_ref() {
-        if now - d.checked_at < TTL_SECS {
-            let arc = Arc::new(d.clone());
-            *guard = Some(arc.clone());
-            return arc;
-        }
+    if let Some(d) = disk.as_ref()
+        && now - d.checked_at < TTL_SECS
+    {
+        let arc = Arc::new(d.clone());
+        *guard = Some(arc.clone());
+        return arc;
     }
 
     let fetched = match reqwest::Client::builder()

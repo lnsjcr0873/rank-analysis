@@ -65,10 +65,10 @@ async fn discover_game_root() -> Option<PathBuf> {
         return Some(root);
     }
     // 2) 客户端正在运行时直接反推（少见：已连着还点启动）
-    if let Some(root) = crate::lcu::util::token::get_client_install_root() {
-        if root.is_dir() {
-            return Some(root);
-        }
+    if let Some(root) = crate::lcu::util::token::get_client_install_root()
+        && root.is_dir()
+    {
+        return Some(root);
     }
     // 3) 扫盘兜底：默认安装位置 <盘>:\WeGameApps\英雄联盟。
     //    以「能否定位到登录客户端 exe」为准，避免命中残留空目录。

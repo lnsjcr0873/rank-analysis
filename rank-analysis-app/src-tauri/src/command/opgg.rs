@@ -89,10 +89,10 @@ fn select_meta(
     position: Option<&str>,
 ) -> Option<ChampionMeta> {
     let metas = snap.champions.get(&champion_id)?;
-    if let Some(pos) = position {
-        if let Some(m) = metas.iter().find(|m| m.position == pos) {
-            return Some(m.clone());
-        }
+    if let Some(pos) = position
+        && let Some(m) = metas.iter().find(|m| m.position == pos)
+    {
+        return Some(m.clone());
     }
     metas
         .iter()
@@ -140,19 +140,21 @@ where
     let tier_ok = |snap: &OpggSnapshot| mode != "ranked" || snap.tier == tier;
 
     // 1. 内存 fresh
-    if let Some(snap) = mem_cache.get(mode).await {
-        if cache::is_fresh(&snap, now) && tier_ok(&snap) {
-            return Ok((snap, false));
-        }
+    if let Some(snap) = mem_cache.get(mode).await
+        && cache::is_fresh(&snap, now)
+        && tier_ok(&snap)
+    {
+        return Ok((snap, false));
     }
 
     // 2. 磁盘 fresh（跨重启复用）
-    if let Some(disk) = disk_load(mode) {
-        if cache::is_fresh(&disk, now) && tier_ok(&disk) {
-            let arc = Arc::new(disk);
-            mem_cache.insert(mode.to_string(), arc.clone()).await;
-            return Ok((arc, false));
-        }
+    if let Some(disk) = disk_load(mode)
+        && cache::is_fresh(&disk, now)
+        && tier_ok(&disk)
+    {
+        let arc = Arc::new(disk);
+        mem_cache.insert(mode.to_string(), arc.clone()).await;
+        return Ok((arc, false));
     }
 
     // 3. HTTP 拉取

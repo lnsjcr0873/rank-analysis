@@ -345,10 +345,10 @@ pub fn extract_bool(value: &Value) -> Option<bool> {
 ///
 /// 前端 `putConfigByIpc` 一律写入 `Value::Map({"value": ...})`，本函数只认这一种格式。
 pub fn extract_int(value: &Value) -> Option<i64> {
-    if let Value::Map(m) = value {
-        if let Some(Value::Integer(n)) = m.get("value") {
-            return Some(*n);
-        }
+    if let Value::Map(m) = value
+        && let Some(Value::Integer(n)) = m.get("value")
+    {
+        return Some(*n);
     }
     None
 }

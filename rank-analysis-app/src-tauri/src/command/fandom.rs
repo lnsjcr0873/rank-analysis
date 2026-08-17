@@ -121,10 +121,9 @@ pub async fn get_champion_patch_note(
         .data
         .as_ref()
         .filter(|d| crate::cn_patch_notes::is_fresh(d, now))
+        && let Some(note) = crate::cn_patch_notes::note_for(data, champion_id)
     {
-        if let Some(note) = crate::cn_patch_notes::note_for(data, champion_id) {
-            return Ok(Some(note));
-        }
+        return Ok(Some(note));
     }
 
     // patch 号仅 Wiki 路径需要；空串（OP.GG 不可达时前端传入）直接视为无兜底数据，

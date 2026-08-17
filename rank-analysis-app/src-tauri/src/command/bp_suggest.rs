@@ -151,10 +151,10 @@ fn derive_main_position(
         let Some(metas) = snap.champions.get(champ_id) else {
             continue;
         };
-        if let Some(main) = metas.iter().find(|m| m.is_main_position) {
-            if !main.position.is_empty() {
-                *votes.entry(main.position.as_str()).or_insert(0) += games;
-            }
+        if let Some(main) = metas.iter().find(|m| m.is_main_position)
+            && !main.position.is_empty()
+        {
+            *votes.entry(main.position.as_str()).or_insert(0) += games;
         }
     }
     // 平票时 HashMap 遍历序不确定；次级 tie-break 用 position 字典序（取较小者），
