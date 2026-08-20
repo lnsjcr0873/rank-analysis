@@ -38,7 +38,9 @@
 
     <!-- Habit Tags Grid -->
     <div v-else-if="tags.length" class="flex flex-col gap-2.5">
-      <div class="flex items-center gap-1.5 text-xs font-bold text-white/80 uppercase tracking-wider">
+      <div
+        class="flex items-center gap-1.5 text-xs font-bold text-white/80 uppercase tracking-wider"
+      >
         <TrendingDown class="h-4 w-4 text-rose-400" />
         <span>需重点关注的习惯短板</span>
       </div>
@@ -65,12 +67,16 @@
             </div>
 
             <div class="mt-2 flex items-center justify-between text-[11px] text-white/50 font-mono">
-              <span>持续落后 <b class="text-rose-300 font-bold">{{ t.streak }}</b> 局</span>
+              <span
+                >持续落后 <b class="text-rose-300 font-bold">{{ t.streak }}</b> 局</span
+              >
               <span>检出 {{ shortDate(t.lastSeen) }}</span>
             </div>
           </div>
 
-          <p class="mt-3 rounded bg-black/40 p-2 text-[11px] leading-relaxed text-white/80 border border-white/5">
+          <p
+            class="mt-3 rounded bg-black/40 p-2 text-[11px] leading-relaxed text-white/80 border border-white/5"
+          >
             💡 {{ DIMENSION_FIX_HINTS[t.dimension] ?? '对局中主动复盘该维度' }}
           </p>
         </div>
@@ -85,7 +91,9 @@
     </div>
 
     <!-- Mistake & Goals Checklist -->
-    <div class="flex flex-col gap-3 rounded-xl border border-white/10 bg-[rgba(14,20,33,0.7)] p-4 backdrop-blur-xl shadow-lg">
+    <div
+      class="flex flex-col gap-3 rounded-xl border border-white/10 bg-[rgba(14,20,33,0.7)] p-4 backdrop-blur-xl shadow-lg"
+    >
       <!-- Goals Head & Add Form -->
       <div class="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-3">
         <div class="flex items-center gap-2">
@@ -150,13 +158,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import {
-  Target,
-  TrendingDown,
-  RotateCw,
-  CheckCircle2,
-  Plus
-} from 'lucide-vue-next'
+import { Target, TrendingDown, RotateCw, CheckCircle2, Plus } from 'lucide-vue-next'
 import { NCheckbox, NSelect } from 'naive-ui'
 import {
   addHabitGoal,

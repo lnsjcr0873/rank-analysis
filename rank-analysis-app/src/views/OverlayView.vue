@@ -1,5 +1,8 @@
 <template>
-  <div v-if="visible" class="overlay-container fixed top-3 right-3 w-80 select-none pointer-events-none z-50">
+  <div
+    v-if="visible"
+    class="overlay-container fixed top-3 right-3 w-80 select-none pointer-events-none z-50"
+  >
     <div
       class="overlay-card rounded-xl border border-white/15 bg-[rgba(10,15,26,0.88)] p-3.5 shadow-2xl backdrop-blur-xl transition-all"
     >

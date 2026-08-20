@@ -20,7 +20,7 @@
           @click="handleMenuSelect(item.key)"
         >
           <component :is="item.icon" class="h-4 w-4 shrink-0" />
-          <span class="truncate flex items-center gap-1.5 flex-1" :class="{ 'hidden': collapsed }">
+          <span class="truncate flex items-center gap-1.5 flex-1" :class="{ hidden: collapsed }">
             <span>{{ item.label }}</span>
           </span>
           <span
@@ -45,14 +45,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import {
-  Sliders,
-  Zap,
-  Tag,
-  BookmarkCheck,
-  Cloud,
-  Info
-} from 'lucide-vue-next'
+import { Sliders, Zap, Tag, BookmarkCheck, Cloud, Info } from 'lucide-vue-next'
 import { useBreakpoint } from '@renderer/composables/useBreakpoint'
 import { useCloudSyncStore } from '@renderer/features/settings/stores/cloudSync'
 
@@ -111,7 +104,9 @@ function handleMenuSelect(key: string) {
 <style scoped>
 .settings-content-enter-active,
 .settings-content-leave-active {
-  transition: opacity 0.15s ease, transform 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .settings-content-enter-from {

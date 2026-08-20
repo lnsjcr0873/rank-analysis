@@ -10,7 +10,9 @@
     </LoadingComponent>
   </template>
   <template v-else>
-    <div class="gaming-page relative flex h-full flex-col gap-3 p-3.5 pr-14 select-none overflow-y-auto">
+    <div
+      class="gaming-page relative flex h-full flex-col gap-3 p-3.5 pr-14 select-none overflow-y-auto"
+    >
       <!-- Floating Actions: Settings & AI Assistant -->
       <n-button
         circle
@@ -63,7 +65,7 @@
         v-model:show="ai.showPanel.value"
         preset="card"
         :title="aiPanelTitle"
-        style="width: 680px; max-width: 90vw;"
+        style="width: 680px; max-width: 90vw"
       >
         <template #header-extra>
           <n-button
@@ -83,8 +85,13 @@
               class="ai-result-content ai-report max-h-[60vh] overflow-y-auto"
               v-html="champSelectRendered"
             ></div>
-            <div v-else-if="ai.kindState.champSelect.loading.value" class="ai-result-skeleton flex flex-col gap-3 py-4">
-              <div class="ai-result-skeleton-label text-xs font-semibold text-white/70">AI 正在深度推演选人期阵容...</div>
+            <div
+              v-else-if="ai.kindState.champSelect.loading.value"
+              class="ai-result-skeleton flex flex-col gap-3 py-4"
+            >
+              <div class="ai-result-skeleton-label text-xs font-semibold text-white/70">
+                AI 正在深度推演选人期阵容...
+              </div>
               <n-skeleton text :repeat="4" />
               <n-skeleton text style="width: 60%" />
             </div>
@@ -95,7 +102,9 @@
 
           <n-tab-pane name="live" tab="对局中">
             <div v-if="live.inGame.value" class="ai-live-hint mb-2 text-xs text-cyan-400/80">
-              对局实时数据每 15 秒自动更新<template v-if="liveUpdatedAt"> · 最后更新 {{ liveUpdatedAt }}</template>
+              对局实时数据每 15 秒自动更新<template v-if="liveUpdatedAt">
+                · 最后更新 {{ liveUpdatedAt }}</template
+              >
             </div>
             <div
               v-if="live.renderedResult.value"
@@ -103,12 +112,18 @@
               v-html="live.renderedResult.value"
             ></div>
             <div v-else-if="live.loading.value" class="ai-result-skeleton flex flex-col gap-3 py-4">
-              <div class="ai-result-skeleton-label text-xs font-semibold text-white/70">AI 正在分析对局实时数据...</div>
+              <div class="ai-result-skeleton-label text-xs font-semibold text-white/70">
+                AI 正在分析对局实时数据...
+              </div>
               <n-skeleton text :repeat="4" />
               <n-skeleton text style="width: 60%" />
             </div>
             <div v-else class="ai-result-empty py-8 text-center text-xs text-white/50">
-              {{ live.inGame.value ? '暂无对局中分析结果，点击「重新分析」生成。' : '当前不在对局中。' }}
+              {{
+                live.inGame.value
+                  ? '暂无对局中分析结果，点击「重新分析」生成。'
+                  : '当前不在对局中。'
+              }}
             </div>
           </n-tab-pane>
 
@@ -118,8 +133,13 @@
               class="ai-result-content ai-report max-h-[60vh] overflow-y-auto"
               v-html="gameRendered"
             ></div>
-            <div v-else-if="ai.kindState.game.loading.value" class="ai-result-skeleton flex flex-col gap-3 py-4">
-              <div class="ai-result-skeleton-label text-xs font-semibold text-white/70">AI 正在深度复盘整局...</div>
+            <div
+              v-else-if="ai.kindState.game.loading.value"
+              class="ai-result-skeleton flex flex-col gap-3 py-4"
+            >
+              <div class="ai-result-skeleton-label text-xs font-semibold text-white/70">
+                AI 正在深度复盘整局...
+              </div>
               <n-skeleton text :repeat="4" />
               <n-skeleton text style="width: 60%" />
             </div>
@@ -131,7 +151,9 @@
       </n-modal>
 
       <!-- Top Intel Banner -->
-      <div class="gaming-intel-banner rounded-xl border border-white/10 bg-[rgba(15,22,36,0.7)] p-3 backdrop-blur-xl shadow-md">
+      <div
+        class="gaming-intel-banner rounded-xl border border-white/10 bg-[rgba(15,22,36,0.7)] p-3 backdrop-blur-xl shadow-md"
+      >
         <div class="banner-main" :class="{ 'banner-main-split': champSelectStage }">
           <!-- Stage Stepper -->
           <div v-if="champSelectStage" class="stage-stepper flex items-center gap-1.5">
@@ -171,7 +193,9 @@
               {{ sessionData.typeCn }}
               <template v-if="opggStatus">
                 · OP.GG {{ opggStatus.patch }}
-                <span v-if="opggStatus.stale" class="banner-stale text-rose-400 font-bold">（数据滞后）</span>
+                <span v-if="opggStatus.stale" class="banner-stale text-rose-400 font-bold"
+                  >（数据滞后）</span
+                >
               </template>
             </span>
             <n-select
@@ -188,7 +212,10 @@
         </div>
 
         <!-- Ban Bar -->
-        <div v-if="hasBans" class="ban-bar mt-2 flex items-center justify-between border-t border-white/10 pt-2 text-xs">
+        <div
+          v-if="hasBans"
+          class="ban-bar mt-2 flex items-center justify-between border-t border-white/10 pt-2 text-xs"
+        >
           <!-- My Bans -->
           <div class="ban-group flex items-center gap-2">
             <span class="ban-group-label text-white/60 font-semibold">我方禁用</span>
@@ -240,7 +267,10 @@
         <NextActionCard :actions="nextActions ?? []" />
 
         <!-- Matchup Hints -->
-        <div v-if="lineupScores.scores.value.matchupHints.length > 0" class="matchup-hints mt-2 flex flex-col gap-1">
+        <div
+          v-if="lineupScores.scores.value.matchupHints.length > 0"
+          class="matchup-hints mt-2 flex flex-col gap-1"
+        >
           <div
             v-for="(hint, i) in lineupScores.scores.value.matchupHints"
             :key="i"
@@ -260,7 +290,10 @@
       </div>
 
       <!-- Battlefield Subteam 5v5 Grid -->
-      <div class="gaming-grid flex flex-col gap-4" :class="{ 'gaming-grid-multi': sessionData.isMultiTeam }">
+      <div
+        class="gaming-grid flex flex-col gap-4"
+        :class="{ 'gaming-grid-multi': sessionData.isMultiTeam }"
+      >
         <div v-for="st of orderedSubteams" :key="`subteam-col-${st.subteamId}`" class="subteam-col">
           <BestPicksPanel
             v-if="showBestPicks && panelForColumn(st)"
@@ -449,13 +482,12 @@ async function ensureChampionOptions(): Promise<void> {
 }
 
 /** 敌方已锁英雄 id */
-const enemyLockedIds = computed(
-  () =>
-    orderedSubteams.value
-      .filter(s => s.subteamId !== sessionData.mySubteamId)
-      .flatMap(s => s.players)
-      .map(p => p.championId)
-      .filter(id => id > 0)
+const enemyLockedIds = computed(() =>
+  orderedSubteams.value
+    .filter(s => s.subteamId !== sessionData.mySubteamId)
+    .flatMap(s => s.players)
+    .map(p => p.championId)
+    .filter(id => id > 0)
 )
 
 /** 推荐候选池数据源 */
@@ -557,7 +589,13 @@ const myPosition = computed<Position | undefined>(() => {
     .find(s => s.subteamId === sessionData.mySubteamId)
     ?.players.find(p => p.summoner.puuid === mySummonerPuuid.value)
   const pos = me?.assignedPosition?.toLowerCase()
-  if (pos === 'top' || pos === 'jungle' || pos === 'middle' || pos === 'bottom' || pos === 'utility') {
+  if (
+    pos === 'top' ||
+    pos === 'jungle' ||
+    pos === 'middle' ||
+    pos === 'bottom' ||
+    pos === 'utility'
+  ) {
     return pos as Position
   }
   return undefined
