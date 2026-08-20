@@ -1,89 +1,153 @@
 <template>
-  <div class="player-bar">
-    <div class="player-bar-identity">
-      <div class="player-bar-avatar-wrap">
-        <n-avatar
-          round
-          :size="36"
-          :src="`${assetPrefix}/profile/${summoner?.profileIconId}`"
-          fallback-src="https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726f1epng.png"
-          class="player-bar-avatar"
-        />
-        <div class="player-bar-level">{{ summoner.summonerLevel }}</div>
-      </div>
-      <n-flex vertical :size="1" class="player-bar-identity-text">
-        <n-flex align="center" :size="4" :wrap="false">
-          <n-ellipsis class="player-bar-nickname">
-            {{ summoner.gameName }}
-          </n-ellipsis>
-          <span class="player-bar-tagline">#{{ summoner.tagLine }}</span>
-          <n-button text size="tiny" @click="copyName">
-            <template #icon>
-              <n-icon><copy-outline /></n-icon>
-            </template>
-          </n-button>
-          <PlayerNoteBadge
-            v-if="summoner.puuid"
-            :puuid="summoner.puuid"
-            :game-name="summoner.gameName"
-            :tag-line="summoner.tagLine"
-            size="normal"
+  <div
+    class="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-white/[0.08] bg-[rgba(14,20,33,0.75)] p-3.5 backdrop-blur-xl shadow-lg transition-all"
+  >
+    <!-- Left: Identity Section (Avatar, Name, Tag, Copy, Note) -->
+    <div class="flex items-center gap-3 min-w-0">
+      <!-- Avatar with Level Badge -->
+      <div class="relative flex-shrink-0">
+        <div
+          class="h-11 w-11 overflow-hidden rounded-full border-2 border-[#c8aa6e]/60 shadow-[0_0_10px_rgba(200,170,110,0.25)] bg-slate-950"
+        >
+          <img
+            :src="`${assetPrefix}/profile/${summoner?.profileIconId}`"
+            :alt="summoner?.gameName"
+            class="h-full w-full object-cover"
+            @error="
+              ($event.target as HTMLImageElement).src =
+                'https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726f1epng.png'
+            "
           />
-        </n-flex>
-      </n-flex>
-    </div>
-
-    <n-flex v-if="!isCrossRegion" align="center" :size="14" class="player-bar-stats">
-      <div v-if="hasRealTier(soloInfo)" class="player-bar-rank">
-        <img :src="tierImage(soloInfo.tier)" class="player-bar-rank-img" alt="" />
-        <span class="player-bar-rank-text">{{ formatCompactTierText(soloInfo) }}</span>
-      </div>
-      <div class="player-bar-rate">
-        <span class="player-bar-rate-label">单双</span>
-        <span class="player-bar-rate-value">{{ solo5v5.winRate }}%</span>
-      </div>
-      <div class="player-bar-rate">
-        <span class="player-bar-rate-label">灵活</span>
-        <span class="player-bar-rate-value">{{ flex.winRate }}%</span>
-      </div>
-      <div class="player-bar-recent">
-        <span class="player-bar-recent-label">近20场</span>
-        <span class="player-bar-recent-value">
-          {{ recentData.wins }}W{{ recentData.losses }}L
+        </div>
+        <span
+          class="absolute -bottom-1 -right-1 rounded-full bg-black/90 px-1.5 py-0.2 text-[10px] font-bold text-amber-300 border border-white/20 shadow-sm"
+        >
+          {{ summoner?.summonerLevel }}
         </span>
       </div>
-    </n-flex>
 
-    <div class="player-bar-platform">
-      <n-popover trigger="hover" v-if="serverDescription">
-        <template #trigger>
-          <n-tag size="small" :bordered="false" type="default" class="player-bar-platform-tag">
+      <!-- Name & Tag -->
+      <div class="flex flex-col min-w-0">
+        <div class="flex items-center gap-1.5">
+          <span
+            class="truncate text-sm font-bold text-white/95 max-w-[160px]"
+            :title="summoner?.gameName"
+          >
+            {{ summoner?.gameName }}
+          </span>
+          <span class="text-xs text-white/40 font-mono">#{{ summoner?.tagLine }}</span>
+
+          <button
+            type="button"
+            class="flex h-5 w-5 items-center justify-center rounded text-white/40 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+            title="复制召唤师名称及Tag"
+            @click="copyName"
+          >
+            <Copy class="h-3 w-3" />
+          </button>
+
+          <PlayerNoteBadge
+            v-if="summoner?.puuid"
+            :puuid="summoner?.puuid"
+            :game-name="summoner?.gameName"
+            :tag-line="summoner?.tagLine"
+            size="normal"
+          />
+        </div>
+
+        <!-- Platform/Server Tag -->
+        <div class="mt-0.5 flex items-center gap-1.5">
+          <n-popover trigger="hover" v-if="serverDescription">
+            <template #trigger>
+              <span
+                class="inline-flex items-center rounded bg-white/5 px-1.5 py-0.2 text-[10px] text-white/60 border border-white/10 hover:bg-white/10 transition-colors cursor-help"
+              >
+                {{ platformIdCn }}
+              </span>
+            </template>
+            <div class="text-xs max-w-xs">{{ serverDescription }}</div>
+          </n-popover>
+          <span
+            v-else
+            class="inline-flex items-center rounded bg-white/5 px-1.5 py-0.2 text-[10px] text-white/60 border border-white/10"
+          >
             {{ platformIdCn }}
-          </n-tag>
-        </template>
-        <span>{{ serverDescription }}</span>
-      </n-popover>
-      <n-tag v-else size="small" :bordered="false" type="default" class="player-bar-platform-tag">
-        {{ platformIdCn }}
-      </n-tag>
+          </span>
+        </div>
+      </div>
     </div>
 
-    <UnifiedTagRow
-      v-if="!isCrossRegion && (tags.length > 0 || hasNote)"
-      class="player-bar-tags"
-      :tags="tags"
-      :puuid="summoner.puuid"
-      :game-name="summoner.gameName"
-      :tag-line="summoner.tagLine"
-    />
+    <!-- Center: Rank & Winrate Stats -->
+    <div v-if="!isCrossRegion" class="flex flex-wrap items-center gap-4">
+      <!-- Solo Rank Badge -->
+      <div
+        v-if="hasRealTier(soloInfo)"
+        class="flex items-center gap-2 rounded-lg bg-white/5 px-2.5 py-1.5 border border-white/10"
+      >
+        <img :src="tierImage(soloInfo.tier)" class="h-7 w-7 object-contain drop-shadow" alt="" />
+        <div class="flex flex-col">
+          <span class="text-[10px] text-white/50 leading-none">单双排位</span>
+          <span class="text-xs font-bold text-amber-200/90 leading-tight">
+            {{ formatCompactTierText(soloInfo) }}
+          </span>
+        </div>
+      </div>
+
+      <!-- Solo 5v5 Win Rate -->
+      <div
+        class="flex flex-col items-center rounded-lg bg-white/5 px-3 py-1 border border-white/10"
+      >
+        <span class="text-[10px] text-white/50">单双胜率</span>
+        <span
+          class="text-xs font-bold font-mono"
+          :class="solo5v5.winRate >= 50 ? 'text-emerald-400' : 'text-slate-300'"
+        >
+          {{ solo5v5.winRate }}%
+        </span>
+      </div>
+
+      <!-- Flex Win Rate -->
+      <div
+        class="flex flex-col items-center rounded-lg bg-white/5 px-3 py-1 border border-white/10"
+      >
+        <span class="text-[10px] text-white/50">灵活胜率</span>
+        <span
+          class="text-xs font-bold font-mono"
+          :class="flex.winRate >= 50 ? 'text-emerald-400' : 'text-slate-300'"
+        >
+          {{ flex.winRate }}%
+        </span>
+      </div>
+
+      <!-- Recent 20 Games -->
+      <div
+        class="flex flex-col items-center rounded-lg bg-white/5 px-3 py-1 border border-white/10"
+      >
+        <span class="text-[10px] text-white/50">近20场战绩</span>
+        <div class="flex items-center gap-1 text-xs font-bold font-mono">
+          <span class="text-emerald-400">{{ recentData.wins }}W</span>
+          <span class="text-rose-400">{{ recentData.losses }}L</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Tags Row -->
+    <div v-if="!isCrossRegion && (tags.length > 0 || hasNote)" class="flex items-center">
+      <UnifiedTagRow
+        :tags="tags"
+        :puuid="summoner?.puuid"
+        :game-name="summoner?.gameName"
+        :tag-line="summoner?.tagLine"
+      />
+    </div>
   </div>
 </template>
 
 <script lang="ts" setup>
-import { assetPrefix } from '@renderer/services/http'
-import { CopyOutline } from '@vicons/ionicons5'
 import { computed } from 'vue'
-import { NAvatar, NButton, NFlex, NIcon, NEllipsis, NPopover, NTag, useMessage } from 'naive-ui'
+import { Copy } from 'lucide-vue-next'
+import { NPopover, useMessage } from 'naive-ui'
+import { assetPrefix } from '@renderer/services/http'
 import type { Rank, RecentWinRate, Summoner } from '@renderer/types/domain/player'
 import type { RankTag, RecentData } from '@renderer/types/domain/analysis'
 import { usePlayerNotesStore } from '@renderer/features/settings/stores/playerNotes'
@@ -116,169 +180,16 @@ const serverDescription = computed(() => serverDesc[props.platformIdCn])
 const soloInfo = computed(() => props.rank.queueMap.RANKED_SOLO_5x5)
 
 const notesStore = usePlayerNotesStore()
-/** 当前玩家是否已有手动备注（决定标签行在无系统标签时是否仍展示备注 chip） */
-const hasNote = computed(() => !!props.summoner.puuid && !!notesStore.getNote(props.summoner.puuid))
+const hasNote = computed(
+  () => !!props.summoner?.puuid && !!notesStore.getNote(props.summoner.puuid)
+)
 
 const message = useMessage()
 const copyName = () => {
+  if (!props.summoner?.gameName) return
   navigator.clipboard
     .writeText(props.summoner.gameName + '#' + props.summoner.tagLine)
     .then(() => message.success('复制成功'))
     .catch(() => message.error('复制失败'))
 }
 </script>
-
-<style lang="css" scoped>
-/* 顶部紧凑玩家条（60px 高度级）：身份 | 段位与胜率 | 大区标签；有标签/备注时第二行 */
-.player-bar {
-  display: flex;
-  align-items: center;
-  gap: var(--space-16);
-  height: 60px;
-  padding: 0 var(--space-16);
-  background: var(--glass-bg-mid);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-sm), var(--glass-highlight);
-}
-
-.player-bar-identity {
-  display: flex;
-  align-items: center;
-  gap: var(--space-10);
-  min-width: 0;
-}
-
-.player-bar-avatar-wrap {
-  position: relative;
-  flex-shrink: 0;
-}
-
-.player-bar-avatar :deep(img) {
-  border: 1px solid var(--border-subtle);
-}
-
-.player-bar-level {
-  position: absolute;
-  bottom: -4px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-subtle);
-  padding: 0 var(--space-4);
-  height: 14px;
-  line-height: 12px;
-  border-radius: var(--radius-pill);
-  font-size: var(--font-size-2xs);
-  color: var(--text-secondary);
-  white-space: nowrap;
-  z-index: 1;
-}
-
-.player-bar-identity-text {
-  flex: 1;
-  min-width: 0;
-}
-
-:deep(.player-bar-nickname) {
-  max-width: 220px;
-  font-size: var(--font-size-md);
-  font-weight: 700;
-}
-
-.player-bar-tagline {
-  font-size: var(--font-size-xs);
-  color: var(--text-tertiary);
-  white-space: nowrap;
-}
-
-.player-bar-stats {
-  margin-left: auto;
-  flex-shrink: 0;
-}
-
-.player-bar-rank {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-4);
-}
-
-.player-bar-rank-img {
-  width: 24px;
-  height: 24px;
-  object-fit: contain;
-}
-
-.player-bar-rank-text {
-  font-size: var(--font-size-sm);
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.player-bar-rate {
-  display: inline-flex;
-  align-items: baseline;
-  gap: var(--space-4);
-  white-space: nowrap;
-}
-
-.player-bar-rate-label {
-  font-size: var(--font-size-xs);
-  color: var(--text-tertiary);
-}
-
-.player-bar-rate-value {
-  font-size: var(--font-size-sm);
-  font-weight: 700;
-  color: var(--semantic-win);
-}
-
-.player-bar-recent {
-  display: inline-flex;
-  align-items: baseline;
-  gap: var(--space-4);
-  white-space: nowrap;
-}
-
-.player-bar-recent-label {
-  font-size: var(--font-size-xs);
-  color: var(--text-tertiary);
-}
-
-.player-bar-recent-value {
-  font-size: var(--font-size-sm);
-  font-weight: 700;
-}
-
-.player-bar-platform {
-  flex-shrink: 0;
-}
-
-.player-bar-platform-tag {
-  font-size: var(--font-size-2xs);
-  padding: 0 var(--space-4);
-  height: 18px;
-}
-
-.player-bar-tags {
-  flex-shrink: 0;
-}
-
-/* 窄窗：隐藏次要统计（灵活/近20场），保留段位与单双胜率，防止横向溢出 */
-@media (max-width: 900px) {
-  .player-bar-rate:nth-of-type(2),
-  .player-bar-recent {
-    display: none;
-  }
-}
-
-@media (max-width: 640px) {
-  .player-bar-rank-text {
-    display: none;
-  }
-
-  .player-bar-tags {
-    display: none;
-  }
-}
-</style>

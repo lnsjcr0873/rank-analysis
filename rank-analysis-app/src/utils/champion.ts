@@ -7,6 +7,19 @@ import { NAvatar, type SelectOption, type SelectRenderLabel, type SelectRenderTa
 import { assetPrefix } from '@renderer/services/http'
 import type { championOption } from '@renderer/types/domain/champion'
 
+export function getChampionIconUrl(championId?: number | string): string {
+  if (
+    championId === undefined ||
+    championId === null ||
+    championId === '' ||
+    championId === 0 ||
+    championId === -1
+  ) {
+    return `${assetPrefix}/champion/-1`
+  }
+  return `${assetPrefix}/champion/${championId}`
+}
+
 /** 后端已统一 camelCase，仅匹配 label / realName / nickname */
 export function filterChampionFunc(input: string, option: SelectOption) {
   if (!input) return true

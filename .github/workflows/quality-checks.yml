@@ -2,9 +2,9 @@ name: Quality Checks
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, develop, gemini-3.7-f, 'gemini*' ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main, develop, gemini-3.7-f, 'gemini*' ]
 
 permissions:
   contents: read

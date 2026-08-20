@@ -1,129 +1,165 @@
 <template>
-  <n-flex justify="space-between" class="header-inner">
-    <div class="header-left" data-tauri-drag-region>
-      <div class="logo-badge">R</div>
-      <span class="header-title">Rank Analysis</span>
-    </div>
-    <div class="header-center">
-      <n-input
-        class="input-lolid header-search"
-        type="text"
-        size="small"
-        placeholder="召唤师名#Tag"
-        v-model:value="searchValue"
-        @keyup.enter="onClinkSearch"
+  <header
+    class="flex h-12 w-full select-none items-center justify-between border-b border-white/[0.08] bg-[rgba(11,15,25,0.85)] px-3 backdrop-blur-xl transition-colors"
+    data-tauri-drag-region
+  >
+    <!-- Left: Brand Logo & Title -->
+    <div class="flex items-center gap-2.5" data-tauri-drag-region>
+      <div
+        class="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-[#c8aa6e] via-[#94733c] to-[#463714] text-xs font-black text-black shadow-[0_0_12px_rgba(200,170,110,0.35)] border border-[#f0e6d2]/40"
       >
-        <!-- 前缀：大区下拉（框内左侧，细分隔线隔开），整体仍是一个搜索框 -->
-        <template #prefix>
-          <n-dropdown
-            trigger="click"
-            size="small"
-            :options="regionDropdownOptions"
-            @select="onRegionSelect"
-          >
-            <button class="region-trigger" type="button" @mousedown.prevent>
-              <span class="region-trigger-label">{{ selectedRegionLabel }}</span>
-              <n-icon :size="11" class="region-trigger-caret"><ChevronDownOutline /></n-icon>
-            </button>
-          </n-dropdown>
-          <span class="region-divider" />
-        </template>
-        <template #suffix>
-          <n-button text quaternary @click="onClinkSearch" class="header-icon-btn">
-            <n-icon :component="Search" />
-          </n-button>
-        </template>
-      </n-input>
+        R
+      </div>
+      <div class="flex flex-col" data-tauri-drag-region>
+        <span class="text-xs font-bold tracking-wider gold-gradient-text uppercase">
+          Rank Analysis
+        </span>
+        <span class="text-[9px] text-white/40 font-mono leading-none">v2.0 PRO</span>
+      </div>
     </div>
-    <div class="header-right" data-tauri-drag-region>
-      <!-- 升级药丸：只在探测到新版本时出现，点击直接走升级流程（不跳转关于页）。
-           availableUpdate 来自 useAppUpdate 的模块级单例状态，无论是这里的启动
-           静默检查，还是用户在「关于」页手动检查，两处共用同一份状态。 -->
-      <Transition name="update-pill-fade">
+
+    <!-- Center: Search & Region Selector -->
+    <div class="flex items-center">
+      <div
+        class="flex h-8 items-center rounded-md border border-white/10 bg-white/5 px-1.5 transition-all focus-within:border-[#c8aa6e]/60 focus-within:bg-white/10 focus-within:ring-1 focus-within:ring-[#c8aa6e]/30"
+      >
+        <!-- Region Dropdown Trigger -->
+        <n-dropdown
+          trigger="click"
+          size="small"
+          :options="regionDropdownOptions"
+          @select="onRegionSelect"
+        >
+          <button
+            type="button"
+            class="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-white/70 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+          >
+            <span>{{ selectedRegionLabel }}</span>
+            <ChevronDown class="h-3 w-3 text-white/50" />
+          </button>
+        </n-dropdown>
+
+        <span class="mx-1.5 h-3.5 w-[1px] bg-white/15" />
+
+        <!-- Search Input -->
+        <input
+          v-model="searchValue"
+          type="text"
+          placeholder="召唤师名#Tag"
+          class="w-48 bg-transparent text-xs text-white/90 placeholder:text-white/40 focus:outline-none"
+          @keyup.enter="onClinkSearch"
+        />
+
+        <button
+          type="button"
+          class="flex h-6 w-6 items-center justify-center rounded text-white/60 hover:bg-white/10 hover:text-white cursor-pointer transition-colors"
+          title="搜索战绩"
+          @click="onClinkSearch"
+        >
+          <Search class="h-3.5 w-3.5" />
+        </button>
+      </div>
+    </div>
+
+    <!-- Right: Update Pill, Actions, Theme & Window Controls -->
+    <div class="flex items-center gap-1.5" data-tauri-drag-region>
+      <!-- Update Pill -->
+      <Transition name="fade">
         <button
           v-if="availableUpdate"
           type="button"
-          class="update-pill"
+          class="update-pill flex items-center gap-1 rounded-full bg-emerald-500/20 px-2.5 py-1 text-xs font-semibold text-emerald-300 border border-emerald-500/40 shadow-[0_0_10px_rgba(34,197,94,0.25)] hover:bg-emerald-500/30 transition-all cursor-pointer animate-pulse"
           :title="`发现新版本 v${availableUpdate.version}，点击立即更新`"
           @click="onUpdatePillClick"
         >
-          <n-icon :size="13" :component="ArrowUpCircleOutline" />
+          <ArrowUpCircle class="h-3.5 w-3.5" />
           <span>新版 v{{ availableUpdate.version }}</span>
         </button>
       </Transition>
+
+      <!-- Close League Client Button -->
       <n-popconfirm positive-text="关闭游戏" negative-text="取消" @positive-click="closeLeague">
         <template #trigger>
-          <n-tooltip trigger="hover">
-            <template #trigger>
-              <n-button
-                quaternary
-                circle
-                class="header-icon-btn close-league-btn"
-                :disabled="!isConnected"
-                :loading="closingLeague"
-              >
-                <n-icon :component="PowerOutline" />
-              </n-button>
-            </template>
-            {{ isConnected ? '关闭游戏客户端' : '游戏客户端未运行' }}
-          </n-tooltip>
+          <button
+            type="button"
+            class="flex h-7 w-7 items-center justify-center rounded-md text-white/60 hover:bg-rose-500/20 hover:text-rose-300 disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
+            :disabled="!isConnected"
+            :title="isConnected ? '关闭游戏客户端' : '游戏客户端未运行'"
+          >
+            <Power class="h-3.5 w-3.5" />
+          </button>
         </template>
         确定关闭游戏客户端？
       </n-popconfirm>
-      <n-tooltip trigger="hover">
-        <template #trigger>
-          <n-button quaternary circle class="header-icon-btn" @click="openGithubLink">
-            <n-icon :component="LogoGithub" />
-          </n-button>
-        </template>
-        访问 wnzzer 的项目主页
-      </n-tooltip>
-      <n-divider vertical />
-      <n-switch
-        :value="themeSwitch"
-        @click="settingsStore.toggleTheme()"
-        size="small"
-        class="header-theme-switch"
+
+      <!-- GitHub Link -->
+      <button
+        type="button"
+        class="flex h-7 w-7 items-center justify-center rounded-md text-white/60 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+        title="访问 GitHub 项目主页"
+        @click="openGithubLink"
       >
-        <template #checked>
-          <n-icon>
-            <sunny-outline />
-          </n-icon>
-        </template>
-        <template #unchecked>
-          <n-icon>
-            <moon-outline />
-          </n-icon>
-        </template>
-      </n-switch>
-      <div class="window-controls">
-        <n-button quaternary text @click="minimizeWindow" class="window-control-btn">
-          <n-icon><remove-outline /></n-icon>
-        </n-button>
-        <n-button quaternary text @click="maximizeWindow" class="window-control-btn">
-          <n-icon><square-outline /></n-icon>
-        </n-button>
-        <n-button quaternary text @click="closeWindow" class="window-control-btn close-btn">
-          <n-icon><close-outline /></n-icon>
-        </n-button>
+        <Github class="h-3.5 w-3.5" />
+      </button>
+
+      <!-- Theme Switch -->
+      <button
+        type="button"
+        class="flex h-7 w-7 items-center justify-center rounded-md text-white/60 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+        :title="themeSwitch ? '切换为暗色模式' : '切换为亮色模式'"
+        @click="settingsStore.toggleTheme()"
+      >
+        <Sun v-if="themeSwitch" class="h-3.5 w-3.5 text-amber-300" />
+        <Moon v-else class="h-3.5 w-3.5 text-slate-300" />
+      </button>
+
+      <span class="mx-1 h-3.5 w-[1px] bg-white/15" />
+
+      <!-- Window Controls -->
+      <div class="flex items-center gap-0.5">
+        <button
+          type="button"
+          class="flex h-7 w-7 items-center justify-center rounded text-white/60 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+          title="最小化"
+          @click="minimizeWindow"
+        >
+          <Minus class="h-3.5 w-3.5" />
+        </button>
+        <button
+          type="button"
+          class="flex h-7 w-7 items-center justify-center rounded text-white/60 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+          title="最大化 / 还原"
+          @click="maximizeWindow"
+        >
+          <Square class="h-3 w-3" />
+        </button>
+        <button
+          type="button"
+          class="flex h-7 w-7 items-center justify-center rounded text-white/60 hover:bg-rose-500/80 hover:text-white transition-colors cursor-pointer"
+          title="关闭"
+          @click="closeWindow"
+        >
+          <X class="h-3.5 w-3.5" />
+        </button>
       </div>
     </div>
-  </n-flex>
+  </header>
 </template>
+
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import {
   Search,
-  LogoGithub,
-  RemoveOutline,
-  SquareOutline,
-  CloseOutline,
-  SunnyOutline,
-  MoonOutline,
-  ChevronDownOutline,
-  PowerOutline,
-  ArrowUpCircleOutline
-} from '@vicons/ionicons5'
+  ChevronDown,
+  Power,
+  Github,
+  Sun,
+  Moon,
+  Minus,
+  Square,
+  X,
+  ArrowUpCircle
+} from 'lucide-vue-next'
 import { darkTheme, useMessage } from 'naive-ui'
 import { Window } from '@tauri-apps/api/window'
 import { openUrl } from '@tauri-apps/plugin-opener'
@@ -135,23 +171,6 @@ import { closeLeagueByIpc } from '@renderer/services/ipc'
 import { getSgpRegions } from '@renderer/features/record/services/sgp'
 import { useAppUpdate } from '@renderer/composables/useAppUpdate'
 import { GATE_SETTLE_MS, GATE_FALLBACK_MS } from '@renderer/composables/useStartupDialogs'
-
-/**
- * 应用顶部导航栏组件
- *
- * 提供应用的核心导航和控制功能：
- * - 品牌展示（Logo + 标题）
- * - 召唤师搜索功能
- * - 主题切换（亮色/暗色）
- * - 窗口控制（最小化/最大化/关闭）
- * - GitHub 项目链接
- *
- * @example
- * <!-- 在 Framework.vue 中使用 -->
- * <n-layout-header class="header" bordered>
- *   <Header />
- * </n-layout-header>
- */
 
 /** 当前应用窗口实例，用于执行窗口控制操作 */
 const currentWindow = Window.getCurrent()
@@ -192,13 +211,6 @@ const message = useMessage()
 /** 关闭游戏请求进行中（防重复点击 + 按钮 loading 态） */
 const closingLeague = ref(false)
 
-/**
- * 关闭游戏客户端（顶栏电源按钮的确认回调）
- *
- * 调用后端 close_league：优先 LCU 优雅退出，失败兜底强杀客户端进程链。
- * 成功/失败均以 message 反馈；连接断开由 game-state-changed 事件自然驱动
- * UI（按钮变为禁用态），无需在此额外处理。
- */
 const closeLeague = async (): Promise<void> => {
   if (closingLeague.value) return
   closingLeague.value = true
@@ -212,34 +224,16 @@ const closeLeague = async (): Promise<void> => {
   }
 }
 
-/**
- * 主题开关状态
- * 根据当前主题是否为暗色主题计算开关状态
- */
+/** 主题开关状态 */
 const themeSwitch = computed(() => settingsStore.theme.name !== darkTheme.name)
 
 // ─── 顶栏升级药丸 ───────────────────────────────────────────────────────────
-// availableUpdate 是 useAppUpdate 的模块级单例状态：无论是这里的启动静默检查
-// 查到的，还是用户在「关于」页手动检查查到的，都共享同一份，药丸都能感知到。
 const { availableUpdate, checkForUpdates, showUpdateDialog } = useAppUpdate()
 
-/** 药丸点击：已经是"已发现更新"的信号，直接弹确认框走升级流程，不用再查一遍 */
 const onUpdatePillClick = (): void => {
   if (availableUpdate.value) showUpdateDialog(availableUpdate.value)
 }
 
-/**
- * 启动时静默查一次更新。
- *
- * 借用 useStartupDialogs 同款"等首屏就绪 + 兜底超时"开闸节奏（GATE_SETTLE_MS /
- * GATE_FALLBACK_MS，见该文件说明）：优先等 LCU 连接建立后再沉淀一小段时间，
- * 避免与首屏加载抢资源；一直连不上则靠兜底超时兜底触发，不然先开工具后开
- * 游戏的用户永远等不到检查。更新检查与启动弹窗队列是两回事，这里只借时间
- * 常量保持"不抢首屏"的口径一致，不接入 useStartupDialogs 的弹窗队列本身。
- *
- * Header 只在主窗口挂载一次（详情子窗口不渲染 Header，见 Framework.vue），
- * 无需处理重复触发/卸载清理。
- */
 function scheduleSilentUpdateCheck(): void {
   let scheduled = false
   function fire(): void {
@@ -269,294 +263,41 @@ onMounted(() => {
   scheduleSilentUpdateCheck()
 })
 
-/**
- * 打开项目 GitHub 主页
- * 使用 Tauri 的 open API 打开项目仓库链接
- */
 const openGithubLink = async (): Promise<void> => {
   await openUrl('https://github.com/wnzzer/rank-analysis')
 }
 
-/**
- * 执行召唤师搜索
- * 将用户输入的召唤师名称作为查询参数跳转到战绩查询页面
- * 使用时间戳作为查询参数确保每次搜索都会触发页面刷新
- *
- * @example
- * 用户输入 "SummonerName" 后按回车或点击搜索按钮
- * 页面跳转到 /Record?name=SummonerName&t=1234567890
- */
 const onClinkSearch = async (): Promise<void> => {
   if (!searchValue.value.trim()) return
 
   await router.push({
     path: '/Record',
-    // region 为空表示当前区，不带该参数即走原本地 LCU 流程
     query: { name: searchValue.value, region: selectedRegion.value || undefined, t: Date.now() }
   })
   searchValue.value = ''
 }
 
-/**
- * 最小化应用窗口
- */
 const minimizeWindow = (): void => {
   currentWindow.minimize()
 }
 
-/**
- * 最大化/还原应用窗口
- */
 const maximizeWindow = (): void => {
   currentWindow.toggleMaximize()
 }
 
-/**
- * 关闭应用窗口
- */
 const closeWindow = (): void => {
   currentWindow.close()
 }
 </script>
-<style lang="css" scoped>
-/* 不加 backdrop-filter：顶栏底色近实色，模糊毫无视觉贡献；且透明窗口
-   （tauri transparent:true）+ backdrop-filter 会诱发 WebView2 合成层
-   冻结——运行时切主题后顶栏卡死在旧主题配色，整页刷新才恢复 */
-.header-inner {
-  width: 100%;
-  height: 100%;
-  align-items: center;
+
+<style scoped>
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
 }
 
-.header-left {
-  width: 33%;
-  text-align: left;
-  display: flex;
-  align-items: center;
-  gap: var(--space-8);
-  padding-left: var(--space-12);
-}
-
-.logo-badge {
-  width: 22px;
-  height: 22px;
-  border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--semantic-win) 18%, transparent);
-  border: 1px solid color-mix(in srgb, var(--semantic-win) 28%, transparent);
-  box-shadow: var(--decor-glow-win);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: var(--font-size-sm);
-  font-weight: 900;
-  color: var(--semantic-win);
-  flex-shrink: 0;
-  -webkit-app-region: no-drag;
-}
-
-.header-title {
-  color: var(--text-primary);
-  font-weight: 700;
-  font-size: var(--font-size-md);
-  letter-spacing: 0.02em;
-}
-
-.header-center {
-  flex: 1;
-  width: 33%;
-  display: flex;
-  justify-content: center;
-  max-width: 340px;
-  margin: 0 auto;
-}
-
-.input-lolid {
-  -webkit-app-region: no-drag;
-  pointer-events: auto;
-}
-
-/* 单一搜索框：大区做成框内左侧下拉前缀，整体一个边框/背景/聚焦态 */
-.header-search {
-  width: 100%;
-  border-radius: var(--radius-md);
-}
-
-.header-search :deep(.n-input-wrapper) {
-  transition:
-    box-shadow var(--dur-fast) var(--ease-expo),
-    border-color var(--dur-fast) var(--ease-expo);
-}
-
-/* 聚焦时整框发光 */
-.header-center:focus-within .header-search :deep(.n-input-wrapper) {
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--semantic-win) 20%, transparent);
-  border-color: color-mix(in srgb, var(--semantic-win) 35%, transparent) !important;
-}
-
-/* 前缀：大区下拉触发器（小号文字 + 箭头，hover 淡底） */
-.region-trigger {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  height: 20px;
-  padding: 0 var(--space-4);
-  border: none;
-  border-radius: var(--radius-control);
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-  line-height: 1;
-  cursor: pointer;
-  white-space: nowrap;
-  -webkit-app-region: no-drag;
-  transition:
-    color var(--dur-fast) var(--ease-expo),
-    background-color var(--dur-fast) var(--ease-expo);
-}
-
-.region-trigger:hover {
-  color: var(--text-primary);
-  background: var(--glass-bg-high);
-}
-
-.region-trigger-caret {
-  color: var(--text-tertiary);
-  flex-shrink: 0;
-}
-
-/* 前缀与输入文本之间的细分隔线 */
-.region-divider {
-  width: 1px;
-  height: 14px;
-  margin: 0 var(--space-8) 0 5px;
-  background: var(--glass-border);
-  flex-shrink: 0;
-}
-
-.header-right {
-  width: 33%;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--space-4);
-}
-
-.header-icon-btn {
-  -webkit-app-region: no-drag;
-  color: var(--text-secondary);
-  border-radius: var(--radius-sm);
-  transition:
-    background-color var(--dur-fast) var(--ease-expo),
-    color var(--dur-fast) var(--ease-expo),
-    transform var(--dur-fast) var(--ease-expo);
-}
-
-/* 升级药丸：探测到新版本才出现，金色强调（与 MatchDetailModal 的 MVP/荣誉
-   chip 同一套 --accent-gold token 语言），不占用未检测到更新时的空间 */
-.update-pill {
-  -webkit-app-region: no-drag;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-4);
-  height: 22px;
-  padding: 0 var(--space-8);
-  border: none;
-  border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--accent-gold) 16%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-gold) 40%, transparent);
-  color: var(--accent-gold-deep);
-  font-size: var(--font-size-xs);
-  font-weight: 700;
-  white-space: nowrap;
-  cursor: pointer;
-  flex-shrink: 0;
-  transition:
-    background-color var(--dur-fast) var(--ease-expo),
-    transform var(--dur-fast) var(--ease-expo);
-}
-
-.update-pill:hover {
-  background: color-mix(in srgb, var(--accent-gold) 28%, transparent);
-  transform: scale(1.04);
-}
-
-.update-pill-fade-enter-active,
-.update-pill-fade-leave-active {
-  transition:
-    opacity var(--dur-normal) var(--ease-expo),
-    transform var(--dur-normal) var(--ease-expo);
-}
-
-.update-pill-fade-enter-from,
-.update-pill-fade-leave-to {
+.fade-enter-from,
+.fade-leave-to {
   opacity: 0;
-  transform: scale(0.85);
-}
-
-.header-icon-btn:hover {
-  color: var(--text-primary);
-  background-color: var(--glass-bg-high);
-  transform: scale(1.08);
-}
-
-/* 关闭游戏按钮：hover 用败方红提示这是个"下线"动作；禁用态（未连接）淡化 */
-.close-league-btn:hover:not(:disabled) {
-  color: var(--semantic-loss);
-  background-color: color-mix(in srgb, var(--semantic-loss) 14%, transparent);
-}
-
-.close-league-btn:disabled {
-  opacity: 0.4;
-}
-
-.header-theme-switch {
-  margin-right: var(--space-8);
-}
-
-.window-controls {
-  display: inline-flex;
-  align-items: center;
-  -webkit-app-region: no-drag;
-}
-
-.window-control-btn {
-  padding: var(--space-6) var(--space-12);
-  font-size: var(--font-size-md);
-  color: var(--text-secondary);
-  border-radius: var(--radius-sm);
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition:
-    color var(--dur-fast) var(--ease-expo),
-    background-color var(--dur-fast) var(--ease-expo),
-    transform var(--dur-fast) var(--ease-expo);
-  position: relative;
-}
-
-.window-control-btn:hover {
-  color: var(--text-primary);
-  background-color: var(--glass-bg-high);
-  transform: scale(1.05);
-}
-
-.window-control-btn:active {
-  transform: scale(0.98);
-}
-
-.close-btn:hover {
-  background-color: color-mix(in srgb, var(--semantic-loss) 75%, transparent);
-  color: white; /* theme-fixed: 红底白字,两主题一致 */
-}
-
-.window-control-btn::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 1;
 }
 </style>

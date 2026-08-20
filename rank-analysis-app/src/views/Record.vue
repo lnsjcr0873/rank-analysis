@@ -1,5 +1,6 @@
 <template>
-  <div class="record-page">
+  <div class="record-page flex h-full flex-col gap-3 p-3 select-none overflow-hidden">
+    <!-- Top Player Bar -->
     <PlayerBar
       :summoner="summoner"
       :rank="rank"
@@ -10,9 +11,14 @@
       :platform-id-cn="platformIdCn"
       :is-cross-region="isCrossRegion"
     />
-    <div class="record-main">
-      <!-- 宽窗（>=1064）：左栏常驻；窄窗：隐藏并改用 NDrawer 抽屉 -->
-      <aside v-if="!isMobile && !isCompact" class="record-side">
+
+    <!-- Main Content Area: Side Panel + Match History -->
+    <div class="record-main relative flex flex-1 gap-4 min-h-0">
+      <!-- Wide Screen Sticky Left Panel -->
+      <aside
+        v-if="!isMobile && !isCompact"
+        class="record-side w-[320px] shrink-0 overflow-y-auto pr-1"
+      >
         <UserSidePanel
           :rank="rank"
           :solo5v5="solo5v5"
@@ -30,19 +36,19 @@
           @open-game="focusGameId = $event"
         />
       </aside>
-      <!-- 窄窗抽屉触发：内容区左上角悬浮按钮（左栏入口） -->
-      <n-button
+
+      <!-- Compact Screen Drawer Trigger Button -->
+      <button
         v-if="isCompact"
-        circle
-        quaternary
-        class="record-side-trigger"
+        type="button"
+        class="record-side-trigger absolute top-2 left-2 z-20 flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-[rgba(15,22,36,0.85)] text-white/70 shadow-md backdrop-blur-md hover:border-[#c8aa6e]/60 hover:text-white cursor-pointer transition-all"
         :title="sideOpen ? '收起侧栏' : '打开侧栏'"
         @click="sideOpen = !sideOpen"
       >
-        <template #icon>
-          <n-icon><MenuOutline /></n-icon>
-        </template>
-      </n-button>
+        <Menu class="h-4 w-4" />
+      </button>
+
+      <!-- Drawer for Compact Mode -->
       <n-drawer
         v-if="isCompact"
         v-model:show="sideOpen"
@@ -70,8 +76,13 @@
           />
         </n-drawer-content>
       </n-drawer>
-      <main :ref="el => bindContentScroll(el)" class="record-content">
-        <div class="record-content-inner">
+
+      <!-- Center Match History List -->
+      <main
+        :ref="el => bindContentScroll(el)"
+        class="record-content flex-1 overflow-y-auto px-1 pb-6"
+      >
+        <div class="record-content-inner max-w-[1280px] mx-auto">
           <MatchHistory
             :focus-game-id="focusGameId"
             :champion-filter="championFilterCmd"
@@ -85,27 +96,27 @@
           />
         </div>
       </main>
-      <!-- 回到顶部 FAB：内容区滚动超过阈值后显示，点击平滑回顶 -->
+
+      <!-- Back to Top Floating Button -->
       <Transition name="fab">
-        <n-button
+        <button
           v-if="showBackTop"
-          circle
-          class="record-back-top"
+          type="button"
+          class="record-back-top absolute right-4 bottom-6 z-30 flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-[rgba(15,22,36,0.9)] text-white/80 shadow-xl backdrop-blur-md hover:border-[#c8aa6e]/60 hover:text-white cursor-pointer transition-all"
           title="回到顶部"
           @click="scrollToTop"
         >
-          <template #icon>
-            <n-icon><ArrowUpOutline /></n-icon>
-          </template>
-        </n-button>
+          <ArrowUp class="h-4 w-4" />
+        </button>
       </Transition>
     </div>
   </div>
 </template>
+
 <script lang="ts" setup>
 import { onBeforeUnmount, ref, watch, type ComponentPublicInstance } from 'vue'
-import { NButton, NIcon, NDrawer, NDrawerContent } from 'naive-ui'
-import { ArrowUpOutline, MenuOutline } from '@vicons/ionicons5'
+import { NDrawer, NDrawerContent } from 'naive-ui'
+import { ArrowUp, Menu } from 'lucide-vue-next'
 import MatchHistory from '../components/record/MatchHistory.vue'
 import PlayerBar from '../components/record/PlayerBar.vue'
 import UserSidePanel from '../components/record/UserSidePanel.vue'
@@ -115,15 +126,12 @@ import { useBreakpoint } from '@renderer/composables/useBreakpoint'
 import { usePlayerRecordData } from '@renderer/composables/usePlayerRecordData'
 
 const { isMobile, isCompact } = useBreakpoint()
-/** 窄窗左栏抽屉开关（进入宽窗时自动关闭，避免跨断点残留） */
 const sideOpen = ref(false)
 
-/** 断点回到宽窗（左栏常驻）时关闭抽屉，避免残留遮罩/状态 */
 watch(isCompact, compact => {
   if (!compact) sideOpen.value = false
 })
 
-/** 回到顶部 FAB：内容区滚动超过阈值显示，点击平滑回顶 */
 const BACK_TOP_THRESHOLD = 400
 const showBackTop = ref(false)
 const contentEl = ref<HTMLElement | null>(null)
@@ -148,6 +156,7 @@ function bindContentScroll(el: Element | ComponentPublicInstance | null) {
 onBeforeUnmount(() => {
   contentEl.value?.removeEventListener('scroll', onContentScroll)
 })
+
 const {
   summoner,
   rank,
@@ -161,149 +170,29 @@ const {
   updateMode
 } = usePlayerRecordData()
 
-/** 左栏英雄池数据与当前 hover 高亮（由 MatchHistory 上抛） */
 const championPool = ref<ChampionPoolEntry[]>([])
 const hoveredChampion = ref<number | null>(null)
-/** 近期对局全量（由 MatchHistory 上抛，D-P3 分时曲线数据源） */
 const games = ref<Game[]>([])
-/** 好友/宿敌弹窗点击对局：交给 MatchHistory 定位并就地展开（处理后清空） */
 const focusGameId = ref<number | null>(null)
-/** 英雄池点击：作为一次性命令下发给 MatchHistory 设置英雄筛选（处理后清空） */
 const championFilterCmd = ref(0)
-/** 战绩列表当前生效的英雄筛选（MatchHistory 上抛，用于英雄池选中态） */
 const activeChampion = ref(0)
 </script>
+
 <style scoped>
-/* 整页 token 覆盖:所有子组件 var(--font-size-*) 自动跟随 viewport 缩放 (1100→2200) */
-.record-page {
-  --font-size-2xs: clamp(10px, calc(10px + (100vw - 1100px) * 2 / 1100), 12px);
-  --font-size-xs: clamp(11px, calc(11px + (100vw - 1100px) * 2 / 1100), 13px);
-  --font-size-sm: clamp(12px, calc(12px + (100vw - 1100px) * 2 / 1100), 14px);
-  --font-size-base: clamp(13px, calc(13px + (100vw - 1100px) * 3 / 1100), 16px);
-  --font-size-md: clamp(14px, calc(14px + (100vw - 1100px) * 4 / 1100), 18px);
-  --font-size-lg: clamp(16px, calc(16px + (100vw - 1100px) * 4 / 1100), 20px);
-  --font-size-xl: clamp(18px, calc(18px + (100vw - 1100px) * 5 / 1100), 23px);
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  gap: var(--space-12);
-}
-
-.record-main {
-  display: flex;
-  flex: 1;
-  min-height: 0;
-  gap: var(--space-16);
-  position: relative;
-}
-
-/* 左栏：独立滚动 + sticky 聚合内容（长列表滚动时左栏不丢） */
-.record-side {
-  width: 320px;
-  flex-shrink: 0;
-  overflow-y: auto;
-  padding-right: var(--space-4);
-  scrollbar-width: none;
-}
-
 .record-side::-webkit-scrollbar {
   display: none;
-}
-
-/* 窄窗左栏抽屉：与常驻左栏同宽、同视觉（glass 卡片列） */
-.record-side-drawer :deep(.n-drawer-body) {
-  padding: var(--space-12);
-}
-
-.record-side-drawer :deep(.n-drawer-content-wrapper) {
-  background: color-mix(in srgb, var(--bg-base) 96%, transparent);
-}
-
-/* 窄窗抽屉触发按钮：内容区左上角悬浮，hover 高亮 */
-.record-side-trigger {
-  position: absolute;
-  top: var(--space-8);
-  left: var(--space-8);
-  z-index: 20;
-  color: var(--text-secondary);
-  background: var(--glass-bg-mid);
-  border: 1px solid var(--glass-border);
-  box-shadow: var(--shadow-sm), var(--glass-highlight);
-  transition:
-    color var(--dur-fast) var(--ease-expo),
-    border-color var(--dur-fast) var(--ease-expo),
-    transform var(--dur-fast) var(--ease-spring);
-}
-
-.record-side-trigger:hover {
-  color: var(--text-primary);
-  border-color: var(--accent-gold-deep);
-  transform: scale(1.05);
-}
-
-/* 回到顶部 FAB：右下角悬浮，glass 视觉与抽屉触发钮一致 */
-.record-back-top {
-  position: absolute;
-  right: var(--space-8);
-  bottom: var(--space-16);
-  z-index: 30;
-  color: var(--text-secondary);
-  background: var(--glass-bg-mid);
-  border: 1px solid var(--glass-border);
-  box-shadow: var(--shadow-md), var(--glass-highlight);
-  transition:
-    color var(--dur-fast) var(--ease-expo),
-    border-color var(--dur-fast) var(--ease-expo),
-    transform var(--dur-fast) var(--ease-spring);
-}
-
-.record-back-top:hover {
-  color: var(--text-primary);
-  border-color: var(--accent-gold-deep);
-  transform: translateY(-2px);
 }
 
 .fab-enter-active,
 .fab-leave-active {
   transition:
-    opacity var(--dur-fast) var(--ease-expo),
-    transform var(--dur-fast) var(--ease-spring);
+    opacity 0.2s ease,
+    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .fab-enter-from,
 .fab-leave-to {
   opacity: 0;
   transform: translateY(8px);
-}
-
-.record-content {
-  flex: 1;
-  min-width: 0;
-  overflow-y: auto;
-  padding: 0 var(--space-8) var(--space-20) var(--space-8);
-}
-
-/* 宽屏 (>1400) 时内容居中,上限 1280 防过宽稀疏 */
-.record-content-inner {
-  max-width: 1280px;
-  margin: 0 auto;
-}
-
-/* 战绩列表滚动条细化：6px 圆角细条替代系统默认宽条（与详情页一致） */
-.record-content::-webkit-scrollbar {
-  width: 6px;
-}
-
-.record-content::-webkit-scrollbar-thumb {
-  border-radius: var(--radius-xs);
-  background: color-mix(in srgb, var(--text-tertiary) 35%, transparent);
-}
-
-.record-content::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in srgb, var(--text-tertiary) 55%, transparent);
-}
-
-.record-content::-webkit-scrollbar-track {
-  background: transparent;
 }
 </style>

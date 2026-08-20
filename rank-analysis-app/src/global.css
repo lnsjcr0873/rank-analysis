@@ -1,3 +1,5 @@
+@import './styles/theme.css';
+
 :root {
   /* 系统字体栈：不再依赖 Google Fonts（渲染阻塞+代理期挂起会导致启动/详情页卡顿） */
   font-family:

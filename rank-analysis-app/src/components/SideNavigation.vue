@@ -1,126 +1,155 @@
 <template>
-  <div class="sidenav-wrap">
-    <div class="nav-items" v-if="!isRecordChild">
+  <nav
+    class="flex h-full w-[64px] flex-col items-center justify-between border-r border-white/[0.08] bg-[rgba(11,15,25,0.92)] py-3 select-none backdrop-blur-xl transition-colors"
+  >
+    <!-- Top Navigation Items -->
+    <div v-if="!isRecordChild" class="flex flex-col items-center gap-2 w-full px-2">
+      <!-- Record Nav -->
       <button
-        v-if="!!mySummoner?.gameName"
+        v-if="!!gameStateSummoner?.gameName"
         type="button"
-        class="nav-item"
-        :class="{ 'nav-item--active': getFirstPath(router.currentRoute.value.path) === 'Record' }"
+        :class="navItemClass(isCurrentPath('Record'))"
+        title="战绩查询与复盘"
         @click="handleMenuClick('Record')"
       >
-        <n-icon :size="18"><BarChartOutline /></n-icon>
-        <span class="nav-item-label">战绩</span>
+        <BarChart2 class="h-4 w-4" />
+        <span class="text-[10px] font-medium leading-none">战绩</span>
+        <div v-if="isCurrentPath('Record')" class="nav-active-bar" />
       </button>
+
+      <!-- Gaming Nav -->
       <button
-        v-if="!!mySummoner?.gameName"
+        v-if="!!gameStateSummoner?.gameName"
         type="button"
-        class="nav-item"
-        :class="{ 'nav-item--active': getFirstPath(router.currentRoute.value.path) === 'Gaming' }"
+        :class="navItemClass(isCurrentPath('Gaming'))"
+        title="实时对局与房间侦查"
         @click="handleMenuClick('Gaming')"
       >
-        <n-icon :size="18"><GameControllerOutline /></n-icon>
-        <span class="nav-item-label">对局</span>
+        <div class="relative">
+          <Gamepad2 class="h-4 w-4" />
+          <span
+            v-if="isInGame"
+            class="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-cyan-400 animate-ping"
+          />
+          <span v-if="isInGame" class="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-cyan-400" />
+        </div>
+        <span class="text-[10px] font-medium leading-none">对局</span>
+        <div v-if="isCurrentPath('Gaming')" class="nav-active-bar" />
       </button>
+
+      <!-- Growth Nav -->
       <button
-        v-if="!!mySummoner?.gameName"
+        v-if="!!gameStateSummoner?.gameName"
         type="button"
-        class="nav-item"
-        :class="{ 'nav-item--active': getFirstPath(router.currentRoute.value.path) === 'Growth' }"
+        :class="navItemClass(isCurrentPath('Growth'))"
+        title="选手成长与改错清单"
         @click="handleMenuClick('Growth')"
       >
-        <n-icon :size="18"><TrendingUpOutline /></n-icon>
-        <span class="nav-item-label">成长</span>
+        <TrendingUp class="h-4 w-4" />
+        <span class="text-[10px] font-medium leading-none">成长</span>
+        <div v-if="isCurrentPath('Growth')" class="nav-active-bar" />
       </button>
-      <!-- 设置不依赖 LCU 连接，未连接（Loading 页）时也保持可见可进 -->
+
+      <!-- Settings Nav -->
       <button
         type="button"
-        class="nav-item"
-        :class="{ 'nav-item--active': getFirstPath(router.currentRoute.value.path) === 'Settings' }"
+        :class="navItemClass(isCurrentPath('Settings'))"
+        title="应用与自动化设置"
         @click="handleMenuClick('Settings')"
       >
-        <n-icon :size="18"><SettingsOutline /></n-icon>
-        <span class="nav-item-label">设置</span>
-        <!-- 有云端配置待裁决时引导用户进设置处理，见 pinia/cloudSync 的 pendingCloudConfig -->
+        <div class="relative">
+          <Settings class="h-4 w-4" />
+          <span
+            v-if="hasPendingCloudConfig"
+            class="pending-badge-dot absolute -top-1 -right-1 h-2 w-2 rounded-full bg-amber-400 animate-pulse"
+          />
+        </div>
+        <span class="text-[10px] font-medium leading-none">设置</span>
+        <div v-if="isCurrentPath('Settings')" class="nav-active-bar" />
+      </button>
+    </div>
+
+    <!-- Child Window Navigation -->
+    <div v-else class="flex flex-col items-center gap-2 w-full px-2">
+      <button
+        type="button"
+        class="flex flex-col items-center justify-center gap-1 w-full h-12 rounded-lg text-white/60 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+        title="聚焦回到主窗口"
+        @click="backToMain"
+      >
+        <AppWindow class="h-4 w-4" />
+        <span class="text-[10px] font-medium leading-none">主窗口</span>
+      </button>
+
+      <button
+        type="button"
+        class="flex flex-col items-center justify-center gap-1 w-full h-12 rounded-lg text-white/60 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+        title="主窗口与战绩窗口横向并排"
+        @click="tileSideBySide"
+      >
+        <Columns class="h-4 w-4" />
+        <span class="text-[10px] font-medium leading-none">并排对比</span>
+      </button>
+    </div>
+
+    <!-- Bottom Status Indicators -->
+    <div v-if="!isRecordChild" class="flex flex-col items-center gap-2">
+      <!-- LCU Connection Status Button -->
+      <button
+        type="button"
+        :disabled="!isConnected"
+        class="relative flex h-8 w-8 items-center justify-center rounded-lg border transition-all cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
+        :class="
+          isConnected
+            ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400 shadow-[0_0_8px_rgba(34,197,94,0.15)]'
+            : 'border-white/10 bg-white/5 text-white/40'
+        "
+        :title="isConnected ? `已连接客户端: ${gameStateSummoner?.gameName}` : '未连接到游戏客户端'"
+        @click="toMe"
+      >
+        <Link2 v-if="isConnected" class="h-3.5 w-3.5" />
+        <Unlink v-else class="h-3.5 w-3.5" />
         <span
-          v-if="hasPendingCloudConfig"
-          class="pending-badge-dot nav-item-badge"
-          aria-hidden="true"
+          class="absolute bottom-0.5 right-0.5 h-1.5 w-1.5 rounded-full"
+          :class="isConnected ? 'bg-emerald-400' : 'bg-slate-500'"
+        />
+      </button>
+
+      <!-- In-Game State Button -->
+      <button
+        type="button"
+        class="relative flex h-8 w-8 items-center justify-center rounded-lg border transition-all cursor-pointer"
+        :class="
+          isInGame
+            ? 'border-cyan-500/40 bg-cyan-500/15 text-cyan-300 shadow-[0_0_8px_rgba(10,200,185,0.2)] animate-pulse'
+            : 'border-white/10 bg-white/5 text-white/40'
+        "
+        :title="isInGame ? '正在对局中 (点击进入)' : '未在游戏中'"
+        @click="goGaming"
+      >
+        <Gamepad2 class="h-3.5 w-3.5" />
+        <span
+          class="absolute bottom-0.5 right-0.5 h-1.5 w-1.5 rounded-full"
+          :class="isInGame ? 'bg-cyan-400' : 'bg-slate-500'"
         />
       </button>
     </div>
-    <div class="status-icons" v-if="!isRecordChild">
-      <n-tooltip placement="right" :delay="200">
-        <template #trigger>
-          <button
-            type="button"
-            class="status-icon-btn"
-            :class="{ 'status-icon-btn--on': isConnected }"
-            :disabled="!isConnected"
-            @click="toMe"
-          >
-            <n-icon :size="15"><LinkOutline /></n-icon>
-            <span
-              class="status-dot"
-              :class="isConnected ? 'status-dot--green' : 'status-dot--off'"
-            />
-          </button>
-        </template>
-        {{ isConnected ? `已连接：${mySummoner.gameName}` : '未连接客户端' }}
-      </n-tooltip>
-      <n-tooltip placement="right" :delay="200">
-        <template #trigger>
-          <button
-            type="button"
-            class="status-icon-btn"
-            :class="{ 'status-icon-btn--blue': isInGame }"
-            @click="goGaming"
-          >
-            <n-icon :size="15"><GameControllerOutline /></n-icon>
-            <span class="status-dot" :class="isInGame ? 'status-dot--blue' : 'status-dot--off'" />
-          </button>
-        </template>
-        {{ isInGame ? '游戏中' : '未在游戏中' }}
-      </n-tooltip>
-    </div>
-
-    <!-- 战绩子窗口（record-*）精简导航：只留「回主窗口」和「并排对比」 -->
-    <div class="nav-items" v-else>
-      <n-tooltip placement="right" :delay="200">
-        <template #trigger>
-          <button type="button" class="nav-item" @click="backToMain">
-            <n-icon :size="18"><AppsOutline /></n-icon>
-            <span class="nav-item-label">主窗口</span>
-          </button>
-        </template>
-        聚焦主窗口
-      </n-tooltip>
-      <n-tooltip placement="right" :delay="200">
-        <template #trigger>
-          <button type="button" class="nav-item" @click="tileSideBySide">
-            <n-icon :size="18"><CopyOutline /></n-icon>
-            <span class="nav-item-label">并排对比</span>
-          </button>
-        </template>
-        主窗口与全部战绩窗口横向并排
-      </n-tooltip>
-    </div>
-  </div>
+  </nav>
 </template>
 
 <script setup lang="ts">
-import router from '../router'
-import { getFirstPath } from '../router'
+import { computed } from 'vue'
 import {
-  BarChartOutline,
-  GameControllerOutline,
-  SettingsOutline,
-  LinkOutline,
-  AppsOutline,
-  CopyOutline,
-  TrendingUpOutline
-} from '@vicons/ionicons5'
-import { computed, ref, watch } from 'vue'
-import { Summoner } from './record/type'
+  BarChart2,
+  Gamepad2,
+  TrendingUp,
+  Settings,
+  Link2,
+  Unlink,
+  AppWindow,
+  Columns
+} from 'lucide-vue-next'
+import router, { getFirstPath } from '../router'
 import { useGameState } from '@renderer/composables/useGameState'
 import { useCloudSyncStore } from '@renderer/features/settings/stores/cloudSync'
 import {
@@ -132,7 +161,7 @@ import {
 const { summoner: gameStateSummoner, currentPhase } = useGameState()
 const cloudStore = useCloudSyncStore()
 
-/** 战绩子窗口（record-*）精简模式：隐藏全局导航/状态，只留子窗口操作 */
+/** 战绩子窗口（record-*）精简模式 */
 const isRecordChild = isRecordChildWindow()
 
 const backToMain = () => {
@@ -143,229 +172,52 @@ const tileSideBySide = () => {
   void tileWindowsSideBySide()
 }
 
-/** 云端配置待裁决时为真：驱动「设置」导航项上的呼吸角标，裁决完立即消失 */
+/** 云端配置待裁决时为真 */
 const hasPendingCloudConfig = computed(() => cloudStore.pendingCloudConfig !== null)
 
-// 将后端数据转换为前端 Summoner 类型
-const mySummoner = ref<Summoner>({} as Summoner)
+const isConnected = computed(() => !!gameStateSummoner.value?.gameName)
+const isInGame = computed(() => currentPhase.value === 'InProgress')
 
-watch(
-  gameStateSummoner,
-  newSummoner => {
-    if (newSummoner) {
-      mySummoner.value = newSummoner as unknown as Summoner
-    } else {
-      mySummoner.value = {} as Summoner
-    }
-  },
-  { immediate: true }
-)
-
-function handleMenuClick(key: string) {
-  // 跳转到对应路由；未连接时（如从 Loading 页进设置）没有召唤师信息，不带 name
-  // 参数，避免生成 "undefined#undefined" 的脏 query
-  router.push({
-    name: key,
-    query: mySummoner.value?.gameName
-      ? { name: mySummoner.value.gameName + '#' + mySummoner.value.tagLine }
-      : undefined
-  })
+function isCurrentPath(name: string) {
+  return getFirstPath(router.currentRoute.value.path) === name
 }
 
-const isConnected = computed(() => !!(mySummoner.value?.gameName && mySummoner.value?.tagLine))
+function navItemClass(active: boolean) {
+  return [
+    'relative flex flex-col items-center justify-center gap-1 w-full h-13 rounded-lg transition-all duration-200 cursor-pointer',
+    active
+      ? 'bg-gradient-to-b from-[#c8aa6e]/20 to-[#c8aa6e]/5 text-[#f0e6d2] shadow-[0_0_12px_rgba(200,170,110,0.15)] border border-[#c8aa6e]/30'
+      : 'text-white/50 hover:text-white/90 hover:bg-white/5'
+  ]
+}
 
-/** 游戏中：由 phase 状态判断（后端已推送），与路由无关 */
-const VALID_GAME_PHASES = ['ChampSelect', 'InProgress', 'PreEndOfGame', 'EndOfGame']
-const isInGame = computed(() => {
-  const p = currentPhase.value
-  return !!p && VALID_GAME_PHASES.includes(p)
-})
+const handleMenuClick = (key: string) => {
+  if (key === 'Record') {
+    void router.push({ path: '/Record', query: { t: Date.now() } })
+  } else {
+    void router.push(`/${key}`)
+  }
+}
 
 const toMe = () => {
-  if (!isConnected.value) return
-  router.push({
-    path: '/Record',
-    query: { name: mySummoner.value.gameName + '#' + mySummoner.value.tagLine }
-  })
+  if (!gameStateSummoner.value?.gameName) return
+  void router.push({ path: '/Record', query: { t: Date.now() } })
 }
 
 const goGaming = () => {
-  router.push({
-    name: 'Gaming',
-    query: mySummoner.value?.gameName
-      ? { name: mySummoner.value.gameName + '#' + mySummoner.value.tagLine }
-      : undefined
-  })
+  void router.push('/Gaming')
 }
 </script>
 
-<style lang="css" scoped>
-.sidenav-wrap {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: var(--space-6) 0 var(--space-4);
-  overflow: hidden;
-}
-
-.nav-items {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-2);
-  flex: 1;
-  width: 100%;
-  padding: 0 var(--space-8);
-}
-
-.nav-item {
-  width: 100%;
-  height: 44px;
-  border-radius: var(--radius-lg);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--text-tertiary);
-  font-size: var(--font-size-3xs);
-  font-weight: 500;
-  letter-spacing: 0.02em;
-  cursor: pointer;
-  transition:
-    background var(--dur-fast) var(--ease-expo),
-    color var(--dur-fast) var(--ease-expo),
-    transform var(--dur-fast) var(--ease-spring),
-    box-shadow var(--dur-fast) var(--ease-expo);
-  -webkit-app-region: no-drag;
-  position: relative;
-}
-
-.nav-item:hover {
-  background: var(--hover-bg);
-  color: var(--text-secondary);
-  transform: scale(1.04);
-}
-
-.nav-item:active {
-  transform: scale(0.97);
-  transition-duration: var(--dur-instant);
-}
-
-.nav-item--active {
-  background: var(--nav-active-bg);
-  color: var(--semantic-win);
-  border-color: var(--nav-active-border);
-  box-shadow: var(--decor-glow-win);
-}
-
-/* 键盘聚焦时让位给全局 focus ring，激活态描边/辉光暂时退场，避免双环 */
-.nav-item--active:focus-visible {
-  border-color: transparent;
-  box-shadow: none;
-}
-
-/* Active indicator — INSIDE the button, NOT bleeding outside */
-.nav-item--active::before {
-  content: '';
+<style scoped>
+.nav-active-bar {
   position: absolute;
   left: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 3px;
-  height: 18px;
-  background: var(--win-bar-gradient);
-  border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
-  box-shadow: var(--nav-indicator-glow);
-}
-
-.nav-item-label {
-  font-size: var(--font-size-3xs);
-}
-
-/* 角标本体（颜色/呼吸动效）在 global.css 的 .pending-badge-dot 里，这里只定位 */
-.nav-item-badge {
-  position: absolute;
-  top: 6px;
-  right: 12px;
-}
-
-/* Status icons */
-.status-icons {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding: 0 var(--space-8);
-  width: 100%;
-  flex-shrink: 0;
-  margin-bottom: var(--space-6);
-}
-
-.status-icon-btn {
-  width: 100%;
-  height: 28px;
-  border-radius: var(--radius-md);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--text-tertiary);
-  cursor: pointer;
-  transition:
-    background var(--dur-fast) var(--ease-expo),
-    color var(--dur-fast) var(--ease-expo);
-  -webkit-app-region: no-drag;
-}
-
-.status-icon-btn:hover:not(:disabled) {
-  background: var(--hover-bg);
-  color: var(--text-secondary);
-}
-
-.status-icon-btn:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-.status-icon-btn--on {
-  background: var(--status-on-bg);
-  color: var(--semantic-win);
-}
-
-.status-icon-btn--blue {
-  background: color-mix(in srgb, var(--accent-sky) 10%, transparent);
-  color: var(--accent-sky);
-}
-
-.status-dot {
-  position: absolute;
-  top: 5px;
-  right: 5px;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  border: 1.5px solid var(--bg-base);
-}
-
-.status-dot--green {
-  background: var(--status-dot-win-bg);
-  box-shadow: var(--status-dot-glow-win);
-  animation: dot-pulse 2s ease-in-out infinite;
-}
-
-.status-dot--blue {
-  background: var(--accent-sky);
-  box-shadow: var(--status-dot-glow-sky);
-  animation: dot-pulse 2s ease-in-out infinite;
-}
-
-.status-dot--off {
-  background: var(--text-tertiary);
-  opacity: 0.5;
+  top: 25%;
+  bottom: 25%;
+  width: 2.5px;
+  border-radius: 9999px;
+  background: linear-gradient(to bottom, #f0e6d2, #c8aa6e);
+  box-shadow: 0 0 8px rgba(200, 170, 110, 0.6);
 }
 </style>
