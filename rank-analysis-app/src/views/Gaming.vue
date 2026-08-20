@@ -353,7 +353,7 @@
 
 <script lang="ts" setup>
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { invoke } from '@tauri-apps/api/core'
 import { getConfigByIpc, putConfigByIpc } from '@renderer/services/ipc'
 import { SettingsOutline, SparklesOutline } from '@vicons/ionicons5'
@@ -745,7 +745,18 @@ const showAITooltip = ref(false)
 let hasShownAITip = false
 
 const router = useRouter()
+const route = useRoute()
 const message = useMessage()
+
+watch(
+  () => route.query.openAi,
+  openAi => {
+    if (openAi) {
+      handleOpenPanel()
+    }
+  },
+  { immediate: true }
+)
 
 const ai = useGamingAIAnalysis(sessionData, opggMode, {
   champSelectExtras: computed(() => ({

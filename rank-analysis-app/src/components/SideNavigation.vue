@@ -379,22 +379,25 @@ const handleMenuClick = (key: string) => {
     } else {
       void router.push({ path: '/Record', query: { t: Date.now() } })
     }
+  } else if (key === 'Settings') {
+    void router.push('/Settings/Automation')
   } else {
     void router.push(`/${key}`)
   }
 }
 
 const handleTacticalClick = () => {
-  void router.push('/Gaming')
+  void router.push({ path: '/Gaming', query: { openAi: '1', t: Date.now() } })
 }
 
 const handleOverlayClick = async () => {
   try {
     await invoke('show_overlay_window')
-    message?.info('游戏内 HUD 置顶窗口已激活')
+    message?.success('游戏内 HUD 置顶悬浮窗已激活')
   } catch {
     message?.info('游戏内 HUD 已就绪，进入对局后自动激活')
   }
+  void router.push('/Settings/Automation')
 }
 
 const launchingGame = ref(false)

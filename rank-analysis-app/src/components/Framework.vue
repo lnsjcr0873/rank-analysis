@@ -18,7 +18,7 @@
       <main class="relative flex-1 overflow-hidden bg-[#0e1422]/60">
         <router-view v-slot="{ Component }">
           <Transition name="page" mode="out-in">
-            <component :is="Component" :key="$route.fullPath" />
+            <component :is="Component" :key="$route.matched[0]?.path || $route.path" />
           </Transition>
         </router-view>
       </main>
