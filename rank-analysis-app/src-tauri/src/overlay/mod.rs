@@ -44,7 +44,7 @@ fn create(app: &tauri::AppHandle) -> Result<(), String> {
         .skip_taskbar(true)
         .visible(false);
 
-    #[cfg(any(not(target_os = "macos"), feature = "macos-private-api"))]
+    #[cfg(not(target_os = "macos"))]
     let builder = builder.transparent(true);
 
     let _w = builder
