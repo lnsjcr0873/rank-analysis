@@ -29,10 +29,18 @@
       v-else-if="!isCrossRegion"
       class="relationship-empty-row flex items-center justify-between rounded-xl border border-dashed border-white/10 bg-white/[0.02] px-3 py-2 text-xs"
     >
-      <span class="relationship-empty-label inline-flex items-center gap-1.5 font-semibold text-white/70">
-        <span class="relationship-empty-dot relationship-empty-dot-win h-1.5 w-1.5 rounded-full bg-emerald-400 opacity-70"></span>好友
+      <span
+        class="relationship-empty-label inline-flex items-center gap-1.5 font-semibold text-white/70"
+      >
+        <span
+          class="relationship-empty-dot relationship-empty-dot-win h-1.5 w-1.5 rounded-full bg-emerald-400 opacity-70"
+        ></span
+        >好友
         <span class="relationship-empty-sep text-white/30">/</span>
-        <span class="relationship-empty-dot relationship-empty-dot-loss h-1.5 w-1.5 rounded-full bg-rose-400 opacity-70"></span>宿敌
+        <span
+          class="relationship-empty-dot relationship-empty-dot-loss h-1.5 w-1.5 rounded-full bg-rose-400 opacity-70"
+        ></span
+        >宿敌
       </span>
       <span class="relationship-empty-text text-white/40">近 20 场没有重复同排的玩家</span>
     </div>
@@ -42,7 +50,9 @@
       v-if="!isCrossRegion && championPool.length > 0"
       class="hero-pool-card rounded-xl border border-white/10 bg-[rgba(15,22,36,0.75)] p-3 backdrop-blur-xl shadow-md"
     >
-      <div class="hero-pool-header text-xs font-bold text-white/80 border-b border-white/10 pb-2 mb-2">
+      <div
+        class="hero-pool-header text-xs font-bold text-white/80 border-b border-white/10 pb-2 mb-2"
+      >
         英雄池（近 {{ championPool.length }} 场）
       </div>
 
@@ -52,8 +62,10 @@
           :key="entry.championId"
           class="hero-pool-row flex items-center gap-2 rounded-lg px-2 py-1 text-xs cursor-pointer transition-all duration-150"
           :class="{
-            'hero-pool-row-hovered bg-white/10 text-white shadow-sm': hoveredLocal === entry.championId,
-            'hero-pool-row-dimmed opacity-40': hoveredLocal !== null && hoveredLocal !== entry.championId,
+            'hero-pool-row-hovered bg-white/10 text-white shadow-sm':
+              hoveredLocal === entry.championId,
+            'hero-pool-row-dimmed opacity-40':
+              hoveredLocal !== null && hoveredLocal !== entry.championId,
             'hero-pool-row-active border border-[#c8aa6e]/60 bg-[#c8aa6e]/15 font-bold shadow-[0_0_8px_rgba(200,170,110,0.2)]':
               activeChampion === entry.championId,
             'hover:bg-white/5': hoveredLocal === null && activeChampion !== entry.championId

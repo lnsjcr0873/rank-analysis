@@ -360,7 +360,8 @@ import {
   getOpggStatus,
   queueIdToOpggMode,
   TIER_OPTIONS,
-  type OpggStatus
+  type OpggStatus,
+  type OpggTier
 } from '@renderer/services/opgg'
 import { useOpggTier } from '@renderer/composables/useOpggTier'
 import { buildRuleDraft } from '@renderer/features/gaming/services/bpRuleDraft'
@@ -368,7 +369,7 @@ import { normalizeLcuPosition } from '@renderer/features/gaming/services/counter
 import { getChampionName, loadChampionNames } from '@renderer/services/ai/champion-names'
 import { getThreatRatings, type ThreatRating } from '@renderer/services/scouting'
 import { getNextActions, type NextAction } from '@renderer/services/nextAction'
-import type { PickRule, BanRule } from '@renderer/types/rules'
+import type { Position, PickRule, BanRule } from '@renderer/types/rules'
 import type { ChampSelect, Subteam } from '@renderer/types/domain/gaming'
 import type { championOption } from '@renderer/types/domain/champion'
 
@@ -524,7 +525,7 @@ watch(
 )
 
 const onTierChange = async (next: string) => {
-  const ok = await switchTier(next)
+  const ok = await switchTier(next as OpggTier)
   if (ok) {
     opggStatus.value = await getOpggStatus(opggMode.value)
   }
@@ -601,16 +602,11 @@ const myPosition = computed<Position | undefined>(() => {
   return undefined
 })
 
-const bp = useBpDecision({
-  phase: computed(() => sessionData.phase),
-  myPosition,
-  session: computed(() => sessionData)
-})
+const bp = useBpDecision(() => sessionData.phase)
 
-const lineupScores = useLineupScore({
-  session: computed(() => sessionData),
-  mySubteamId: computed(() => sessionData.mySubteamId),
-  opggMode
+const lineupScores = useLineupScore(sessionData, opggMode, {
+  includePlayerProfiles: true,
+  prefetchProfiles: true
 })
 
 const threatRatings = ref<ThreatRating[]>([])
@@ -632,7 +628,17 @@ watch(
   () => sessionData.phase,
   async phase => {
     if (phase === 'InProgress') {
-      nextActions.value = await getNextActions()
+      const myPlayer = orderedSubteams.value
+        .find(s => s.subteamId === sessionData.mySubteamId)
+        ?.players.find(p => p.summoner.puuid === mySummonerPuuid.value)
+      const myChampionId = myPlayer?.championId ?? 0
+      const myGameName = myPlayer?.summoner?.gameName ?? ''
+      nextActions.value = await getNextActions(
+        myChampionId,
+        myGameName,
+        mySummonerPuuid.value,
+        sessionData.queueId
+      )
     } else {
       nextActions.value = []
     }
@@ -647,8 +653,13 @@ let hasShownAITip = false
 const router = useRouter()
 const message = useMessage()
 
-const ai = useGamingAIAnalysis(sessionData)
-const live = useLiveAIAnalysis(computed(() => sessionData.phase === 'InProgress'))
+const ai = useGamingAIAnalysis(sessionData, opggMode, {
+  champSelectExtras: computed(() => ({
+    bpDecision: bp.decision.value,
+    lineupScore: lineupScores.scores.value
+  }))
+})
+const live = useLiveAIAnalysis(sessionData, { mySummoner })
 
 type AITabKey = 'champSelect' | 'live' | 'game'
 const aiTab = ref<AITabKey>('champSelect')
@@ -667,20 +678,21 @@ watch(
 )
 
 const champSelectRendered = computed<string>(() => {
-  const raw = ai.kindState.champSelect.content.value
+  const raw = ai.kindState.champSelect.result.value
   return raw ? renderAnalysisReport(raw) : ''
 })
 
 const gameRendered = computed<string>(() => {
-  const raw = ai.kindState.game.content.value
+  const raw = ai.kindState.game.result.value
   return raw ? renderAnalysisReport(raw) : ''
 })
 
 const liveUpdatedAt = computed<string>(() => {
-  const t = live.lastUpdated.value
+  const t = live.lastPollAt.value
   if (!t) return ''
+  const d = new Date(t)
   const pad = (n: number) => String(n).padStart(2, '0')
-  return `${pad(t.getHours())}:${pad(t.getMinutes())}:${pad(t.getSeconds())}`
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 })
 
 const currentTabLoading = computed<boolean>(() => {
@@ -720,7 +732,7 @@ async function handleSaveRule(): Promise<void> {
   if (!d) return
   const draft = buildRuleDraft({
     decision: d,
-    myPosition: myPosition.value,
+    myPosition: myPosition.value ?? null,
     championName: getChampionName
   })
   if (!draft) {

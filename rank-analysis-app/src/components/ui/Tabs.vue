@@ -2,10 +2,12 @@
 import { TabsRoot, TabsList, TabsTrigger } from 'radix-vue'
 import { cn } from '@/utils/cn'
 
+import type { Component } from 'vue'
+
 type TabItem = {
   value: string
   label: string
-  icon?: any
+  icon?: Component | Function | string
   badge?: string | number
 }
 
