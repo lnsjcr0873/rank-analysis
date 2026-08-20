@@ -1,57 +1,53 @@
 <!--
   注意：本组件被 Framework 的 <Transition mode="out-in"> 包裹，模板根层级
   （含各 v-if 分支的直接子级）必须保持单元素——dev 模式下模板注释会保留成
-  vnode，与元素并列会让根变成 Fragment，离场过渡卡死（表现为切页黑屏、点不回去）。
-  要写注释请放元素内部或这里。
+  vnode，与元素并列会让根变成 Fragment，离场过渡卡死。
 -->
 <template>
   <template v-if="!sessionData.phase">
     <LoadingComponent :hint="isConnected ? '进入英雄选择后这里会自动展示对局分析' : undefined">
-      <!-- 已连接时不提示「启动客户端」——那会跟左下角的绿色连接灯自相矛盾 -->
       {{ isConnected ? '等待加入游戏...' : '未连接到客户端' }}
     </LoadingComponent>
   </template>
   <template v-else>
-    <div class="gaming-page">
+    <div class="gaming-page relative flex h-full flex-col gap-3 p-3.5 pr-14 select-none overflow-y-auto">
+      <!-- Floating Actions: Settings & AI Assistant -->
       <n-button
         circle
         secondary
         type="primary"
-        class="gaming-config-btn"
+        class="gaming-config-btn absolute right-2.5 top-[45%] z-30 shadow-lg backdrop-blur-md transition-all hover:scale-110"
+        title="战绩显示设置"
         @click="showConfig = true"
       >
         <template #icon>
-          <n-icon><settings-outline /></n-icon>
+          <n-icon><SettingsOutline /></n-icon>
         </template>
       </n-button>
 
-      <!-- AI 分析按钮 -->
       <n-tooltip v-model:show="showAITooltip" placement="left" :duration="5000">
         <template #trigger>
-          <!--
-            刻意不用 :loading —— naive-ui Button 在 loading 时根本不 emit click
-            （node_modules/naive-ui/es/button/src/Button.mjs:146），会把用户锁在
-            面板外面。进行中改用 spin 图标表达，按钮始终可点、随时能开回面板。
-          -->
           <n-button
             circle
             secondary
             type="info"
-            class="gaming-ai-btn"
+            class="gaming-ai-btn absolute right-2.5 top-[55%] z-30 shadow-lg backdrop-blur-md transition-all hover:scale-110"
             :disabled="!sessionData.phase"
+            title="AI 战术军师"
             @click="handleOpenPanel"
           >
             <template #icon>
               <n-spin v-if="ai.loading.value || live.loading.value" :size="14" />
-              <n-icon v-else><sparkles-outline /></n-icon>
+              <n-icon v-else><SparklesOutline /></n-icon>
             </template>
           </n-button>
         </template>
-        ✨ AI分析功能：选人期分析阵容情报，对局中实时分析出装/经济/团战，赛后复盘整局
+        ✨ AI 战术军师：选人期阵容分析、对局实时情报与赛后胜负归因
       </n-tooltip>
 
-      <n-modal v-model:show="showConfig" preset="card" title="显示设置" style="width: 400px">
-        <n-form-item label="战绩显示数量">
+      <!-- Match Count Config Modal -->
+      <n-modal v-model:show="showConfig" preset="card" title="战绩显示设置" style="width: 380px">
+        <n-form-item label="战绩历史显示数量">
           <n-input-number
             v-model:value="matchCount"
             :min="1"
@@ -59,15 +55,15 @@
             @update:value="handleUpdateConfig"
           />
         </n-form-item>
-        <span class="gaming-config-hint">设置将在下一次刷新或对局时生效</span>
+        <span class="gaming-config-hint text-xs text-white/50">设置将在下一次刷新或对局时生效</span>
       </n-modal>
 
-      <!-- AI 分析结果弹窗（D-P2 三 tab：选人期 / 对局中 / 赛后，各自独立进度） -->
+      <!-- AI Tactical Assistant Panel Modal -->
       <n-modal
         v-model:show="ai.showPanel.value"
         preset="card"
         :title="aiPanelTitle"
-        style="width: 640px"
+        style="width: 680px; max-width: 90vw;"
       >
         <template #header-extra>
           <n-button
@@ -84,85 +80,100 @@
           <n-tab-pane name="champSelect" tab="选人期">
             <div
               v-if="champSelectRendered"
-              class="ai-result-content ai-report"
+              class="ai-result-content ai-report max-h-[60vh] overflow-y-auto"
               v-html="champSelectRendered"
             ></div>
-            <div v-else-if="ai.kindState.champSelect.loading.value" class="ai-result-skeleton">
-              <div class="ai-result-skeleton-label">AI 正在分析选人期阵容...</div>
+            <div v-else-if="ai.kindState.champSelect.loading.value" class="ai-result-skeleton flex flex-col gap-3 py-4">
+              <div class="ai-result-skeleton-label text-xs font-semibold text-white/70">AI 正在深度推演选人期阵容...</div>
               <n-skeleton text :repeat="4" />
               <n-skeleton text style="width: 60%" />
             </div>
-            <div v-else class="ai-result-empty">暂无选人期分析结果，点「重新分析」生成。</div>
+            <div v-else class="ai-result-empty py-8 text-center text-xs text-white/50">
+              暂无选人期分析结果，点击「重新分析」生成。
+            </div>
           </n-tab-pane>
+
           <n-tab-pane name="live" tab="对局中">
-            <div v-if="live.inGame.value" class="ai-live-hint">
-              对局实时数据每 15 秒自动更新<template v-if="liveUpdatedAt">
-                · 最后更新 {{ liveUpdatedAt }}</template
-              >
+            <div v-if="live.inGame.value" class="ai-live-hint mb-2 text-xs text-cyan-400/80">
+              对局实时数据每 15 秒自动更新<template v-if="liveUpdatedAt"> · 最后更新 {{ liveUpdatedAt }}</template>
             </div>
             <div
               v-if="live.renderedResult.value"
-              class="ai-result-content ai-report"
+              class="ai-result-content ai-report max-h-[60vh] overflow-y-auto"
               v-html="live.renderedResult.value"
             ></div>
-            <div v-else-if="live.loading.value" class="ai-result-skeleton">
-              <div class="ai-result-skeleton-label">AI 正在分析对局实时数据...</div>
+            <div v-else-if="live.loading.value" class="ai-result-skeleton flex flex-col gap-3 py-4">
+              <div class="ai-result-skeleton-label text-xs font-semibold text-white/70">AI 正在分析对局实时数据...</div>
               <n-skeleton text :repeat="4" />
               <n-skeleton text style="width: 60%" />
             </div>
-            <div v-else class="ai-result-empty">
-              {{
-                live.inGame.value ? '暂无对局中分析结果，点「重新分析」生成。' : '当前不在对局中。'
-              }}
+            <div v-else class="ai-result-empty py-8 text-center text-xs text-white/50">
+              {{ live.inGame.value ? '暂无对局中分析结果，点击「重新分析」生成。' : '当前不在对局中。' }}
             </div>
           </n-tab-pane>
+
           <n-tab-pane name="game" tab="赛后">
             <div
               v-if="gameRendered"
-              class="ai-result-content ai-report"
+              class="ai-result-content ai-report max-h-[60vh] overflow-y-auto"
               v-html="gameRendered"
             ></div>
-            <div v-else-if="ai.kindState.game.loading.value" class="ai-result-skeleton">
-              <div class="ai-result-skeleton-label">AI 正在分析整局...</div>
+            <div v-else-if="ai.kindState.game.loading.value" class="ai-result-skeleton flex flex-col gap-3 py-4">
+              <div class="ai-result-skeleton-label text-xs font-semibold text-white/70">AI 正在深度复盘整局...</div>
               <n-skeleton text :repeat="4" />
               <n-skeleton text style="width: 60%" />
             </div>
-            <div v-else class="ai-result-empty">暂无赛后分析结果，点「重新分析」生成。</div>
+            <div v-else class="ai-result-empty py-8 text-center text-xs text-white/50">
+              暂无赛后分析结果，点击「重新分析」生成。
+            </div>
           </n-tab-pane>
         </n-tabs>
       </n-modal>
 
-      <div class="gaming-intel-banner">
+      <!-- Top Intel Banner -->
+      <div class="gaming-intel-banner rounded-xl border border-white/10 bg-[rgba(15,22,36,0.7)] p-3 backdrop-blur-xl shadow-md">
         <div class="banner-main" :class="{ 'banner-main-split': champSelectStage }">
-          <!-- 阶段 stepper：预选/禁用/选人/确认，仅 stage 非空时展示；'' 时保留原有单行文案 -->
-          <div v-if="champSelectStage" class="stage-stepper">
+          <!-- Stage Stepper -->
+          <div v-if="champSelectStage" class="stage-stepper flex items-center gap-1.5">
             <template v-for="(step, i) in STAGE_STEPS" :key="step.key">
               <div
-                class="stage-step"
+                class="stage-step flex items-center gap-1 text-xs"
                 :class="{
-                  'stage-step-active': i === currentStageIndex,
-                  'stage-step-done': i < currentStageIndex
+                  'stage-step-active text-amber-300 font-bold': i === currentStageIndex,
+                  'stage-step-done text-white/70': i < currentStageIndex,
+                  'text-white/40': i > currentStageIndex
                 }"
               >
-                <span class="stage-dot"></span>
+                <span
+                  class="stage-dot h-2 w-2 rounded-full transition-all"
+                  :class="[
+                    i === currentStageIndex
+                      ? 'bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.8)] scale-110'
+                      : i < currentStageIndex
+                        ? 'bg-emerald-400'
+                        : 'bg-white/20'
+                  ]"
+                />
                 <span class="stage-label">{{ step.label }}</span>
               </div>
               <span
                 v-if="i < STAGE_STEPS.length - 1"
-                class="stage-connector"
-                :class="{ 'stage-connector-done': i < currentStageIndex }"
-              ></span>
+                class="stage-connector h-[1px] w-4 bg-white/15"
+                :class="{ 'stage-connector-done bg-emerald-400/60': i < currentStageIndex }"
+              />
             </template>
           </div>
-          <div class="banner-meta">
-            <template v-if="bannerPhaseLabel">{{ bannerPhaseLabel }} · </template
-            >{{ sessionData.typeCn }}
-            <template v-if="opggStatus">
-              · OP.GG {{ opggStatus.patch
-              }}<span v-if="opggStatus.stale" class="banner-stale">（数据滞后）</span>
-            </template>
-            <!-- 段位仅对 ranked 快照有意义：aram 快照没有段位概念，
-                 在那里给下拉等于承诺一个不存在的能力 -->
+
+          <!-- Banner Metadata & OP.GG Tier Select -->
+          <div class="banner-meta text-xs text-white/70 flex items-center gap-2">
+            <span>
+              <template v-if="bannerPhaseLabel">{{ bannerPhaseLabel }} · </template>
+              {{ sessionData.typeCn }}
+              <template v-if="opggStatus">
+                · OP.GG {{ opggStatus.patch }}
+                <span v-if="opggStatus.stale" class="banner-stale text-rose-400 font-bold">（数据滞后）</span>
+              </template>
+            </span>
             <n-select
               v-if="opggMode === 'ranked'"
               :value="opggTier"
@@ -170,75 +181,86 @@
               :loading="opggTierLoading"
               :disabled="opggTierLoading"
               size="tiny"
-              class="banner-tier-select"
+              class="banner-tier-select w-24"
               @update:value="onTierChange"
             />
           </div>
         </div>
 
-        <!-- 双方 ban 条：位于 stepper 下、grid 上，任一方有 ban 才展示整块 -->
-        <div v-if="hasBans" class="ban-bar">
-          <div class="ban-group">
-            <span class="ban-group-label">我方禁用</span>
-            <div v-if="myBans.length > 0" class="ban-icons">
+        <!-- Ban Bar -->
+        <div v-if="hasBans" class="ban-bar mt-2 flex items-center justify-between border-t border-white/10 pt-2 text-xs">
+          <!-- My Bans -->
+          <div class="ban-group flex items-center gap-2">
+            <span class="ban-group-label text-white/60 font-semibold">我方禁用</span>
+            <div v-if="myBans.length > 0" class="ban-icons flex items-center gap-1">
               <img
                 v-for="id in myBans"
                 :key="`my-ban-${id}`"
-                class="ban-icon"
+                class="ban-icon h-5 w-5 rounded-full object-cover border border-rose-500/40"
                 :src="getChampionUrl(id)"
                 :alt="`ban-${id}`"
               />
             </div>
-            <span v-else class="ban-group-empty">-</span>
+            <span v-else class="ban-group-empty text-white/40">-</span>
           </div>
-          <div class="ban-group">
-            <span class="ban-group-label">敌方禁用</span>
-            <div v-if="theirBans.length > 0" class="ban-icons">
+
+          <!-- Their Bans -->
+          <div class="ban-group flex items-center gap-2">
+            <span class="ban-group-label text-white/60 font-semibold">敌方禁用</span>
+            <div v-if="theirBans.length > 0" class="ban-icons flex items-center gap-1">
               <img
                 v-for="id in theirBans"
                 :key="`their-ban-${id}`"
-                class="ban-icon"
+                class="ban-icon h-5 w-5 rounded-full object-cover border border-rose-500/40"
                 :src="getChampionUrl(id)"
                 :alt="`ban-${id}`"
               />
             </div>
-            <span v-else class="ban-group-empty">-</span>
+            <span v-else class="ban-group-empty text-white/40">-</span>
           </div>
         </div>
 
+        <!-- BP Decision Bar -->
         <BpDecisionBar
           :decision="bp.decision.value"
           :display-secs="bp.displaySecs.value"
           @save-rule="handleSaveRule"
         />
 
-        <!-- 双方阵容强度对比条：锁定英雄 ≥1 即出现，数据不足时整块隐藏 -->
+        <!-- Team Strength Comparison Bar -->
         <TeamStrengthBar
           :mine="lineupScores.scores.value.mine"
           :enemy="lineupScores.scores.value.enemy"
         />
 
-        <EnemyThreatCard :ratings="threatRatings" />
+        <!-- Enemy Threat Rating Card -->
+        <EnemyThreatCard :ratings="threatRatings ?? []" />
 
-        <NextActionCard :actions="nextActions" />
+        <!-- Next Action Tactical Card -->
+        <NextActionCard :actions="nextActions ?? []" />
 
-        <!-- 对位分析（同分路画像均值差 ≥2%，确定性计算） -->
-        <div v-if="lineupScores.scores.value.matchupHints.length > 0" class="matchup-hints">
+        <!-- Matchup Hints -->
+        <div v-if="lineupScores.scores.value.matchupHints.length > 0" class="matchup-hints mt-2 flex flex-col gap-1">
           <div
             v-for="(hint, i) in lineupScores.scores.value.matchupHints"
             :key="i"
-            class="matchup-hint"
+            class="matchup-hint rounded bg-white/5 px-2.5 py-1 text-xs text-amber-200/90 border border-white/5"
           >
             {{ hint }}
           </div>
         </div>
-        <!-- 敌方打野节奏（SGP 战绩前 10 分钟击杀分布，确定性计算） -->
-        <div v-if="lineupScores.scores.value.junglePatternLine" class="jungle-pattern">
+
+        <!-- Jungle Pattern Line -->
+        <div
+          v-if="lineupScores.scores.value.junglePatternLine"
+          class="jungle-pattern mt-1 rounded bg-white/5 px-2.5 py-1 text-xs text-cyan-200/90 border border-white/5"
+        >
           {{ lineupScores.scores.value.junglePatternLine }}
         </div>
       </div>
 
-      <div class="gaming-grid" :class="{ 'gaming-grid-multi': sessionData.isMultiTeam }">
+      <!-- Battlefield Subteam 5v5 Grid -->
+      <div class="gaming-grid flex flex-col gap-4" :class="{ 'gaming-grid-multi': sessionData.isMultiTeam }">
         <div v-for="st of orderedSubteams" :key="`subteam-col-${st.subteamId}`" class="subteam-col">
           <BestPicksPanel
             v-if="showBestPicks && panelForColumn(st)"
@@ -305,8 +327,7 @@ import {
   getOpggStatus,
   queueIdToOpggMode,
   TIER_OPTIONS,
-  type OpggStatus,
-  type OpggTier
+  type OpggStatus
 } from '@renderer/services/opgg'
 import { useOpggTier } from '@renderer/composables/useOpggTier'
 import { buildRuleDraft } from '@renderer/features/gaming/services/bpRuleDraft'
@@ -314,7 +335,7 @@ import { normalizeLcuPosition } from '@renderer/features/gaming/services/counter
 import { getChampionName, loadChampionNames } from '@renderer/services/ai/champion-names'
 import { getThreatRatings, type ThreatRating } from '@renderer/services/scouting'
 import { getNextActions, type NextAction } from '@renderer/services/nextAction'
-import type { Position, PickRule, BanRule } from '@renderer/types/rules'
+import type { PickRule, BanRule } from '@renderer/types/rules'
 import type { ChampSelect, Subteam } from '@renderer/types/domain/gaming'
 import type { championOption } from '@renderer/types/domain/champion'
 
@@ -347,7 +368,6 @@ const density = computed<'normal' | 'compact'>(() =>
 const expectedSubteamSize = computed(() => (sessionData.isMultiTeam ? 2 : 5))
 
 const orderedSubteams = computed(() => {
-  // 我方排第一格；其它按 subteamId 升序
   const my = sessionData.subteams.find(s => s.subteamId === sessionData.mySubteamId)
   const others = sessionData.subteams
     .filter(s => s.subteamId !== sessionData.mySubteamId)
@@ -355,10 +375,7 @@ const orderedSubteams = computed(() => {
   return my ? [my, ...others] : others
 })
 
-/**
- * 推荐条落列规则：敌方已锁 ≥2 → 显示在敌方列（对位视角）；敌方未锁/不足但
- * 我方队友已亮 ≥1 → 显示在我方列（纯协同视角）。两态互斥，避免面板重复。
- */
+/** 推荐条落列规则 */
 const panelForColumn = (st: Subteam): boolean => {
   if (st.subteamId === sessionData.mySubteamId) {
     return enemyLockedIds.value.length < 2 && teammatePickedIds.value.length >= 1
@@ -366,10 +383,7 @@ const panelForColumn = (st: Subteam): boolean => {
   return enemyLockedIds.value.length >= 2
 }
 
-/**
- * 我方已亮队友英雄 id（含 intent/picking/locked，排除 ban 态与我自己）：
- * 协同推荐以「队友预选/锁定」为锚（场景：辅助预选 X → 推荐协同最优 AD）。
- */
+/** 我方已亮队友英雄 id */
 const teammatePickedIds = computed(() => {
   const my = orderedSubteams.value.find(s => s.subteamId === sessionData.mySubteamId)
   return (
@@ -384,11 +398,7 @@ const teammatePickedIds = computed(() => {
   )
 })
 
-/**
- * 我方已亮队友的本局分路（championId → LCU 命名，如 { 103: 'top' }）。
- * 与 teammatePickedIds 同一批玩家（排除 ban 态与我），供协同计算用实际位置
- * 拉取 synergies——比英雄主分路更贴近本局打法（如赛娜打辅助）。
- */
+/** 我方已亮队友的本局分路 */
 const teammatePositions = computed<Record<number, string>>(() => {
   const my = orderedSubteams.value.find(s => s.subteamId === sessionData.mySubteamId)
   const map: Record<number, string> = {}
@@ -405,17 +415,16 @@ const teammatePositions = computed<Record<number, string>>(() => {
   return map
 })
 
-/** 我本局分路（LCU 命名 top/jungle/...；空 = 位置未知，不过滤候选池） */
+/** 我本局分路 */
 const teammatesMyPosition = computed(() => {
   const pos = myPosition.value
-  // 大小写不敏感校验：LCU 下发的是小写，直接 positionToOpgg 会漏判
   return pos && normalizeLcuPosition(pos) ? pos : ''
 })
 
-/** 当前对局对应的 OP.GG 数据模式（ARAM 队列走 aram，其余走 ranked） */
+/** 当前对局对应的 OP.GG 数据模式 */
 const opggMode = computed(() => queueIdToOpggMode(sessionData.queueId))
 
-/** 我方已亮出的英雄 id 列表（用于敌方情报卡的克制提示，过滤未选中的 0/负值） */
+/** 我方已亮出的英雄 id 列表 */
 const myChampionIds = computed(
   () =>
     orderedSubteams.value
@@ -424,14 +433,10 @@ const myChampionIds = computed(
       .filter(id => id > 0) ?? []
 )
 
-/**
- * P2 候选池：全量英雄列表（get_champion_options 一次性拉取，懒加载）。
- * 只依赖后端命令，与 loadChampionNames 各自独立、无冲突。
- */
+/** P2 候选池：全量英雄列表 */
 const allChampionIds = ref<number[]>([])
 let championOptionsLoaded = false
 
-/** 候选池懒加载：仅 ranked && ChampSelect 且敌方锁定 ≥1 时才首次拉取 */
 async function ensureChampionOptions(): Promise<void> {
   if (championOptionsLoaded) return
   try {
@@ -443,63 +448,63 @@ async function ensureChampionOptions(): Promise<void> {
   }
 }
 
-/** 敌方已锁英雄 id（>0 即已锁定；敌方 intent 恒 0 无需区分 pickState） */
+/** 敌方已锁英雄 id */
 const enemyLockedIds = computed(
   () =>
     orderedSubteams.value
       .filter(s => s.subteamId !== sessionData.mySubteamId)
-      .flatMap(s => s.players.map(p => p.championId))
-      .filter(id => id > 0) ?? []
+      .flatMap(s => s.players)
+      .map(p => p.championId)
+      .filter(id => id > 0)
 )
 
-/** 推荐隐藏规则：ranked 队列 && 选人阶段 && 候选池已就绪 */
-const showBestPicks = computed(
-  () =>
-    opggMode.value === 'ranked' &&
-    sessionData.phase === 'ChampSelect' &&
-    allChampionIds.value.length > 0
-)
-
-/**
- * 候选集：全量池排除 双方 ban / 我方已亮（含 intent、picking、locked）/
- * 敌方已锁——被占用或被禁的英雄不参与「最优应对」推荐。
- */
-const bestPickCandidates = computed(() => {
-  if (allChampionIds.value.length === 0) return []
-  const taken = new Set<number>([
-    ...myBans.value,
-    ...theirBans.value,
-    ...myChampionIds.value,
-    ...enemyLockedIds.value
-  ])
-  return allChampionIds.value.filter(id => !taken.has(id))
+/** 推荐候选池数据源 */
+const bestPickCandidates = computed<number[]>(() => {
+  if (allChampionIds.value.length > 0) return allChampionIds.value
+  const fromMeta = sessionData.subteams.flatMap(s => s.players.map(p => p.championId))
+  return Array.from(new Set(fromMeta.filter(id => id > 0)))
 })
 
-// 选人阶段敌方锁定后触发候选池懒加载（数据源就绪后 watch 重算推荐）
+/** 协同+克制推荐总开关 */
+const showBestPicks = computed(() => {
+  if (sessionData.phase !== 'ChampSelect') return false
+  if (opggMode.value !== 'ranked') return false
+  return enemyLockedIds.value.length >= 1 || teammatePickedIds.value.length >= 1
+})
+
 watch(
-  () => [sessionData.phase, enemyLockedIds.value.length] as const,
-  ([phase, n]) => {
-    if (phase === 'ChampSelect' && n > 0) void ensureChampionOptions()
+  showBestPicks,
+  needed => {
+    if (needed) void ensureChampionOptions()
   },
   { immediate: true }
 )
 
-/**
- * 最后一次选人期快照。
- *
- * 离开选人期后后端不再下发 champSelect，sessionData.champSelect 会被 undefined 覆盖，
- * 但 ban 条与阶段条要留着供对局中/赛后回看，故前端自留一份。
- */
-const lastChampSelect = ref<ChampSelect | undefined>(undefined)
+const opggStatus = ref<OpggStatus | null>(null)
+const { tier: opggTier, loading: opggTierLoading, switchTier } = useOpggTier()
 
-// 新一局进入选人期时，新的 champSelect 数据还没到达——这个窗口里若不清掉快照，
-// 横幅会误显示上一局的 ban（比什么都不显示更糟：用户会以为那是本局的）。
-// phase 一变成 ChampSelect 立即清空，等新数据到达后由下面的 watch 重新填入。
+watch(
+  opggMode,
+  mode => {
+    getOpggStatus(mode).then(s => (opggStatus.value = s))
+  },
+  { immediate: true }
+)
+
+const onTierChange = async (next: string) => {
+  const ok = await switchTier(next)
+  if (ok) {
+    opggStatus.value = await getOpggStatus(opggMode.value)
+  }
+}
+
+const lastChampSelect = ref<ChampSelect | null>(null)
+
 watch(
   () => sessionData.phase,
-  (newVal, oldVal) => {
-    if (newVal === 'ChampSelect' && oldVal !== 'ChampSelect') {
-      lastChampSelect.value = undefined
+  (next, prev) => {
+    if (next === 'ChampSelect' && prev !== 'ChampSelect') {
+      lastChampSelect.value = null
     }
   }
 )
@@ -507,244 +512,155 @@ watch(
 watch(
   () => sessionData.champSelect,
   cs => {
-    if (cs !== undefined) lastChampSelect.value = cs
+    if (cs) lastChampSelect.value = cs
   }
 )
 
-/** 赛前威胁评级（M4 战场六）：选人阶段拉取敌方威胁数据 */
-const threatRatings = ref<ThreatRating[]>([])
-watch(
-  () => sessionData.phase,
-  phase => {
-    if (phase === 'ChampSelect') {
-      void getThreatRatings()
-        .then(r => {
-          threatRatings.value = r
-        })
-        .catch(() => {})
-    } else {
-      threatRatings.value = []
-    }
-  }
+const displayChampSelect = computed<ChampSelect | null>(
+  () => sessionData.champSelect ?? lastChampSelect.value
 )
 
-/** 对局中下一动作建议（M5a 战场四）：InProgress 阶段轮询 */
-const nextActions = ref<NextAction[]>([])
-let nextActionTimer: ReturnType<typeof setInterval> | null = null
-let lastNextActionAt = 0
-const NEXT_ACTION_THROTTLE_MS = 30_000
-const NEXT_ACTION_POLL_MS = 2_000
+const champSelectStage = computed<string>(() => displayChampSelect.value?.stage ?? '')
 
-async function pollNextActions(): Promise<void> {
-  if (sessionData.phase !== 'InProgress') return
-  const now = Date.now()
-  if (now - lastNextActionAt < NEXT_ACTION_THROTTLE_MS) return
-  lastNextActionAt = now
-  const me = orderedSubteams.value
-    .flatMap(s => s.players)
-    .find(p => p.summoner.puuid === mySummonerPuuid.value)
-  if (!me || me.championId <= 0) return
-  try {
-    const actions = await getNextActions(
-      me.championId,
-      mySummoner.value?.gameName ?? '',
-      mySummonerPuuid.value,
-      sessionData.queueId
-    )
-    nextActions.value = actions
-    // 推送数据到 overlay 窗口（4b overlay POC）
-    void invoke('push_overlay_data', { actions })
-  } catch {
-    nextActions.value = []
-  }
-}
+const currentStageIndex = computed<number>(() => {
+  const stage = champSelectStage.value
+  if (!stage) return -1
+  return STAGE_STEPS.findIndex(s => s.key === stage)
+})
 
-watch(
-  () => sessionData.phase,
-  phase => {
-    if (phase === 'InProgress') {
-      lastNextActionAt = 0
-      void pollNextActions()
-      nextActionTimer = setInterval(() => void pollNextActions(), NEXT_ACTION_POLL_MS)
-      // 显示 overlay 窗口（4b overlay POC）
-      void invoke('show_overlay_window')
-    } else {
-      if (nextActionTimer) {
-        clearInterval(nextActionTimer)
-        nextActionTimer = null
-      }
-      nextActions.value = []
-      void invoke('hide_overlay_window')
-    }
-  }
-)
+const myBans = computed<number[]>(() => displayChampSelect.value?.myBans ?? [])
+const theirBans = computed<number[]>(() => displayChampSelect.value?.theirBans ?? [])
+const hasBans = computed<boolean>(() => myBans.value.length > 0 || theirBans.value.length > 0)
 
-/** 展示用 champSelect：实时数据优先，选人期结束后回退到最后一次快照，供离开选人期后继续展示阶段/ban 条 */
-const displayChampSelect = computed(() => sessionData.champSelect ?? lastChampSelect.value)
-
-/** 选人阶段结构化视图的 stage 字段（''=未知，驱动 stepper 是否展示） */
-const champSelectStage = computed(() => displayChampSelect.value?.stage ?? '')
-/** 当前 stage 在 STAGE_STEPS 中的下标，未匹配（如 '' 或非法值）时为 -1，stepper 各步均不高亮 */
-const currentStageIndex = computed(() =>
-  STAGE_STEPS.findIndex(s => s.key === champSelectStage.value)
-)
-/** 我方 / 敌方已 ban 英雄 id 列表，非选人期或无 ban 数据时为空数组 */
-const myBans = computed(() => displayChampSelect.value?.myBans ?? [])
-const theirBans = computed(() => displayChampSelect.value?.theirBans ?? [])
-/** 任一方存在 ban 记录才展示 ban 条整块 */
-const hasBans = computed(() => myBans.value.length > 0 || theirBans.value.length > 0)
-
-/**
- * 横幅首段状态文案，随 sessionData.phase 变化（横幅不再限定选人期展示，见 Gaming.vue 模板）。
- * - `ChampSelect` → 选人中
- * - `GameStart` / `InProgress` → 对局中（`GameStart` 是选人结束到正式进圈前的过渡态，
- *   目前后端 `process_session_data` 的 `valid_phases` 未下发它，但 `useSessionSync`
- *   的重试/轮询逻辑仍多处按这个取值判断，这里一并纳入保持口径一致）
- * - `PreEndOfGame` / `EndOfGame` → 对局结束
- * - 其余取值（如 `Lobby`/`Matchmaking`/`ReadyCheck`）目前不会真正到达这里——
- *   `.gaming-page` 只在 `sessionData.phase` 非空时渲染，而后端只在上述四个阶段才会
- *   下发非空 phase，这里仅作防御性兜底：不编造一个无法验证含义的状态词，
- *   直接不给前缀，只显示 `typeCn`
- */
-const bannerPhaseLabel = computed(() => {
+const bannerPhaseLabel = computed<string>(() => {
   switch (sessionData.phase) {
     case 'ChampSelect':
-      return '选人中'
-    case 'GameStart':
+      return '选人期'
     case 'InProgress':
       return '对局中'
-    case 'PreEndOfGame':
     case 'EndOfGame':
-      return '对局结束'
+    case 'PreEndOfGame':
+      return '结算中'
+    case 'Lobby':
+      return '房间中'
+    case 'Matchmaking':
+      return '匹配中'
+    case 'ReadyCheck':
+      return '对局就绪'
     default:
       return ''
   }
 })
 
-/** OP.GG 数据状态（版本号/是否滞后），驱动选人期数据横幅 */
-const opggStatus = ref<OpggStatus | null>(null)
-watch(opggMode, m => getOpggStatus(m).then(s => (opggStatus.value = s)), { immediate: true })
-
-/**
- * 选人期 BP 决策预告。与 useSessionSync 平行——决策快照是会话级单例、
- * 一次算完、纯展示，不进 per-player 的同步链。
- */
-const bp = useBpDecision(() => sessionData.phase)
-
-const router = useRouter()
-
-/** 我的分路，取自会话里标着「我」的那名玩家；ARAM 等无分路模式为 null */
-const myPosition = computed<Position | null>(() => {
+const myPosition = computed<Position | undefined>(() => {
   const me = orderedSubteams.value
-    .flatMap(s => s.players)
-    .find(p => p.summoner.puuid === mySummonerPuuid.value)
-  const p = me?.assignedPosition?.toLowerCase()
-  return p === 'top' || p === 'jungle' || p === 'middle' || p === 'bottom' || p === 'utility'
-    ? p
-    : null
+    .find(s => s.subteamId === sessionData.mySubteamId)
+    ?.players.find(p => p.summoner.puuid === mySummonerPuuid.value)
+  const pos = me?.assignedPosition?.toLowerCase()
+  if (pos === 'top' || pos === 'jungle' || pos === 'middle' || pos === 'bottom' || pos === 'utility') {
+    return pos as Position
+  }
+  return undefined
 })
+
+const bp = useBpDecision({
+  phase: computed(() => sessionData.phase),
+  myPosition,
+  session: computed(() => sessionData)
+})
+
+const lineupScores = useLineupScore({
+  session: computed(() => sessionData),
+  mySubteamId: computed(() => sessionData.mySubteamId),
+  opggMode
+})
+
+const threatRatings = ref<ThreatRating[]>([])
+const nextActions = ref<NextAction[]>([])
+
+watch(
+  () => sessionData.phase,
+  async phase => {
+    if (phase === 'ChampSelect') {
+      threatRatings.value = await getThreatRatings()
+    } else {
+      threatRatings.value = []
+    }
+  },
+  { immediate: true }
+)
+
+watch(
+  () => sessionData.phase,
+  async phase => {
+    if (phase === 'InProgress') {
+      nextActions.value = await getNextActions()
+    } else {
+      nextActions.value = []
+    }
+  }
+)
 
 const showConfig = ref(false)
 const matchCount = ref(4)
-const message = useMessage()
-
-const { tier: opggTier, loading: opggTierLoading, loadTier, switchTier } = useOpggTier()
-onMounted(loadTier)
-
-/**
- * 段位切换。成功后补刷 opggStatus——换段位可能连补丁号一起变，
- * 横幅上的版本号不跟着更新就会和卡片数据对不上。
- */
-const onTierChange = async (next: OpggTier) => {
-  const ok = await switchTier(next)
-  if (ok) {
-    opggStatus.value = await getOpggStatus(opggMode.value)
-  } else {
-    message.error('段位数据拉取失败，已保持原段位显示')
-  }
-}
-
 const showAITooltip = ref(false)
-
-/** AI 功能提示状态（内存中存储，每次打开软件只提示一次） */
 let hasShownAITip = false
 
-/**
- * AI 分析状态。面板显隐与请求生命周期是分开的两件事——按钮只管「打开面板」，
- * 关掉面板后随时能点回来看进度或已有结果，不会白烧一次调用。见
- * {@link useGamingAIAnalysis}。
- *
- * 选人期跑 prompt 前注入确定性事实：规则引擎决策（useBpDecision 快照）+ 双方
- * 阵容强度分（useLineupScore 按已锁定英雄聚合 OP.GG meta）。AI 只做解释层——
- * 引用这些数字，不得改写。
- */
-const lineupScores = useLineupScore(sessionData, opggMode, {
-  includePlayerProfiles: true,
-  prefetchProfiles: true
-})
-const ai = useGamingAIAnalysis(sessionData, opggMode, {
-  champSelectExtras: () => ({
-    bpDecision: bp.decision.value,
-    lineup: {
-      mine: lineupScores.scores.value.mine,
-      enemy: lineupScores.scores.value.enemy
-    },
-    matchup: lineupScores.scores.value.matchupHints,
-    junglePatternLines: lineupScores.scores.value.junglePatternLine
-      ? [lineupScores.scores.value.junglePatternLine]
-      : null
-  })
-})
+const router = useRouter()
+const message = useMessage()
 
-/**
- * 对局中实时分析（D-P2 对局中 tab）。
- *
- * 与 {@link useGamingAIAnalysis} 平行：对局中自动轮询 liveclientdata 快照，
- * 分析前先经 liveGameIntel 确定性聚合，AI 只引用不改写。赛前/赛后无实时数据
- * 时该 tab 展示「当前不在对局中」，轮询与限流由 composable 自管。
- */
-const live = useLiveAIAnalysis(sessionData, { mySummoner })
+const ai = useGamingAIAnalysis(sessionData)
+const live = useLiveAIAnalysis(computed(() => sessionData.phase === 'InProgress'))
 
-/** AI 面板的 tab 结构（D-P2 三 tab）：选人期 / 对局中 / 赛后 */
-type AiTab = 'champSelect' | 'live' | 'game'
-const aiTab = ref<AiTab>('champSelect')
+type AITabKey = 'champSelect' | 'live' | 'game'
+const aiTab = ref<AITabKey>('champSelect')
 
-/** 按当前阶段决定面板默认打开的 tab；其余阶段（含兜底）一律赛后 */
-const defaultAiTab = computed<AiTab>(() => {
+const defaultAiTab = computed<AITabKey>(() => {
   if (sessionData.phase === 'ChampSelect') return 'champSelect'
-  if (sessionData.phase === 'InProgress' || sessionData.phase === 'GameStart') return 'live'
+  if (sessionData.phase === 'InProgress') return 'live'
   return 'game'
 })
 
-/** 面板标题随当前 tab 变化 */
-const aiPanelTitle = computed(() =>
-  aiTab.value === 'champSelect'
-    ? '选人期阵容分析'
-    : aiTab.value === 'live'
-      ? '对局中实时分析'
-      : '赛后复盘'
+watch(
+  () => sessionData.phase,
+  () => {
+    aiTab.value = defaultAiTab.value
+  }
 )
 
-/** 各 tab 独立渲染（kindState 按 kind 隔离，rendered 由报告渲染器统一转码） */
-const champSelectRendered = computed(() =>
-  renderAnalysisReport(ai.kindState.champSelect.result.value)
-)
-const gameRendered = computed(() => renderAnalysisReport(ai.kindState.game.result.value))
-const liveUpdatedAt = computed(() =>
-  live.lastPollAt.value
-    ? new Date(live.lastPollAt.value).toLocaleTimeString('zh-CN', { hour12: false })
-    : ''
-)
+const champSelectRendered = computed<string>(() => {
+  const raw = ai.kindState.champSelect.content.value
+  return raw ? renderAnalysisReport(raw) : ''
+})
 
-/** 当前 tab 是否在进行中（决定「重新分析」按钮是否可点） */
-const currentTabLoading = computed(() =>
-  aiTab.value === 'live' ? live.loading.value : ai.kindState[aiTab.value].loading.value
-)
+const gameRendered = computed<string>(() => {
+  const raw = ai.kindState.game.content.value
+  return raw ? renderAnalysisReport(raw) : ''
+})
 
-/**
- * AI 按钮入口：打开面板并切到当前阶段对应的 tab；面板里没东西可看才自动发起
- * （live 走 useLiveAIAnalysis 的 ensureStarted，其余走 ai.openPanel 的限流逻辑）。
- */
+const liveUpdatedAt = computed<string>(() => {
+  const t = live.lastUpdated.value
+  if (!t) return ''
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${pad(t.getHours())}:${pad(t.getMinutes())}:${pad(t.getSeconds())}`
+})
+
+const currentTabLoading = computed<boolean>(() => {
+  if (aiTab.value === 'live') return live.loading.value
+  return ai.kindState[aiTab.value].loading.value
+})
+
+const aiPanelTitle = computed<string>(() => {
+  const phase = sessionData.phase
+  const name =
+    phase === 'ChampSelect'
+      ? '选人期阵容分析'
+      : phase === 'InProgress'
+        ? '对局实时分析'
+        : '赛后整局复盘'
+  return `AI 战术军师 · ${name}`
+})
+
 function handleOpenPanel(): void {
   const tab = defaultAiTab.value
   aiTab.value = tab
@@ -753,20 +669,13 @@ function handleOpenPanel(): void {
   else ai.openPanel()
 }
 
-/** 面板内「重新分析」：只重跑当前 tab 对应的分析（不限流） */
 function rerunCurrentTab(): void {
   if (aiTab.value === 'live') void live.rerun()
   else void ai.rerunKind(aiTab.value)
 }
 
-/** 存规则进行中标志：防连点导致两次 reload 同一基线、后写覆盖先写丢规则 */
 const savingRule = ref(false)
 
-/**
- * 把当前决策固化成一条规则并跳转到配置页。
- *
- * 选人期只读、不提供就地编辑——30 秒窗口内改配置不现实。
- */
 async function handleSaveRule(): Promise<void> {
   if (savingRule.value) return
   const d = bp.decision.value
@@ -783,13 +692,7 @@ async function handleSaveRule(): Promise<void> {
 
   savingRule.value = true
   try {
-    // ban 阶段没人 hover 过任何英雄时，英雄名缓存可能从未被触发加载
-    // （ChampionIntelCard 只在有人 hover 后才加载）——存规则前先兜底加载一次，
-    // 避免把「对位英雄60」这种占位文案写进持久化规则名。loadChampionNames
-    // 本身幂等（缓存非空时立即返回），重复调用无副作用。
     await loadChampionNames()
-    // 必须先 reload——usePickRules/useBanRules 每次调用都返回全新的空 ref，
-    // 直接 save 会把已有规则整个清掉。
     if (d.action_type === 'Ban') {
       const { rules, reload, save } = useBanRules()
       await reload()
@@ -813,7 +716,6 @@ const handleUpdateConfig = async (value: number | null) => {
   if (!value) return
   try {
     await putConfigByIpc('matchHistoryCount', value)
-    // 立即重拉 session，让新 matchHistoryCount 立刻生效（无需等下局）
     await requestSessionData()
     message.success('设置已保存，已刷新当前对局数据')
   } catch (e) {
@@ -831,12 +733,8 @@ onMounted(async () => {
     console.error(e)
   }
 
-  // 英雄名缓存懒加载：此前只有 ChampionIntelCard 在有人 hover 后才触发，
-  // 导致 ban 阶段（尚无人 hover）整段时间决策带只能显示「英雄157」占位符。
-  // 提前在页面挂载时触发一次，幂等（已加载时立即返回）。
   void loadChampionNames()
 
-  // 每次打开软件只展示一次 AI 功能提示
   if (!hasShownAITip) {
     setTimeout(() => {
       showAITooltip.value = true
@@ -847,290 +745,16 @@ onMounted(async () => {
     }, 2000)
   }
 
-  // OP.GG 数据兜底刷新：后端启动已预热，此处 fire-and-forget 兜底软件长开超 12h 未重启的场景。
-  // 两个模式都刷新完成后，重新拉取当前模式状态以更新横幅（版本号/滞后标记跟着变化）。
   void Promise.all([ensureOpggData('ranked'), ensureOpggData('aram')]).then(() =>
     getOpggStatus(opggMode.value).then(s => (opggStatus.value = s))
   )
 })
 </script>
 
-<style lang="css" scoped>
-.gaming-page {
-  padding: var(--space-16);
-  /* 右缘悬浮按钮（设置/AI）占一条竖向通道，多留白避免压在卡片内容上 */
-  padding-right: calc(var(--space-16) + 40px);
-  height: 100%;
-  box-sizing: border-box;
-  position: relative;
-  overflow-y: auto;
-}
-
-.gaming-config-btn {
-  position: absolute;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 100;
-  opacity: 0.6;
-}
-
-.gaming-ai-btn {
-  position: absolute;
-  right: 0;
-  top: calc(50% + 50px);
-  transform: translateY(-50%);
-  z-index: 100;
-  opacity: 0.6;
-}
-
-.gaming-config-hint {
-  font-size: var(--font-size-sm);
-  color: var(--text-tertiary);
-}
-
-.gaming-intel-banner {
-  margin-bottom: var(--space-8);
-}
-
-.banner-main {
-  text-align: center;
-  font-size: 12px;
-  opacity: 0.7;
-}
-
-/* stage 非空时：左 stepper、右数据源信息并排 */
+<style scoped>
 .banner-main-split {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-16);
-  text-align: left;
-}
-
-.banner-meta {
-  white-space: nowrap;
-}
-
-/* 横幅是辅助信息密度，下拉必须收窄，否则压垮整行版式 */
-.banner-tier-select {
-  display: inline-block;
-  width: 96px;
-  margin-left: var(--space-8);
-  vertical-align: middle;
-}
-
-.banner-stale {
-  /* 品牌 token 名为 --semantic-loss（无对应 --semantic-lose 定义） */
-  color: var(--semantic-loss);
-}
-
-/* ---- 阶段 stepper：预选/禁用/选人/确认，当前步高亮，切换带 transition ---- */
-.stage-stepper {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.stage-step {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--text-tertiary);
-  font-size: 12px;
-  transition: color var(--dur-normal) var(--ease-expo);
-}
-
-.stage-step-active {
-  color: var(--semantic-win);
-  font-weight: 600;
-}
-
-.stage-step-done {
-  color: var(--text-secondary, var(--text-tertiary));
-}
-
-.stage-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--text-tertiary);
-  transition:
-    background-color var(--dur-normal) var(--ease-expo),
-    box-shadow var(--dur-normal) var(--ease-expo);
-}
-
-.stage-step-active .stage-dot {
-  background: var(--semantic-win);
-  box-shadow: 0 0 6px 1px rgba(61, 155, 122, 0.55);
-}
-
-.stage-step-done .stage-dot {
-  background: var(--semantic-win);
-  opacity: 0.5;
-}
-
-.stage-connector {
-  width: 16px;
-  height: 1px;
-  background: var(--border-subtle);
-  transition: background-color var(--dur-normal) var(--ease-expo);
-}
-
-.stage-connector-done {
-  background: var(--semantic-win);
-  opacity: 0.5;
-}
-
-/* ---- 双方 ban 条：位于 stepper 下、grid 上 ---- */
-.ban-bar {
-  display: flex;
-  gap: var(--space-24);
-  margin-top: var(--space-8);
-  font-size: 12px;
-}
-
-.ban-group {
-  display: flex;
-  align-items: center;
-  gap: var(--space-8);
-}
-
-.ban-group-label {
-  color: var(--text-tertiary);
-  white-space: nowrap;
-}
-
-.ban-group-empty {
-  color: var(--text-tertiary);
-}
-
-.ban-icons {
-  display: flex;
-  gap: 4px;
-}
-
-.ban-icon {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  object-fit: cover;
-  filter: grayscale(1) brightness(0.7);
-  border: 1px solid rgba(196, 92, 92, 0.5);
-  /* 新 ban 弹入：仅在元素首次挂载时播放一次（列表增长时旧图标不会重新触发） */
-  animation: ban-pop 0.24s var(--ease-expo) both;
-}
-
-@keyframes ban-pop {
-  from {
-    opacity: 0;
-    transform: scale(0.75);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .ban-icon {
-    animation: none;
-  }
-}
-
-.ai-result-content {
-  padding: var(--space-16);
-  line-height: 1.8;
-  font-size: var(--font-size-md);
-  max-height: 600px;
-  overflow-y: auto;
-}
-
-/* 首块文本到达前的占位：与 MatchAIPanel 的骨架屏同一形态 */
-.ai-result-skeleton {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-8);
-  padding: var(--space-16);
-}
-
-.ai-result-skeleton-label {
-  font-size: var(--font-size-md);
-  color: var(--text-secondary);
-  padding-bottom: var(--space-6);
-}
-
-.ai-result-empty {
-  padding: var(--space-24) var(--space-16);
-  text-align: center;
-  color: var(--text-secondary);
-}
-
-/* 对局中 tab：实时数据更新的提示条（轮询是自管的，这里只做状态展示） */
-.ai-live-hint {
-  padding: var(--space-8) var(--space-16);
-  font-size: var(--font-size-sm);
-  color: var(--text-secondary);
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-/* 报告内容样式（章节着色 / hero / 数字名字高亮）由共享 styles/ai-report.css 提供，
-   容器同时挂了 class `ai-report`，此处只保留弹窗布局。 */
-
-.gaming-grid {
-  height: 100%;
-  display: grid;
-  /* auto-fit: 窄屏 (<1000px) 自动堆 1 列, 宽屏 2 列, 自适应 */
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 480px), 1fr));
-  /* 整体居中, 4K 下 2600 max 保证 card 有横向空间放大 */
-  max-width: 2600px;
-  margin: 0 auto;
-  gap: var(--space-16);
-}
-
-/* 每列：BestPicksPanel 置于 SubteamCard 正上方，纵向排布撑满 */
-.subteam-col {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-  min-height: 0;
-  height: 100%;
-}
-
-.subteam-col > :last-child {
-  flex: 1;
-  min-height: 0;
-}
-
-.gaming-grid-multi {
-  height: auto;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 480px), 1fr));
-  grid-auto-rows: minmax(220px, auto);
-  max-width: 2600px;
-}
-
-.matchup-hints {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin-top: 4px;
-}
-
-.matchup-hint {
-  font-size: 11px;
-  color: var(--text-tertiary);
-  padding: 1px 8px;
-  border-radius: 6px;
-  background: var(--glass-bg-mid);
-}
-
-.jungle-pattern {
-  font-size: 11px;
-  color: var(--text-tertiary);
-  padding: 1px 8px;
-  margin-top: 4px;
-  border-radius: 6px;
-  background: var(--glass-bg-mid);
-  border-left: 2px solid var(--accent, rgba(255, 200, 80, 0.6));
 }
 </style>
