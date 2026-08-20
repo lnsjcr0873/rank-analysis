@@ -1,20 +1,54 @@
-<template>
+﻿<template>
   <div
     v-if="visible"
-    class="overlay-container fixed top-3 right-3 w-80 select-none pointer-events-none z-50"
+    class="overlay-container fixed top-3 right-3 select-none pointer-events-auto z-50 transition-all duration-300"
+    :class="isMiniMode ? 'w-auto max-w-sm' : 'w-80'"
   >
+    <!-- Mini Capsule Mode -->
     <div
+      v-if="isMiniMode"
+      class="mini-capsule-card flex items-center gap-2 rounded-full border border-indigo-500/40 bg-[rgba(10,15,26,0.92)] px-3 py-1.5 shadow-2xl backdrop-blur-xl transition-all cursor-pointer hover:border-cyan-400/60"
+      @click="isMiniMode = false"
+    >
+      <div class="flex h-4 w-4 items-center justify-center rounded-full bg-cyan-500/20 text-cyan-300 animate-pulse shrink-0">
+        <Sparkles class="h-2.5 w-2.5" />
+      </div>
+      <span
+        v-if="topAction"
+        class="text-[11px] font-bold text-white truncate max-w-[220px]"
+        :style="{ color: URGENCY_COLORS[topAction.urgency] ?? '#fff' }"
+      >
+        [{{ NEXT_ACTION_LABELS[topAction.kind] ?? topAction.kind }}] {{ topAction.reason }}
+      </span>
+      <span v-else class="text-[11px] text-white/60">战术 HUD 待命中</span>
+      <Maximize2 class="h-3 w-3 text-white/40 hover:text-white shrink-0 ml-1" />
+    </div>
+
+    <!-- Full Tactical Hub Mode -->
+    <div
+      v-else
       class="overlay-card rounded-xl border border-white/15 bg-[rgba(10,15,26,0.88)] p-3.5 shadow-2xl backdrop-blur-xl transition-all"
     >
       <!-- Header -->
       <div class="flex items-center justify-between border-b border-white/10 pb-2 mb-2.5">
         <div class="flex items-center gap-1.5">
           <Sparkles class="h-3.5 w-3.5 text-cyan-400 animate-pulse" />
-          <span class="text-xs font-bold uppercase tracking-wider gold-gradient-text">
+          <span class="text-xs font-bold uppercase tracking-wider text-cyan-300">
             实时战术建议
           </span>
         </div>
-        <span class="text-[9px] font-mono text-white/40">HUD ACTIVE</span>
+        <div class="flex items-center gap-2">
+          <button
+            type="button"
+            class="text-[10px] text-white/40 hover:text-white transition-colors cursor-pointer flex items-center gap-1"
+            title="切换为迷你胶囊"
+            @click="isMiniMode = true"
+          >
+            <Minimize2 class="h-3 w-3" />
+            <span>极简</span>
+          </button>
+          <span class="text-[9px] font-mono text-white/40">HUD ACTIVE</span>
+        </div>
       </div>
 
       <!-- Action Items -->
@@ -65,20 +99,31 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
-import { Sparkles, AlertTriangle, Crosshair } from 'lucide-vue-next'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { Sparkles, AlertTriangle, Crosshair, Minimize2, Maximize2 } from 'lucide-vue-next'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { NEXT_ACTION_LABELS, URGENCY_COLORS, type NextAction } from '@renderer/services/nextAction'
 
 const actions = ref<NextAction[]>([])
-const visible = ref(false)
+const visible = ref(true)
+const isMiniMode = ref(false)
 let unlisten: UnlistenFn | null = null
 
+const topAction = computed(() => {
+  if (!actions.value || actions.value.length === 0) return null
+  const highPriority = actions.value.find(a => a.urgency === 'high')
+  return highPriority ?? actions.value[0]
+})
+
 onMounted(async () => {
-  unlisten = await listen<NextAction[]>('overlay:update', event => {
-    actions.value = event.payload
-    visible.value = (event.payload?.length ?? 0) > 0
-  })
+  try {
+    unlisten = await listen<NextAction[]>('overlay:update', event => {
+      actions.value = event.payload ?? []
+      visible.value = (event.payload?.length ?? 0) > 0
+    })
+  } catch {
+    // ignore
+  }
 })
 
 onUnmounted(() => {

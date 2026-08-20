@@ -247,11 +247,28 @@
           </div>
         </div>
 
+        <!-- Rival & Friend Instant Alert Banner -->
+        <RivalFriendAlertBanner v-if="radarAlerts.length > 0" :alerts="radarAlerts" />
+
         <!-- BP Decision Bar -->
         <BpDecisionBar
           :decision="bp.decision.value"
           :display-secs="bp.displaySecs.value"
           @save-rule="handleSaveRule"
+        />
+
+        <!-- Dodge Advisor Card (ChampSelect) -->
+        <DodgeAdvisorCard
+          v-if="sessionData.phase === 'ChampSelect'"
+          :result="dodgeAdvice"
+          class="mb-2"
+        />
+
+        <!-- ARAM Balance & Bench Comp Advisor (ARAM mode) -->
+        <AramBalanceCard
+          v-if="opggMode === 'aram'"
+          :my-team-champion-ids="myChampionIds"
+          class="mb-2"
         />
 
         <!-- Team Strength Comparison Bar -->
@@ -342,6 +359,11 @@ import BpDecisionBar from '@renderer/components/gaming/BpDecisionBar.vue'
 import TeamStrengthBar from '@renderer/components/gaming/TeamStrengthBar.vue'
 import EnemyThreatCard from '@renderer/components/gaming/EnemyThreatCard.vue'
 import NextActionCard from '@renderer/components/gaming/NextActionCard.vue'
+import DodgeAdvisorCard from '@renderer/components/gaming/DodgeAdvisorCard.vue'
+import AramBalanceCard from '@renderer/components/gaming/AramBalanceCard.vue'
+import RivalFriendAlertBanner, { type RadarAlert } from '@renderer/components/gaming/RivalFriendAlertBanner.vue'
+import { evaluateDodgeQuality, type DodgeAdvisorResult } from '@renderer/features/gaming/services/dodgeAdvisor'
+import { usePlayerNotesStore } from '@renderer/features/settings/stores/playerNotes'
 import { useGamingAIAnalysis } from '@renderer/composables/useGamingAIAnalysis'
 import { useLiveAIAnalysis } from '@renderer/composables/useLiveAIAnalysis'
 import { renderAnalysisReport } from '@renderer/services/ai/matchDetail/renderReport'
@@ -608,6 +630,47 @@ const lineupScores = useLineupScore(sessionData, opggMode, {
 
 const threatRatings = ref<ThreatRating[]>([])
 const nextActions = ref<NextAction[]>([])
+
+let notesStore: ReturnType<typeof usePlayerNotesStore> | null = null
+try {
+  notesStore = usePlayerNotesStore()
+} catch {
+  // Pinia not active in isolated component tests
+}
+
+const dodgeAdvice = computed<DodgeAdvisorResult>(() =>
+  evaluateDodgeQuality({
+    myTeamScore: lineupScores.scores.value.mine,
+    theirTeamScore: lineupScores.scores.value.enemy,
+    threatRatings: threatRatings.value,
+    myPosition: teammatesMyPosition.value,
+    isRankedQueue: sessionData.queueId === 420 || sessionData.queueId === 440
+  })
+)
+
+const radarAlerts = computed<RadarAlert[]>(() => {
+  if (!notesStore) return []
+  const alerts: RadarAlert[] = []
+  for (const st of orderedSubteams.value) {
+    const isEnemy = st.subteamId !== sessionData.mySubteamId
+    for (const player of st.players) {
+      if (!player.summoner?.puuid) continue
+      const note = notesStore.getNote(player.summoner.puuid)
+      if (note && note.note) {
+        const isBad = note.label === 'blacklist' || note.label === 'careful'
+        const isGood = note.label === 'friendly'
+        alerts.push({
+          type: isBad ? 'rival' : isGood ? 'friend' : 'warning',
+          title: `${isEnemy ? '敌方' : '己方'}【${player.summoner.gameName || '玩家'}】备注提醒`,
+          badge: isBad ? '避坑/宿敌' : isGood ? '大腿/好友' : '标记玩家',
+          detail: note.note,
+          side: isEnemy ? 'enemy' : 'ally'
+        })
+      }
+    }
+  }
+  return alerts
+})
 
 watch(
   () => sessionData.phase,
