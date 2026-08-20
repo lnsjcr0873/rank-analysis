@@ -60,9 +60,9 @@
               class="truncate text-base font-black text-white max-w-[180px]"
               :title="summoner?.gameName"
             >
-              {{ summoner?.gameName || '召唤师小明' }}
+              {{ summoner?.gameName || '等待召唤师信息...' }}
             </span>
-            <span class="text-xs text-white/40 font-mono">#{{ summoner?.tagLine || '000' }}</span>
+            <span v-if="summoner?.tagLine" class="text-xs text-white/40 font-mono">#{{ summoner.tagLine }}</span>
 
             <button
               type="button"
@@ -275,10 +275,11 @@ const displayKda = computed(() => {
 
 const message = useMessage()
 const copyName = () => {
-  const name = props.summoner?.gameName || '召唤师小明'
-  const tag = props.summoner?.tagLine || '000'
+  if (!props.summoner?.gameName) return
+  const name = props.summoner.gameName
+  const tag = props.summoner.tagLine || ''
   navigator.clipboard
-    .writeText(`${name}#${tag}`)
+    .writeText(tag ? `${name}#${tag}` : name)
     .then(() => message.success('复制成功'))
     .catch(() => message.error('复制失败'))
 }

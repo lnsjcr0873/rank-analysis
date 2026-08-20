@@ -46,7 +46,7 @@
     </div>
 
     <!-- List -->
-    <div class="flex flex-col gap-2">
+    <div v-if="displayList.length > 0" class="flex flex-col gap-2">
       <div
         v-for="entry in displayList"
         :key="entry.puuid"
@@ -78,11 +78,15 @@
             <span class="text-[9px] text-white/40 font-mono">{{ entry.record }}</span>
           </div>
 
-          <span class="rounded px-1.5 py-0.5 text-[9px] font-bold" :class="entry.tagClass">
+          <span class="rounded px-1.5 py-0.5 text-[9px] font-bold border" :class="entry.tagClass">
             {{ entry.tag }}
           </span>
         </div>
       </div>
+    </div>
+
+    <div v-else class="py-4 text-center text-xs text-white/40">
+      暂无宿敌与好友记录
     </div>
   </div>
 </template>
@@ -112,36 +116,6 @@ const emit = defineEmits<{
 
 const activeTab = ref<'team' | 'vs'>('team')
 
-const demoFriendsAndRivals = [
-  {
-    puuid: 'r-1',
-    name: '玩家X',
-    encounter: '多次同队',
-    winRate: 62,
-    record: '5胜3负',
-    tag: '宿敌',
-    tagClass: 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
-  },
-  {
-    puuid: 'r-2',
-    name: '玩家Y',
-    encounter: '经常同排',
-    winRate: 33,
-    record: '2胜8负',
-    tag: '二叔',
-    tagClass: 'bg-slate-500/20 text-slate-300 border border-slate-500/40'
-  },
-  {
-    puuid: 'r-3',
-    name: '玩家Z',
-    encounter: '车队开黑',
-    winRate: 80,
-    record: '4胜1负',
-    tag: '铁哥们',
-    tagClass: 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-  }
-]
-
 const displayList = computed(() => {
   if (props.summoners && props.summoners.length > 0) {
     return props.summoners.map((s, index) => ({
@@ -157,7 +131,7 @@ const displayList = computed(() => {
           : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
     }))
   }
-  return demoFriendsAndRivals
+  return []
 })
 
 function onPlayerClick(entry: any) {

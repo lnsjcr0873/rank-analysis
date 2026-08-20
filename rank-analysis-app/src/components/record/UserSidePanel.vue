@@ -83,7 +83,8 @@
         </div>
       </div>
 
-      <div class="hero-pool-list flex flex-col gap-1.5">
+      <!-- Hero Pool Rows -->
+      <div v-if="displayChampionPool.length > 0" class="hero-pool-list flex flex-col gap-1.5">
         <div
           v-for="entry in displayChampionPool"
           :key="entry.championId"
@@ -127,6 +128,10 @@
             <span class="text-amber-300 text-[10px]">{{ getPoolKda(entry) }}</span>
           </div>
         </div>
+      </div>
+
+      <div v-else class="py-6 text-center text-xs text-white/40">
+        暂无常用英雄数据
       </div>
 
       <!-- Footer: 查看全部英雄 -->
@@ -257,14 +262,6 @@ function getPoolWins(entry: any): number {
   return Math.round((Number(entry?.count) || 0) * 0.6)
 }
 
-const defaultDemoPool = [
-  { championId: 103, count: 32, wins: 20, kda: '3.21', mastery: 34567, winRate: 62 },
-  { championId: 84, count: 25, wins: 14, kda: '2.85', mastery: 28123, winRate: 56 },
-  { championId: 22, count: 18, wins: 11, kda: '3.12', mastery: 26789, winRate: 61 },
-  { championId: 134, count: 15, wins: 8, kda: '2.45', mastery: 22456, winRate: 53 },
-  { championId: 13, count: 10, wins: 7, kda: '3.80', mastery: 18765, winRate: 70 }
-]
-
 const displayChampionPool = computed(() => {
   if (props.championPool && props.championPool.length > 0) {
     const list = [...props.championPool]
@@ -273,7 +270,7 @@ const displayChampionPool = computed(() => {
     }
     return list.sort((a, b) => b.count - a.count)
   }
-  return defaultDemoPool
+  return []
 })
 
 function onPoolClick(championId: number) {

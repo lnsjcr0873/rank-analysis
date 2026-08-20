@@ -119,7 +119,8 @@
       <!-- User Profile Chip -->
       <div
         class="flex items-center gap-2 rounded-lg bg-white/5 hover:bg-white/10 px-2 py-1 border border-white/10 cursor-pointer transition-all"
-        @click="router.push('/Record')"
+        :title="summoner?.gameName ? `点击查看 ${summoner.gameName}#${summoner.tagLine} 的战绩` : '未连接到客户端'"
+        @click="toMyRecord"
       >
         <div
           class="relative flex h-6 w-6 items-center justify-center rounded-full bg-indigo-600/40 border border-indigo-400/40 overflow-hidden"
@@ -139,7 +140,7 @@
         <div class="flex flex-col">
           <div class="flex items-center gap-1">
             <span class="text-xs font-bold text-white leading-tight truncate max-w-[90px]">
-              {{ summoner?.gameName || '召唤师小明' }}
+              {{ summoner?.gameName || (isConnected ? '加载中...' : '未登录') }}
             </span>
             <ChevronDown class="h-3 w-3 text-white/50" />
           </div>
@@ -238,6 +239,24 @@ const onRegionSelect = (key: string): void => {
 
 /** 当前登录召唤师信息与连接状态 */
 const { isConnected, summoner } = useGameState()
+
+const toMyRecord = (): void => {
+  const s = summoner.value
+  if (s?.gameName) {
+    void router.push({
+      path: '/Record',
+      query: {
+        name: `${s.gameName}#${s.tagLine}`,
+        t: Date.now()
+      }
+    })
+  } else {
+    void router.push({
+      path: '/Record',
+      query: { t: Date.now() }
+    })
+  }
+}
 
 // ─── 顶栏升级药丸 ───────────────────────────────────────────────────────────
 const { availableUpdate, checkForUpdates, showUpdateDialog } = useAppUpdate()

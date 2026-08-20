@@ -94,14 +94,6 @@
             @champion-filter-handled="championFilterCmd = 0"
             @filter-change="activeChampion = $event.championId"
           />
-
-          <!-- Bottom Overview Dashboard Grid (AI, HUD, Growth, Settings, ARAM) -->
-          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3.5 pt-2">
-            <AiTacticalCard />
-            <HudPreviewCard />
-            <GrowthRadarCard />
-            <SettingsQuickCard />
-          </div>
         </div>
       </main>
 
@@ -128,10 +120,6 @@ import { ArrowUp, Menu } from 'lucide-vue-next'
 import MatchHistory from '../components/record/MatchHistory.vue'
 import PlayerBar from '../components/record/PlayerBar.vue'
 import UserSidePanel from '../components/record/UserSidePanel.vue'
-import AiTacticalCard from '../components/gaming/AiTacticalCard.vue'
-import HudPreviewCard from '../components/gaming/HudPreviewCard.vue'
-import GrowthRadarCard from '../components/record/GrowthRadarCard.vue'
-import SettingsQuickCard from '../components/settings/SettingsQuickCard.vue'
 import type { Game } from '../types/domain/match'
 import type { ChampionPoolEntry } from '../components/record/championPool'
 import { useBreakpoint } from '@renderer/composables/useBreakpoint'
