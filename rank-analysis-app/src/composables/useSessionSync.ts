@@ -376,23 +376,41 @@ export function useSessionSync() {
 
     // 监听 game_state_monitor 的可靠 phase 流（每 2s 轮询 + 变化即推）：
     // 检测到进入选人（= 新开一局）且面板还挂着上一局数据时，立即清场重拉。
-    // 以 sessionData.phase !== 'ChampSelect' 防抖——若选人数据已先行到达则无需清。
+    // 同时启动主动轮询重试直到拿齐本局选人数据，避免首次拉取 404 后卡在空面板。
     let lastMonitorPhase = ''
+    let champSelectPollAttempts = 0
+
+    function pollChampSelectSession() {
+      if (sessionData.phase === 'ChampSelect' && sessionData.subteams.length > 0) return
+      if (champSelectPollAttempts >= 20) return
+      champSelectPollAttempts++
+      requestSessionData()
+      trackedSetTimeout(pollChampSelectSession, 1200)
+    }
+
     unlisteners.push(
       await listen<{ phase: string | null }>('game-state-changed', event => {
         const phase = event.payload.phase ?? ''
-        if (
-          phase === 'ChampSelect' &&
-          lastMonitorPhase !== 'ChampSelect' &&
-          sessionData.phase !== 'ChampSelect'
-        ) {
-          resetForNewGame()
+        if (phase === 'ChampSelect') {
+          if (lastMonitorPhase !== 'ChampSelect' && sessionData.phase !== 'ChampSelect') {
+            resetForNewGame()
+          }
+          if (!sessionData.phase || sessionData.subteams.length === 0) {
+            champSelectPollAttempts = 0
+            pollChampSelectSession()
+          }
         }
         lastMonitorPhase = phase
       })
     )
 
     await requestSessionData()
+    trackedSetTimeout(() => {
+      if (!sessionData.phase || sessionData.subteams.length === 0) {
+        champSelectPollAttempts = 0
+        pollChampSelectSession()
+      }
+    }, 1000)
   })
 
   watch(

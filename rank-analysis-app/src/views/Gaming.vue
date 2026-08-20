@@ -4,9 +4,16 @@
   vnode，与元素并列会让根变成 Fragment，离场过渡卡死。
 -->
 <template>
-  <template v-if="!sessionData.phase">
+  <template v-if="!sessionData.phase && currentPhase !== 'ChampSelect' && currentPhase !== 'InProgress'">
     <LoadingComponent :hint="isConnected ? '进入英雄选择后这里会自动展示对局分析' : undefined">
       {{ isConnected ? '等待加入游戏...' : '未连接到客户端' }}
+    </LoadingComponent>
+  </template>
+  <template v-else-if="!sessionData.phase">
+    <LoadingComponent
+      :hint="currentPhase === 'ChampSelect' ? '已进入英雄选择，正在同步双方队伍与英雄数据...' : '对局已开始，正在同步实时战况...'"
+    >
+      {{ currentPhase === 'ChampSelect' ? '正在载入选人数据...' : '正在载入对局数据...' }}
     </LoadingComponent>
   </template>
   <template v-else>
@@ -403,7 +410,7 @@ const STAGE_STEPS: Array<{ key: string; label: string }> = [
 const { sessionData, requestSessionData } = useSessionSync()
 const tiersBySubteam = useSessionTiers(sessionData)
 const { getChampionUrl } = useAssetUrl()
-const { isConnected, summoner: mySummoner } = useGameState()
+const { isConnected, currentPhase, summoner: mySummoner } = useGameState()
 
 /** 自己的 puuid，用于在玩家卡上标出「我」 */
 const mySummonerPuuid = computed(() => mySummoner.value?.puuid ?? '')
