@@ -4,6 +4,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { getConfigByIpc, putConfigByIpc } from '@renderer/services/ipc'
 import { getSgpRankByName, getSgpRegions } from '@renderer/features/record/services/sgp'
 import { modeOptions, initModeOptions } from '@renderer/composables/useGameModes'
+import { useGameState } from '@renderer/composables/useGameState'
 import {
   defaultRank,
   defaultRecentWinRate,
@@ -103,9 +104,25 @@ export function usePlayerRecordData() {
     mode.value = option.label ?? '全部'
   }
 
+  const { summoner: gameStateSummoner } = useGameState()
+
   onMounted(async () => {
     await initModeOptions()
-    const nameFromQuery = route.query.name as string
+    let nameFromQuery = route.query.name as string
+    if (!nameFromQuery) {
+      if (gameStateSummoner.value?.gameName) {
+        nameFromQuery = `${gameStateSummoner.value.gameName}#${gameStateSummoner.value.tagLine}`
+      } else {
+        try {
+          const cur = await invoke<Summoner>('get_current_summoner')
+          if (cur?.gameName) {
+            nameFromQuery = `${cur.gameName}#${cur.tagLine}`
+          }
+        } catch {
+          // ignore
+        }
+      }
+    }
     if (nameFromQuery) {
       await loadSummonerData(nameFromQuery)
     }
@@ -116,6 +133,15 @@ export function usePlayerRecordData() {
     newName => {
       if (newName && typeof newName === 'string') {
         loadSummonerData(newName)
+      }
+    }
+  )
+
+  watch(
+    () => gameStateSummoner.value,
+    s => {
+      if (s?.gameName && !summoner.value?.puuid && !route.query.name) {
+        loadSummonerData(`${s.gameName}#${s.tagLine}`)
       }
     }
   )

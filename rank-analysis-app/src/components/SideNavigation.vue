@@ -191,17 +191,32 @@ function navItemClass(active: boolean) {
   ]
 }
 
+const toMe = () => {
+  if (!gameStateSummoner.value?.gameName) return
+  void router.push({
+    path: '/Record',
+    query: {
+      name: `${gameStateSummoner.value.gameName}#${gameStateSummoner.value.tagLine}`,
+      t: Date.now()
+    }
+  })
+}
+
 const handleMenuClick = (key: string) => {
   if (key === 'Record') {
-    void router.push({ path: '/Record', query: { t: Date.now() } })
+    const currentName = router.currentRoute.value.query.name as string
+    const fallbackName = gameStateSummoner.value?.gameName
+      ? `${gameStateSummoner.value.gameName}#${gameStateSummoner.value.tagLine}`
+      : ''
+    const targetName = currentName || fallbackName
+    if (targetName) {
+      void router.push({ path: '/Record', query: { name: targetName, t: Date.now() } })
+    } else {
+      void router.push({ path: '/Record', query: { t: Date.now() } })
+    }
   } else {
     void router.push(`/${key}`)
   }
-}
-
-const toMe = () => {
-  if (!gameStateSummoner.value?.gameName) return
-  void router.push({ path: '/Record', query: { t: Date.now() } })
 }
 
 const goGaming = () => {

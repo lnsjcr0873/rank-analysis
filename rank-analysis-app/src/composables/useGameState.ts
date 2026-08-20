@@ -100,38 +100,45 @@ function handleConnectionRoute(state: GameStateEvent) {
 }
 
 async function setupListeners() {
-  // 1. 监听游戏状态 (连接/断开)
-  unlistenState = await listen<GameStateEvent>('game-state-changed', event => {
-    const state = event.payload
-    console.log('🎮 Game state changed:', state)
+  try {
+    const hasTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
+    if (!hasTauri) return
 
-    isConnected.value = state.connected
-    currentPhase.value = state.phase
-    summoner.value = state.summoner
-    reasonCode.value = state.reasonCode ?? null
-    reasonMessage.value = state.reasonMessage ?? null
+    // 1. 监听游戏状态 (连接/断开)
+    unlistenState = await listen<GameStateEvent>('game-state-changed', event => {
+      const state = event.payload
+      console.log('🎮 Game state changed:', state)
 
-    handleConnectionRoute(state)
-  })
+      isConnected.value = state.connected
+      currentPhase.value = state.phase
+      summoner.value = state.summoner
+      reasonCode.value = state.reasonCode ?? null
+      reasonMessage.value = state.reasonMessage ?? null
 
-  // 2. 监听会话状态 (选人/游戏中)
-  unlistenSession = await listen<SessionData>('session-complete', event => {
-    const phase = event.payload.phase
+      handleConnectionRoute(state)
+    })
 
-    if (phase !== lastPhase) {
-      if (
-        (phase === 'ChampSelect' || phase === 'InProgress' || phase === 'GameStart') &&
-        router.currentRoute.value.name !== 'Gaming' &&
-        !isRecordChildWindow()
-      ) {
-        console.log(`🎮 [Auto-Nav] Phase changed to ${phase}, navigating to Gaming...`)
-        router.push('/Gaming')
+    // 2. 监听会话状态 (选人/游戏中)
+    unlistenSession = await listen<SessionData>('session-complete', event => {
+      const phase = event.payload.phase
+
+      if (phase !== lastPhase) {
+        if (
+          (phase === 'ChampSelect' || phase === 'InProgress' || phase === 'GameStart') &&
+          router.currentRoute.value.name !== 'Gaming' &&
+          !isRecordChildWindow()
+        ) {
+          console.log(`🎮 [Auto-Nav] Phase changed to ${phase}, navigating to Gaming...`)
+          router.push('/Gaming')
+        }
+        lastPhase = phase
       }
-      lastPhase = phase
-    }
-  })
+    })
 
-  console.log('✅ Game state listeners registered')
+    console.log('✅ Game state listeners registered')
+  } catch (err) {
+    console.warn('[useGameState] setupListeners skipped:', err)
+  }
 }
 
 function teardownListeners() {

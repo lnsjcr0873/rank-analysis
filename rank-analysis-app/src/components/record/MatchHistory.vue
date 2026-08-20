@@ -180,9 +180,11 @@ import {
 } from '@renderer/features/record/services/sgp'
 import { championOption } from '../type'
 import type { Game, MatchHistory } from './match'
+import type { Summoner } from '@renderer/types/domain/player'
 import MatchDetailInline from './MatchDetailInline.vue'
 import { useRecordAssets } from '@renderer/composables/useRecordAssets'
 import { recordAssetsKey } from '@renderer/composables/recordAssetsKey'
+import { useGameState } from '@renderer/composables/useGameState'
 import {
   filterMatches,
   hasActiveFilter,
@@ -324,8 +326,16 @@ watch(allGames, games => emit('games-change', games), { immediate: true })
 /** 点击趋势格后的高亮对局 id（列表内定位用，闪烁后清除） */
 const highlightedGameId = ref<number | null>(null)
 
+const { summoner: gameStateSummoner } = useGameState()
 const route = useRoute()
-const name = computed(() => (route.query.name as string) ?? '')
+const name = computed(() => {
+  const qName = (route.query.name as string) ?? ''
+  if (qName) return qName
+  if (gameStateSummoner.value?.gameName) {
+    return `${gameStateSummoner.value.gameName}#${gameStateSummoner.value.tagLine}`
+  }
+  return ''
+})
 /** 跨区查询目标大区 platformId（空 = 当前区，走本地 LCU；非空走 SGP 跨区） */
 const region = computed(() => (route.query.region as string) ?? '')
 /** 当前登录客户端所在大区 platformId（如 `HN10`）：本区 50 场窗口翻完后续拉 SGP 用 */
@@ -448,7 +458,21 @@ function toggleExpandAll() {
 }
 
 // 获取最近 50 场（一次拉取，列表分页/趋势条/英雄池共用）
-const getHistoryMatch = async (name: string) => {
+const getHistoryMatch = async (summonerName?: string) => {
+  let targetName = summonerName || name.value
+  if (!targetName) {
+    try {
+      const cur = await invoke<Summoner>('get_current_summoner')
+      if (cur?.gameName) {
+        targetName = `${cur.gameName}#${cur.tagLine}`
+      }
+    } catch {
+      // ignore
+    }
+  }
+  if (!targetName) {
+    return
+  }
   collectGeneration.value++ // 作废进行中的全量收集（结果丢弃）
   collectDone.value = false
   collectCancelRequested.value = false
@@ -458,11 +482,11 @@ const getHistoryMatch = async (name: string) => {
   try {
     let result: MatchHistory | null = null
     if (region.value) {
-      result = await getSgpMatchHistoryByName(region.value, name, 0, 50)
+      result = await getSgpMatchHistoryByName(region.value, targetName, 0, 50)
       if (!result) throw new Error('SGP 跨区查询失败')
       // 恢复上次「收集全部」的持久化成果：已存集合（上次收集到的全量）比本次 50 场窗口
       // 更全，直接合并展示；续收游标对齐到恢复后的总数，从上次收尾处继续拉取
-      const saved = await loadCollectedGames(region.value, name)
+      const saved = await loadCollectedGames(region.value, targetName)
       hasCollected.value = !!saved
       if (saved) {
         const merged = mergeGamesByGameId(result.games?.games ?? [], saved)
@@ -471,12 +495,12 @@ const getHistoryMatch = async (name: string) => {
       sgpStartIndex.value = result.games?.games?.length ?? 50
     } else {
       result = await invoke<MatchHistory>('get_match_history_by_name', {
-        name,
+        name: targetName,
         begIndex: 0,
         endIndex: 49
       })
       // 本区（LCU 50 场窗口）也恢复「收集全部」的持久化成果，续收游标对齐
-      const saved = await loadCollectedGames(sgpRegion.value, name)
+      const saved = await loadCollectedGames(sgpRegion.value, targetName)
       hasCollected.value = !!saved
       if (saved) {
         const merged = mergeGamesByGameId(result.games?.games ?? [], saved)
@@ -504,7 +528,7 @@ const getHistoryMatch = async (name: string) => {
  * 重试当前页加载（点击"加载失败"空态下的"重试"按钮触发）
  */
 async function retry() {
-  await getHistoryMatch(name.value)
+  await getHistoryMatch()
 }
 
 watch(
@@ -694,7 +718,7 @@ onMounted(async () => {
   await loadPageSizeConfig()
   // 本区深翻页依赖当前登录大区 platformId（SGP 网关支持本区查询）
   currentRegion.value = (await getCurrentSgpRegion()) ?? ''
-  await getHistoryMatch(name.value)
+  await getHistoryMatch()
 })
 
 onBeforeUnmount(() => {
@@ -707,7 +731,22 @@ watch(
   () => route.query.name,
   newName => {
     if (newName && typeof newName === 'string') {
-      getHistoryMatch(newName)
+      void getHistoryMatch(newName)
+    }
+  }
+)
+
+// 若此前因 summoner 尚未就绪导致列表为空，当检测到登录召唤师到来时自动拉取
+watch(
+  () => gameStateSummoner.value,
+  s => {
+    if (
+      s?.gameName &&
+      allGames.value.length === 0 &&
+      !loadError.value &&
+      !isRequestingMatchHostory.value
+    ) {
+      void getHistoryMatch(`${s.gameName}#${s.tagLine}`)
     }
   }
 )
