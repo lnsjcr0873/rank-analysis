@@ -152,12 +152,25 @@
           </Transition>
         </div>
       </TransitionGroup>
+
+      <!-- Bottom Action: 查看全部对局 (50) > -->
+      <div class="flex items-center justify-center pt-2 pb-1">
+        <button
+          type="button"
+          class="flex items-center gap-1 text-xs font-bold text-indigo-400 hover:text-indigo-300 transition-colors py-2 px-4 rounded-xl bg-white/[0.03] border border-white/10 hover:bg-white/[0.08] cursor-pointer shadow-sm"
+          @click="nextPage"
+        >
+          <span>查看全部对局 ({{ games.length > 0 ? games.length : 50 }})</span>
+          <ChevronRight class="h-3.5 w-3.5" />
+        </button>
+      </div>
     </n-flex>
   </div>
 </template>
 
 <script setup lang="ts">
 import RecordCard from './RecordCard.vue'
+import { ChevronRight } from 'lucide-vue-next'
 import RecordCardSkeleton from './RecordCardSkeleton.vue'
 import TrendBar from './TrendBar.vue'
 import { ArrowBack, ArrowForward, RepeatOutline } from '@vicons/ionicons5'
@@ -462,7 +475,7 @@ const getHistoryMatch = async (summonerName?: string) => {
   let targetName = summonerName || name.value
   if (!targetName) {
     try {
-      const cur = await invoke<Summoner>('get_current_summoner')
+      const cur = await invoke<Summoner>('get_my_summoner')
       if (cur?.gameName) {
         targetName = `${cur.gameName}#${cur.tagLine}`
       }

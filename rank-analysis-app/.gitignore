@@ -12,3 +12,6 @@
 # Logs
 *.log
 npm-debug.log*
+
+# CodeGraph
+.codegraph/

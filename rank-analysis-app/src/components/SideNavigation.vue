@@ -1,157 +1,305 @@
 <template>
   <nav
-    class="flex h-full w-[64px] flex-col items-center justify-between border-r border-white/[0.08] bg-[rgba(11,15,25,0.92)] py-3 select-none backdrop-blur-xl transition-colors"
+    class="flex h-full w-[145px] shrink-0 flex-col justify-between border-r border-white/[0.08] bg-[rgba(9,13,22,0.95)] p-3 select-none backdrop-blur-2xl transition-all"
   >
-    <!-- Top Navigation Items -->
-    <div v-if="!isRecordChild" class="flex flex-col items-center gap-2 w-full px-2">
-      <!-- Record Nav -->
+    <!-- Top Navigation Section -->
+    <div v-if="!isRecordChild" class="flex flex-col gap-1.5 w-full">
+      <!-- 1. 战绩复盘 (RECORD) -->
       <button
-        v-if="!!gameStateSummoner?.gameName"
         type="button"
         :class="navItemClass(isCurrentPath('Record'))"
-        title="战绩查询与复盘"
+        title="战绩复盘与查询"
         @click="handleMenuClick('Record')"
       >
-        <BarChart2 class="h-4 w-4" />
-        <span class="text-[10px] font-medium leading-none">战绩</span>
-        <div v-if="isCurrentPath('Record')" class="nav-active-bar" />
+        <div class="flex items-center gap-2.5 w-full">
+          <div
+            class="flex h-7 w-7 items-center justify-center rounded-lg"
+            :class="isCurrentPath('Record') ? 'bg-indigo-500/30 text-indigo-300' : 'text-white/60'"
+          >
+            <BarChart2 class="h-4 w-4" />
+          </div>
+          <div class="flex flex-col text-left">
+            <span
+              class="text-xs font-bold leading-tight"
+              :class="isCurrentPath('Record') ? 'text-white' : 'text-white/80'"
+            >
+              战绩复盘
+            </span>
+            <span class="text-[9px] font-mono tracking-wider text-white/40 leading-tight">
+              RECORD
+            </span>
+          </div>
+        </div>
       </button>
 
-      <!-- Gaming Nav -->
+      <!-- 2. 实时对局 (GAMING) -->
       <button
-        v-if="!!gameStateSummoner?.gameName"
         type="button"
         :class="navItemClass(isCurrentPath('Gaming'))"
-        title="实时对局与房间侦查"
+        title="实时对局侦查"
         @click="handleMenuClick('Gaming')"
       >
-        <div class="relative">
-          <Gamepad2 class="h-4 w-4" />
-          <span
-            v-if="isInGame"
-            class="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-cyan-400 animate-ping"
-          />
-          <span v-if="isInGame" class="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-cyan-400" />
+        <div class="flex items-center gap-2.5 w-full">
+          <div
+            class="relative flex h-7 w-7 items-center justify-center rounded-lg"
+            :class="isCurrentPath('Gaming') ? 'bg-indigo-500/30 text-cyan-300' : 'text-white/60'"
+          >
+            <Gamepad2 class="h-4 w-4" />
+            <span
+              v-if="isInGame"
+              class="absolute top-1 right-1 h-2 w-2 rounded-full bg-cyan-400 animate-ping"
+            />
+            <span v-if="isInGame" class="absolute top-1 right-1 h-2 w-2 rounded-full bg-cyan-400" />
+          </div>
+          <div class="flex flex-col text-left">
+            <span
+              class="text-xs font-bold leading-tight"
+              :class="isCurrentPath('Gaming') ? 'text-white' : 'text-white/80'"
+            >
+              实时对局
+            </span>
+            <span class="text-[9px] font-mono tracking-wider text-white/40 leading-tight">
+              GAMING
+            </span>
+          </div>
         </div>
-        <span class="text-[10px] font-medium leading-none">对局</span>
-        <div v-if="isCurrentPath('Gaming')" class="nav-active-bar" />
       </button>
 
-      <!-- Growth Nav -->
+      <!-- 3. AI 军师 (TACTICAL) -->
       <button
-        v-if="!!gameStateSummoner?.gameName"
+        type="button"
+        :class="navItemClass(isCurrentPath('Tactical'))"
+        title="AI 军师阵容与对局推演"
+        @click="handleTacticalClick"
+      >
+        <div class="flex items-center gap-2.5 w-full">
+          <div
+            class="flex h-7 w-7 items-center justify-center rounded-lg"
+            :class="isCurrentPath('Tactical') ? 'bg-indigo-500/30 text-amber-300' : 'text-white/60'"
+          >
+            <Sparkles class="h-4 w-4" />
+          </div>
+          <div class="flex flex-col text-left">
+            <span
+              class="text-xs font-bold leading-tight"
+              :class="isCurrentPath('Tactical') ? 'text-white' : 'text-white/80'"
+            >
+              AI 军师
+            </span>
+            <span class="text-[9px] font-mono tracking-wider text-white/40 leading-tight">
+              TACTICAL
+            </span>
+          </div>
+        </div>
+      </button>
+
+      <!-- 4. 游戏内 HUD (OVERLAY) -->
+      <button
+        type="button"
+        :class="navItemClass(isCurrentPath('OverlayView'))"
+        title="游戏内悬浮 HUD 窗"
+        @click="handleOverlayClick"
+      >
+        <div class="flex items-center gap-2.5 w-full">
+          <div
+            class="flex h-7 w-7 items-center justify-center rounded-lg"
+            :class="
+              isCurrentPath('OverlayView') ? 'bg-indigo-500/30 text-cyan-300' : 'text-white/60'
+            "
+          >
+            <Layers class="h-4 w-4" />
+          </div>
+          <div class="flex flex-col text-left">
+            <span
+              class="text-xs font-bold leading-tight"
+              :class="isCurrentPath('OverlayView') ? 'text-white' : 'text-white/80'"
+            >
+              游戏内 HUD
+            </span>
+            <span class="text-[9px] font-mono tracking-wider text-white/40 leading-tight">
+              OVERLAY
+            </span>
+          </div>
+        </div>
+      </button>
+
+      <!-- 5. 成长分析 (GROWTH) -->
+      <button
         type="button"
         :class="navItemClass(isCurrentPath('Growth'))"
         title="选手成长与改错清单"
         @click="handleMenuClick('Growth')"
       >
-        <TrendingUp class="h-4 w-4" />
-        <span class="text-[10px] font-medium leading-none">成长</span>
-        <div v-if="isCurrentPath('Growth')" class="nav-active-bar" />
+        <div class="flex items-center gap-2.5 w-full">
+          <div
+            class="flex h-7 w-7 items-center justify-center rounded-lg"
+            :class="isCurrentPath('Growth') ? 'bg-indigo-500/30 text-emerald-300' : 'text-white/60'"
+          >
+            <TrendingUp class="h-4 w-4" />
+          </div>
+          <div class="flex flex-col text-left">
+            <span
+              class="text-xs font-bold leading-tight"
+              :class="isCurrentPath('Growth') ? 'text-white' : 'text-white/80'"
+            >
+              成长分析
+            </span>
+            <span class="text-[9px] font-mono tracking-wider text-white/40 leading-tight">
+              GROWTH
+            </span>
+          </div>
+        </div>
       </button>
 
-      <!-- Settings Nav -->
+      <!-- 6. 设置中心 (SETTINGS) -->
       <button
         type="button"
         :class="navItemClass(isCurrentPath('Settings'))"
         title="应用与自动化设置"
         @click="handleMenuClick('Settings')"
       >
-        <div class="relative">
-          <Settings class="h-4 w-4" />
-          <span
-            v-if="hasPendingCloudConfig"
-            class="pending-badge-dot absolute -top-1 -right-1 h-2 w-2 rounded-full bg-amber-400 animate-pulse"
-          />
+        <div class="flex items-center gap-2.5 w-full">
+          <div
+            class="relative flex h-7 w-7 items-center justify-center rounded-lg"
+            :class="
+              isCurrentPath('Settings') ? 'bg-indigo-500/30 text-indigo-300' : 'text-white/60'
+            "
+          >
+            <Settings class="h-4 w-4" />
+            <span
+              v-if="hasPendingCloudConfig"
+              class="pending-badge-dot absolute top-1 right-1 h-2 w-2 rounded-full bg-amber-400 animate-pulse"
+            />
+          </div>
+          <div class="flex flex-col text-left">
+            <span
+              class="text-xs font-bold leading-tight"
+              :class="isCurrentPath('Settings') ? 'text-white' : 'text-white/80'"
+            >
+              设置中心
+            </span>
+            <span class="text-[9px] font-mono tracking-wider text-white/40 leading-tight">
+              SETTINGS
+            </span>
+          </div>
         </div>
-        <span class="text-[10px] font-medium leading-none">设置</span>
-        <div v-if="isCurrentPath('Settings')" class="nav-active-bar" />
       </button>
     </div>
 
-    <!-- Child Window Navigation -->
-    <div v-else class="flex flex-col items-center gap-2 w-full px-2">
+    <!-- Child Window Navigation Mode -->
+    <div v-else class="flex flex-col gap-2 w-full">
       <button
         type="button"
-        class="flex flex-col items-center justify-center gap-1 w-full h-12 rounded-lg text-white/60 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+        class="flex items-center gap-2 w-full rounded-lg p-2 text-white/70 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
         title="聚焦回到主窗口"
         @click="backToMain"
       >
-        <AppWindow class="h-4 w-4" />
-        <span class="text-[10px] font-medium leading-none">主窗口</span>
+        <AppWindow class="h-4 w-4 text-indigo-300" />
+        <span class="text-xs font-medium">主窗口</span>
       </button>
 
       <button
         type="button"
-        class="flex flex-col items-center justify-center gap-1 w-full h-12 rounded-lg text-white/60 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+        class="flex items-center gap-2 w-full rounded-lg p-2 text-white/70 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
         title="主窗口与战绩窗口横向并排"
         @click="tileSideBySide"
       >
-        <Columns class="h-4 w-4" />
-        <span class="text-[10px] font-medium leading-none">并排对比</span>
+        <Columns class="h-4 w-4 text-cyan-300" />
+        <span class="text-xs font-medium">并排对比</span>
       </button>
     </div>
 
-    <!-- Bottom Status Indicators -->
-    <div v-if="!isRecordChild" class="flex flex-col items-center gap-2">
-      <!-- LCU Connection Status Button -->
+    <!-- Bottom Section: Quick Tools, Launch Button & Version -->
+    <div v-if="!isRecordChild" class="flex flex-col gap-3 w-full border-t border-white/10 pt-3">
+      <!-- Quick Tools List -->
+      <div class="flex flex-col gap-1 text-[11px] text-white/60">
+        <button
+          type="button"
+          class="flex items-center gap-2 rounded px-2 py-1 hover:bg-white/5 hover:text-white transition-colors cursor-pointer text-left"
+          @click="tileSideBySide"
+        >
+          <AppWindow class="h-3.5 w-3.5 text-indigo-400" />
+          <span>多窗口管理</span>
+        </button>
+
+        <button
+          type="button"
+          class="flex items-center gap-2 rounded px-2 py-1 hover:bg-white/5 hover:text-white transition-colors cursor-pointer text-left"
+          @click="router.push('/Settings/PlayerNotes')"
+        >
+          <BookmarkCheck class="h-3.5 w-3.5 text-amber-400" />
+          <span>玩家备注</span>
+        </button>
+
+        <button
+          type="button"
+          class="flex items-center gap-2 rounded px-2 py-1 hover:bg-white/5 hover:text-white transition-colors cursor-pointer text-left"
+          @click="toMe"
+        >
+          <FileText class="h-3.5 w-3.5 text-cyan-400" />
+          <span>对局记录库</span>
+        </button>
+
+        <button
+          type="button"
+          class="flex items-center gap-2 rounded px-2 py-1 hover:bg-white/5 hover:text-white transition-colors cursor-pointer text-left"
+          @click="router.push('/Settings/DataSync')"
+        >
+          <Cloud class="h-3.5 w-3.5 text-blue-400" />
+          <span>云端同步</span>
+        </button>
+      </div>
+
+      <!-- Primary Action: 一键启动游戏 Button -->
       <button
         type="button"
-        :disabled="!isConnected"
-        class="relative flex h-8 w-8 items-center justify-center rounded-lg border transition-all cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
-        :class="
-          isConnected
-            ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400 shadow-[0_0_8px_rgba(34,197,94,0.15)]'
-            : 'border-white/10 bg-white/5 text-white/40'
-        "
-        :title="isConnected ? `已连接客户端: ${gameStateSummoner?.gameName}` : '未连接到游戏客户端'"
-        @click="toMe"
+        :disabled="launchingGame"
+        class="flex w-full items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-600 px-3 py-2 text-xs font-bold text-white shadow-[0_0_15px_rgba(59,130,246,0.4)] hover:brightness-110 hover:shadow-[0_0_20px_rgba(59,130,246,0.6)] active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50"
+        @click="handleLaunchGame"
       >
-        <Link2 v-if="isConnected" class="h-3.5 w-3.5" />
-        <Unlink v-else class="h-3.5 w-3.5" />
-        <span
-          class="absolute bottom-0.5 right-0.5 h-1.5 w-1.5 rounded-full"
-          :class="isConnected ? 'bg-emerald-400' : 'bg-slate-500'"
-        />
+        <Play v-if="!launchingGame" class="h-3.5 w-3.5 fill-current" />
+        <span v-if="!launchingGame">一键启动游戏</span>
+        <span v-else>正在拉起...</span>
       </button>
 
-      <!-- In-Game State Button -->
-      <button
-        type="button"
-        class="relative flex h-8 w-8 items-center justify-center rounded-lg border transition-all cursor-pointer"
-        :class="
-          isInGame
-            ? 'border-cyan-500/40 bg-cyan-500/15 text-cyan-300 shadow-[0_0_8px_rgba(10,200,185,0.2)] animate-pulse'
-            : 'border-white/10 bg-white/5 text-white/40'
-        "
-        :title="isInGame ? '正在对局中 (点击进入)' : '未在游戏中'"
-        @click="goGaming"
-      >
-        <Gamepad2 class="h-3.5 w-3.5" />
-        <span
-          class="absolute bottom-0.5 right-0.5 h-1.5 w-1.5 rounded-full"
-          :class="isInGame ? 'bg-cyan-400' : 'bg-slate-500'"
-        />
-      </button>
+      <!-- Footer Version & Check Update -->
+      <div class="flex items-center justify-between text-[10px] text-white/40 px-1 font-mono">
+        <span>版本: 4b.0.0</span>
+        <button
+          type="button"
+          class="hover:text-cyan-400 cursor-pointer transition-colors"
+          @click="onCheckUpdateManual"
+        >
+          检查更新
+        </button>
+      </div>
     </div>
   </nav>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import {
   BarChart2,
   Gamepad2,
   TrendingUp,
   Settings,
-  Link2,
-  Unlink,
   AppWindow,
-  Columns
+  Columns,
+  Sparkles,
+  Layers,
+  BookmarkCheck,
+  FileText,
+  Cloud,
+  Play
 } from 'lucide-vue-next'
+import { useMessage } from 'naive-ui'
+import { invoke } from '@tauri-apps/api/core'
 import router, { getFirstPath } from '../router'
 import { useGameState } from '@renderer/composables/useGameState'
 import { useCloudSyncStore } from '@renderer/features/settings/stores/cloudSync'
+import { useAppUpdate } from '@renderer/composables/useAppUpdate'
+import { launchLeagueByIpc } from '@renderer/services/ipc'
 import {
   isRecordChildWindow,
   focusMainWindow,
@@ -160,6 +308,21 @@ import {
 
 const { summoner: gameStateSummoner, currentPhase } = useGameState()
 const cloudStore = useCloudSyncStore()
+
+let checkForUpdates: ((mode?: any) => Promise<any>) | null = null
+try {
+  const appUpdate = useAppUpdate()
+  checkForUpdates = appUpdate.checkForUpdates
+} catch {
+  // Outside naive-ui notification/dialog provider (e.g. in isolated component unit tests)
+}
+
+let message: ReturnType<typeof useMessage> | null = null
+try {
+  message = useMessage()
+} catch {
+  // Outside naive-ui message provider in isolated unit tests
+}
 
 /** 战绩子窗口（record-*）精简模式 */
 const isRecordChild = isRecordChildWindow()
@@ -175,7 +338,6 @@ const tileSideBySide = () => {
 /** 云端配置待裁决时为真 */
 const hasPendingCloudConfig = computed(() => cloudStore.pendingCloudConfig !== null)
 
-const isConnected = computed(() => !!gameStateSummoner.value?.gameName)
 const isInGame = computed(() => currentPhase.value === 'InProgress')
 
 function isCurrentPath(name: string) {
@@ -184,15 +346,18 @@ function isCurrentPath(name: string) {
 
 function navItemClass(active: boolean) {
   return [
-    'relative flex flex-col items-center justify-center gap-1 w-full h-13 rounded-lg transition-all duration-200 cursor-pointer',
+    'relative flex items-center w-full px-2.5 py-2 rounded-xl transition-all duration-200 cursor-pointer',
     active
-      ? 'bg-gradient-to-b from-[#c8aa6e]/20 to-[#c8aa6e]/5 text-[#f0e6d2] shadow-[0_0_12px_rgba(200,170,110,0.15)] border border-[#c8aa6e]/30'
-      : 'text-white/50 hover:text-white/90 hover:bg-white/5'
+      ? 'bg-gradient-to-r from-indigo-600/35 to-purple-600/20 text-white border border-indigo-500/50 shadow-[0_0_15px_rgba(99,102,241,0.25)]'
+      : 'text-white/60 hover:text-white hover:bg-white/5 border border-transparent'
   ]
 }
 
 const toMe = () => {
-  if (!gameStateSummoner.value?.gameName) return
+  if (!gameStateSummoner.value?.gameName) {
+    void router.push('/Record')
+    return
+  }
   void router.push({
     path: '/Record',
     query: {
@@ -219,20 +384,36 @@ const handleMenuClick = (key: string) => {
   }
 }
 
-const goGaming = () => {
+const handleTacticalClick = () => {
   void router.push('/Gaming')
 }
-</script>
 
-<style scoped>
-.nav-active-bar {
-  position: absolute;
-  left: 0;
-  top: 25%;
-  bottom: 25%;
-  width: 2.5px;
-  border-radius: 9999px;
-  background: linear-gradient(to bottom, #f0e6d2, #c8aa6e);
-  box-shadow: 0 0 8px rgba(200, 170, 110, 0.6);
+const handleOverlayClick = async () => {
+  try {
+    await invoke('show_overlay_window')
+    message?.info('游戏内 HUD 置顶窗口已激活')
+  } catch {
+    message?.info('游戏内 HUD 已就绪，进入对局后自动激活')
+  }
 }
-</style>
+
+const launchingGame = ref(false)
+const handleLaunchGame = async () => {
+  if (launchingGame.value) return
+  launchingGame.value = true
+  try {
+    await launchLeagueByIpc()
+    message?.success('游戏启动指令已发送')
+  } catch (err) {
+    message?.error(String(err) || '启动失败')
+  } finally {
+    launchingGame.value = false
+  }
+}
+
+const onCheckUpdateManual = () => {
+  if (checkForUpdates) {
+    void checkForUpdates('manual')
+  }
+}
+</script>

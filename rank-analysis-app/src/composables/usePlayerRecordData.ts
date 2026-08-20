@@ -44,11 +44,23 @@ export function usePlayerRecordData() {
 
   let name = ''
 
-  const getTags = async (summonerName: string, modeValue: number) => {
-    const user_tag = await invoke<UserTag>('get_user_tag_by_name', {
-      name: summonerName,
-      mode: modeValue
-    })
+  const getTags = async (summonerName: string, modeValue: number, puuid?: string) => {
+    let user_tag: UserTag
+    if (puuid) {
+      try {
+        user_tag = await invoke<UserTag>('get_user_tag_by_puuid', { puuid, mode: modeValue })
+      } catch {
+        user_tag = await invoke<UserTag>('get_user_tag_by_name', {
+          name: summonerName,
+          mode: modeValue
+        })
+      }
+    } else {
+      user_tag = await invoke<UserTag>('get_user_tag_by_name', {
+        name: summonerName,
+        mode: modeValue
+      })
+    }
     tags.value = user_tag.tag
     recentData.value = user_tag.recentData
   }
@@ -77,15 +89,28 @@ export function usePlayerRecordData() {
 
     // 需要 summoner 作为其余请求的依据，单独先取；其余调用互相独立，并行
     summoner.value = await invoke<Summoner>('get_summoner_by_name', { name })
+    const puuid = summoner.value?.puuid
 
     const [rankValue, modeValue, platformValue, solo, flexValue] = await Promise.all([
-      invoke<Rank>('get_rank_by_name', { name }),
+      puuid
+        ? invoke<Rank>('get_rank_by_puuid', { puuid }).catch(() =>
+            invoke<Rank>('get_rank_by_name', { name })
+          )
+        : invoke<Rank>('get_rank_by_name', { name }),
       // 历史上 reader 用 `selectMode`、writer 用 `settings.user.selectMode`，
       // 导致用户切换的模式从来没被持久化读到。统一为 writer 用的 key。
       getConfigByIpc<number>('settings.user.selectMode').then(v => v ?? 0),
       invoke<string>('get_platform_name_by_name', { name }),
-      invoke<RecentWinRate>('get_win_rate_by_name_mode', { name, mode: 420 }),
-      invoke<RecentWinRate>('get_win_rate_by_name_mode', { name, mode: 440 })
+      puuid
+        ? invoke<RecentWinRate>('get_win_rate_by_puuid_mode', { puuid, mode: 420 }).catch(() =>
+            invoke<RecentWinRate>('get_win_rate_by_name_mode', { name, mode: 420 })
+          )
+        : invoke<RecentWinRate>('get_win_rate_by_name_mode', { name, mode: 420 }),
+      puuid
+        ? invoke<RecentWinRate>('get_win_rate_by_puuid_mode', { puuid, mode: 440 }).catch(() =>
+            invoke<RecentWinRate>('get_win_rate_by_name_mode', { name, mode: 440 })
+          )
+        : invoke<RecentWinRate>('get_win_rate_by_name_mode', { name, mode: 440 })
     ])
 
     rank.value = rankValue
@@ -94,13 +119,13 @@ export function usePlayerRecordData() {
     solo5v5.value = solo
     flex.value = flexValue
 
-    getTags(name, modeValue)
+    getTags(name, modeValue, puuid)
   }
 
   const updateMode = (value: string | number, option: { label?: string }) => {
     const selectMode = value as number
     putConfigByIpc('settings.user.selectMode', selectMode)
-    getTags(name, selectMode)
+    getTags(name, selectMode, summoner.value?.puuid)
     mode.value = option.label ?? '全部'
   }
 
@@ -114,7 +139,7 @@ export function usePlayerRecordData() {
         nameFromQuery = `${gameStateSummoner.value.gameName}#${gameStateSummoner.value.tagLine}`
       } else {
         try {
-          const cur = await invoke<Summoner>('get_current_summoner')
+          const cur = await invoke<Summoner>('get_my_summoner')
           if (cur?.gameName) {
             nameFromQuery = `${cur.gameName}#${cur.tagLine}`
           }

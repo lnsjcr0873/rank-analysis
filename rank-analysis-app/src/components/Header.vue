@@ -1,28 +1,36 @@
 <template>
   <header
-    class="flex h-12 w-full select-none items-center justify-between border-b border-white/[0.08] bg-[rgba(11,15,25,0.85)] px-3 backdrop-blur-xl transition-colors"
+    class="flex h-13 w-full select-none items-center justify-between border-b border-white/[0.08] bg-[rgba(9,13,22,0.95)] px-4 backdrop-blur-2xl transition-colors"
     data-tauri-drag-region
   >
-    <!-- Left: Brand Logo & Title -->
-    <div class="flex items-center gap-2.5" data-tauri-drag-region>
+    <!-- Left: Brand Logo, Title & 4b Badge -->
+    <div class="flex items-center gap-3" data-tauri-drag-region>
       <div
-        class="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-[#c8aa6e] to-[#785a28] text-xs font-black text-black border border-[#f0e6d2]/50 shadow-sm"
+        class="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 via-purple-600 to-cyan-500 p-0.5 shadow-[0_0_12px_rgba(99,102,241,0.4)]"
       >
-        R
+        <div class="flex h-full w-full items-center justify-center rounded-[10px] bg-[#0b0f19]">
+          <svg class="h-4 w-4 text-cyan-400" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+          </svg>
+        </div>
       </div>
-      <div class="flex flex-col" data-tauri-drag-region>
-        <span class="text-xs font-bold tracking-wider text-[#f0e6d2] uppercase font-sans">
-          Rank Analysis
+      <div class="flex items-center gap-2" data-tauri-drag-region>
+        <span class="text-sm font-black tracking-wide text-white font-sans"> LoL 战绩助手 </span>
+        <span
+          class="rounded-full bg-purple-900/60 px-2 py-0.5 text-[10px] font-bold text-purple-300 border border-purple-500/30 shadow-[0_0_8px_rgba(168,85,247,0.25)]"
+        >
+          4b
         </span>
-        <span class="text-[10px] text-white/60 font-sans leading-tight">对局助手</span>
       </div>
     </div>
 
-    <!-- Center: Search & Region Selector -->
+    <!-- Center: Search & Region Selector with Ctrl + K shortcut -->
     <div class="flex items-center">
       <div
-        class="flex h-8 items-center rounded-md border border-white/15 bg-white/5 px-2 transition-all focus-within:border-[#c8aa6e] focus-within:bg-white/10"
+        class="flex h-9 w-[380px] items-center rounded-lg border border-white/10 bg-[#131929]/90 px-2.5 transition-all focus-within:border-indigo-500/80 focus-within:bg-[#161f33] focus-within:shadow-[0_0_15px_rgba(99,102,241,0.2)]"
       >
+        <Search class="h-3.5 w-3.5 text-white/40 mr-2 shrink-0" />
+
         <!-- Region Dropdown Trigger -->
         <n-dropdown
           trigger="click"
@@ -32,37 +40,37 @@
         >
           <button
             type="button"
-            class="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-white/90 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+            class="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-white/80 hover:bg-white/10 hover:text-white transition-colors cursor-pointer shrink-0"
           >
-            <span class="font-medium">{{ selectedRegionLabel }}</span>
-            <ChevronDown class="h-3 w-3 text-white/60" />
+            <span class="font-medium text-[11px]">{{ selectedRegionLabel }}</span>
+            <ChevronDown class="h-3 w-3 text-white/40" />
           </button>
         </n-dropdown>
 
-        <span class="mx-1.5 h-3.5 w-[1px] bg-white/20" />
+        <span class="mx-2 h-3.5 w-[1px] bg-white/15 shrink-0" />
 
         <!-- Search Input -->
         <input
           v-model="searchValue"
           type="text"
-          placeholder="召唤师名#Tag"
-          class="w-48 bg-transparent text-xs text-white placeholder:text-white/50 focus:outline-none"
+          placeholder="搜索召唤师名称#TAG"
+          class="flex-1 bg-transparent text-xs text-white placeholder:text-white/35 focus:outline-none"
           @keyup.enter="onClinkSearch"
         />
 
-        <button
-          type="button"
-          class="flex h-6 w-6 items-center justify-center rounded text-white/70 hover:bg-white/10 hover:text-white cursor-pointer transition-colors"
-          title="搜索战绩"
-          @click="onClinkSearch"
+        <!-- Shortcut Badge -->
+        <div
+          class="flex items-center gap-1 text-[10px] font-mono text-white/40 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded shadow-sm shrink-0"
         >
-          <Search class="h-3.5 w-3.5" />
-        </button>
+          <span>Ctrl</span>
+          <span>·</span>
+          <span>K</span>
+        </div>
       </div>
     </div>
 
-    <!-- Right: Update Pill, Actions, Theme & Window Controls -->
-    <div class="flex items-center gap-1.5" data-tauri-drag-region>
+    <!-- Right: Update Pill, Action Icons, User Profile & Window Controls -->
+    <div class="flex items-center gap-2" data-tauri-drag-region>
       <!-- Update Pill -->
       <Transition name="fade">
         <button
@@ -77,43 +85,74 @@
         </button>
       </Transition>
 
-      <!-- Close League Client Button -->
-      <n-popconfirm positive-text="关闭游戏" negative-text="取消" @positive-click="closeLeague">
-        <template #trigger>
-          <button
-            type="button"
-            class="flex h-7 w-7 items-center justify-center rounded-md text-white/60 hover:bg-rose-500/20 hover:text-rose-300 disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
-            :disabled="!isConnected"
-            :title="isConnected ? '关闭游戏客户端' : '游戏客户端未运行'"
+      <!-- Notification Bell -->
+      <button
+        type="button"
+        class="flex h-8 w-8 items-center justify-center rounded-lg text-white/60 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+        title="通知中心"
+      >
+        <Bell class="h-4 w-4" />
+      </button>
+
+      <!-- Cloud Sync Button -->
+      <button
+        type="button"
+        class="flex h-8 w-8 items-center justify-center rounded-lg text-white/60 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+        title="云端同步"
+        @click="router.push('/Settings/DataSync')"
+      >
+        <Cloud class="h-4 w-4" />
+      </button>
+
+      <!-- Settings Button -->
+      <button
+        type="button"
+        class="flex h-8 w-8 items-center justify-center rounded-lg text-white/60 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+        title="系统设置"
+        @click="router.push('/Settings')"
+      >
+        <Settings class="h-4 w-4" />
+      </button>
+
+      <span class="mx-1 h-4 w-[1px] bg-white/10" />
+
+      <!-- User Profile Chip -->
+      <div
+        class="flex items-center gap-2 rounded-lg bg-white/5 hover:bg-white/10 px-2 py-1 border border-white/10 cursor-pointer transition-all"
+        @click="router.push('/Record')"
+      >
+        <div
+          class="relative flex h-6 w-6 items-center justify-center rounded-full bg-indigo-600/40 border border-indigo-400/40 overflow-hidden"
+        >
+          <img
+            v-if="summoner?.profileIconId"
+            :src="`${assetPrefix}/profile/${summoner.profileIconId}`"
+            class="h-full w-full object-cover"
+            alt="avatar"
+          />
+          <User v-else class="h-3.5 w-3.5 text-indigo-200" />
+          <span
+            class="absolute bottom-0 right-0 h-1.5 w-1.5 rounded-full"
+            :class="isConnected ? 'bg-emerald-400 ring-1 ring-black' : 'bg-slate-500'"
+          />
+        </div>
+        <div class="flex flex-col">
+          <div class="flex items-center gap-1">
+            <span class="text-xs font-bold text-white leading-tight truncate max-w-[90px]">
+              {{ summoner?.gameName || '召唤师小明' }}
+            </span>
+            <ChevronDown class="h-3 w-3 text-white/50" />
+          </div>
+          <span
+            class="text-[9px] leading-tight"
+            :class="isConnected ? 'text-emerald-400 font-medium' : 'text-white/40'"
           >
-            <Power class="h-3.5 w-3.5" />
-          </button>
-        </template>
-        确定关闭游戏客户端？
-      </n-popconfirm>
+            {{ isConnected ? '在线' : '离线' }}
+          </span>
+        </div>
+      </div>
 
-      <!-- GitHub Link -->
-      <button
-        type="button"
-        class="flex h-7 w-7 items-center justify-center rounded-md text-white/60 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
-        title="访问 GitHub 项目主页"
-        @click="openGithubLink"
-      >
-        <Github class="h-3.5 w-3.5" />
-      </button>
-
-      <!-- Theme Switch -->
-      <button
-        type="button"
-        class="flex h-7 w-7 items-center justify-center rounded-md text-white/60 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
-        :title="themeSwitch ? '切换为暗色模式' : '切换为亮色模式'"
-        @click="settingsStore.toggleTheme()"
-      >
-        <Sun v-if="themeSwitch" class="h-3.5 w-3.5 text-amber-300" />
-        <Moon v-else class="h-3.5 w-3.5 text-slate-300" />
-      </button>
-
-      <span class="mx-1 h-3.5 w-[1px] bg-white/15" />
+      <span class="mx-1 h-4 w-[1px] bg-white/10" />
 
       <!-- Window Controls -->
       <div class="flex items-center gap-0.5">
@@ -151,26 +190,23 @@ import { ref, computed, onMounted, watch } from 'vue'
 import {
   Search,
   ChevronDown,
-  Power,
-  Github,
-  Sun,
-  Moon,
   Minus,
   Square,
   X,
-  ArrowUpCircle
+  ArrowUpCircle,
+  Bell,
+  Cloud,
+  Settings,
+  User
 } from 'lucide-vue-next'
-import { darkTheme, useMessage } from 'naive-ui'
 import { Window } from '@tauri-apps/api/window'
-import { openUrl } from '@tauri-apps/plugin-opener'
 
 import router from '@renderer/router'
-import { useSettingsStore } from '@renderer/features/settings/stores/setting'
 import { useGameState, lcuConnected } from '@renderer/composables/useGameState'
-import { closeLeagueByIpc } from '@renderer/services/ipc'
 import { getSgpRegions } from '@renderer/features/record/services/sgp'
 import { useAppUpdate } from '@renderer/composables/useAppUpdate'
 import { GATE_SETTLE_MS, GATE_FALLBACK_MS } from '@renderer/composables/useStartupDialogs'
+import { assetPrefix } from '@renderer/services/http'
 
 /** 当前应用窗口实例，用于执行窗口控制操作 */
 const currentWindow = Window.getCurrent()
@@ -180,15 +216,15 @@ const searchValue = ref('')
 
 /** 选中的大区 platformId（空 = 当前区，走本地 LCU；非空走 SGP 跨区查询） */
 const selectedRegion = ref('')
-/** 大区下拉选项：当前区 + 各腾讯大区（来自后端 get_sgp_regions） */
-const regionOptions = ref<{ label: string; value: string }[]>([{ label: '当前区', value: '' }])
-
+/** 大区下拉选项列表 */
+const regionOptions = ref<{ label: string; value: string }[]>([])
 onMounted(async () => {
-  const regions = await getSgpRegions()
-  regionOptions.value = [{ label: '当前区', value: '' }, ...regions]
+  try {
+    regionOptions.value = await getSgpRegions()
+  } catch {
+    regionOptions.value = []
+  }
 })
-
-/** n-dropdown 选项格式（key=platformId） */
 const regionDropdownOptions = computed(() =>
   regionOptions.value.map(r => ({ label: r.label, key: r.value }))
 )
@@ -200,32 +236,8 @@ const onRegionSelect = (key: string): void => {
   selectedRegion.value = key
 }
 
-/** 设置状态管理 Store */
-const settingsStore = useSettingsStore()
-
-/** LCU 连接状态：仅在客户端运行（已连接）时允许点击关闭游戏 */
-const { isConnected } = useGameState()
-
-const message = useMessage()
-
-/** 关闭游戏请求进行中（防重复点击 + 按钮 loading 态） */
-const closingLeague = ref(false)
-
-const closeLeague = async (): Promise<void> => {
-  if (closingLeague.value) return
-  closingLeague.value = true
-  try {
-    await closeLeagueByIpc()
-    message.success('已关闭游戏客户端')
-  } catch (e) {
-    message.error(String(e))
-  } finally {
-    closingLeague.value = false
-  }
-}
-
-/** 主题开关状态 */
-const themeSwitch = computed(() => settingsStore.theme.name !== darkTheme.name)
+/** 当前登录召唤师信息与连接状态 */
+const { isConnected, summoner } = useGameState()
 
 // ─── 顶栏升级药丸 ───────────────────────────────────────────────────────────
 const { availableUpdate, checkForUpdates, showUpdateDialog } = useAppUpdate()
@@ -262,10 +274,6 @@ function scheduleSilentUpdateCheck(): void {
 onMounted(() => {
   scheduleSilentUpdateCheck()
 })
-
-const openGithubLink = async (): Promise<void> => {
-  await openUrl('https://github.com/wnzzer/rank-analysis')
-}
 
 const onClinkSearch = async (): Promise<void> => {
   if (!searchValue.value.trim()) return

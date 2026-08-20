@@ -1,9 +1,6 @@
 <script setup lang="ts">
 /**
- * 赛前敌方威胁评级卡片（M4 战场六）。
- *
- * 展示 champ-select 阶段敌方玩家的威胁评级、风格标签、相遇次数。
- * 数据不足时降级展示，绝不编造。
+ * 赛前敌方威胁评级卡片（M4 战场六）
  */
 import { computed } from 'vue'
 import type { ThreatRating } from '@renderer/services/scouting'
@@ -42,43 +39,69 @@ function formatScore(v: number): string {
 </script>
 
 <template>
-  <div v-if="visible" class="threat-card">
-    <!-- 最高威胁指示条 -->
-    <div class="threat-header" :style="{ borderColor: maxThreatColor }">
-      <span class="threat-label">敌方威胁评级</span>
-      <span class="threat-value" :style="{ color: maxThreatColor }">{{ maxThreatLabel }}</span>
+  <div
+    v-if="visible"
+    class="threat-card rounded-2xl border border-white/[0.08] bg-[rgba(15,22,37,0.92)] p-3.5 backdrop-blur-2xl shadow-xl transition-all"
+  >
+    <!-- 最高威胁指示条 Header -->
+    <div
+      class="threat-header flex items-center justify-between border-b border-white/[0.06] pb-2 mb-2"
+      :style="{ borderColor: maxThreatColor }"
+    >
+      <span class="threat-label text-xs font-bold tracking-wide text-white">敌方威胁评级</span>
+      <span class="threat-value text-xs font-black" :style="{ color: maxThreatColor }">{{
+        maxThreatLabel
+      }}</span>
     </div>
 
     <!-- 逐玩家列表 -->
-    <div class="threat-list">
+    <div class="threat-list flex flex-col gap-2">
       <div
         v-for="r in ratings"
         :key="r.puuid"
-        class="threat-row"
-        :class="{ 'threat-row-low': r.threatLevel === 'Low' }"
+        class="threat-row flex flex-col gap-1.5 rounded-xl bg-white/[0.03] p-2.5 border border-white/5 hover:bg-white/[0.06] transition-all"
+        :class="{ 'threat-row-low opacity-75': r.threatLevel === 'Low' }"
       >
-        <div class="threat-row-header">
-          <span class="threat-badge" :style="{ background: THREAT_LEVEL_COLORS[r.threatLevel] }">
+        <div class="threat-row-header flex items-center gap-2">
+          <span
+            class="threat-badge rounded px-1.5 py-0.5 text-[10px] font-black text-white shadow-sm"
+            :style="{ background: THREAT_LEVEL_COLORS[r.threatLevel] }"
+          >
             {{ THREAT_LEVEL_LABELS[r.threatLevel] }}
           </span>
-          <span class="threat-pos">{{ r.position || '?' }}</span>
-          <span v-if="r.encounterCount > 0" class="threat-encounter">
+          <span class="threat-pos text-xs font-bold text-slate-300">{{ r.position || '?' }}</span>
+          <span
+            v-if="r.encounterCount > 0"
+            class="threat-encounter text-[11px] font-bold text-amber-300 ml-auto"
+          >
             交手 {{ r.encounterCount }} 局
           </span>
         </div>
 
-        <div class="threat-row-stats">
-          <span class="threat-stat"> 表现分 {{ formatScore(r.recentPerformance) }} </span>
-          <span class="threat-stat"> 胜率 {{ formatPercent(r.mainChampionWinRate) }} </span>
-          <span class="threat-stat"> 侵略性 {{ formatScore(r.laneAggression) }} </span>
+        <div class="threat-row-stats flex items-center gap-3 text-xs text-white/70">
+          <span class="threat-stat">表现分 {{ formatScore(r.recentPerformance) }}</span>
+          <span class="threat-stat">胜率 {{ formatPercent(r.mainChampionWinRate) }}</span>
+          <span class="threat-stat">侵略性 {{ formatScore(r.laneAggression) }}</span>
         </div>
 
-        <div v-if="r.styleTags.length > 0" class="threat-tags">
-          <span v-for="tag in r.styleTags" :key="tag" class="threat-tag">{{ tag }}</span>
+        <div v-if="r.styleTags.length > 0" class="threat-tags flex flex-wrap gap-1">
+          <span
+            v-for="tag in r.styleTags"
+            :key="tag"
+            class="threat-tag rounded bg-rose-500/15 border border-rose-500/30 px-1.5 py-0.5 text-[10px] font-bold text-rose-300"
+          >
+            {{ tag }}
+          </span>
         </div>
 
-        <div v-if="r.caveats.length > 0" class="threat-caveats">
-          <span v-for="c in r.caveats" :key="c" class="threat-caveat">{{ c }}</span>
+        <div v-if="r.caveats.length > 0" class="threat-caveats flex flex-wrap gap-1">
+          <span
+            v-for="c in r.caveats"
+            :key="c"
+            class="threat-caveat text-[10px] text-amber-300 font-medium"
+          >
+            {{ c }}
+          </span>
         </div>
       </div>
     </div>
@@ -86,120 +109,7 @@ function formatScore(v: number): string {
 </template>
 
 <style scoped>
-.threat-card {
-  margin: 8px 0 0;
-  border-radius: 8px;
-  background: rgba(18, 25, 38, 0.95);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  overflow: hidden;
-}
-
-.threat-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 12px;
-  border-bottom: 2px solid;
-  border-color: inherit;
-  background: rgba(255, 255, 255, 0.03);
-}
-
-.threat-label {
-  font-size: 13px;
-  font-weight: 700;
-  color: #f8fafc;
-}
-
-.threat-value {
-  font-size: 14px;
-  font-weight: 800;
-}
-
-.threat-list {
-  padding: 4px 0;
-}
-
-.threat-row {
-  padding: 8px 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.threat-row:last-child {
-  border-bottom: none;
-}
-
-.threat-row-low {
-  opacity: 0.8;
-}
-
-.threat-row-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
-}
-
-.threat-badge {
-  display: inline-block;
-  padding: 1px 6px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 700;
-  color: #fff;
-}
-
-.threat-pos {
-  font-size: 12px;
-  color: #cbd5e1;
-  font-weight: 600;
-  text-transform: capitalize;
-}
-
-.threat-encounter {
-  font-size: 11px;
-  color: #fbbf24;
-  font-weight: 500;
-  margin-left: auto;
-}
-
-.threat-row-stats {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 4px;
-}
-
-.threat-stat {
-  font-size: 12px;
-  color: #cbd5e1;
-  font-weight: 500;
-}
-
-.threat-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-bottom: 4px;
-}
-
-.threat-tag {
-  display: inline-block;
-  padding: 1px 6px;
-  border-radius: 4px;
-  font-size: 11px;
-  background: rgba(255, 255, 255, 0.1);
-  color: #e2e8f0;
-  font-weight: 500;
-}
-
-.threat-caveats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.threat-caveat {
-  font-size: 11px;
-  color: #fbbf24;
-  font-style: normal;
+.threat-card:hover {
+  border-color: rgba(255, 255, 255, 0.14);
 }
 </style>

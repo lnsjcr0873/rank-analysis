@@ -328,7 +328,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { invoke } from '@tauri-apps/api/core'
 import { getConfigByIpc, putConfigByIpc } from '@renderer/services/ipc'
@@ -621,26 +621,53 @@ watch(
   { immediate: true }
 )
 
+let nextActionTimer: ReturnType<typeof setInterval> | null = null
+
+async function updateNextActionsAndPushOverlay() {
+  if (sessionData.phase !== 'InProgress') return
+  const myPlayer = orderedSubteams.value
+    .find(s => s.subteamId === sessionData.mySubteamId)
+    ?.players.find(p => p.summoner.puuid === mySummonerPuuid.value)
+  const myChampionId = myPlayer?.championId ?? 0
+  const myGameName = myPlayer?.summoner?.gameName ?? ''
+  const actions = await getNextActions(
+    myChampionId,
+    myGameName,
+    mySummonerPuuid.value,
+    sessionData.queueId
+  )
+  nextActions.value = actions
+  if (actions && actions.length > 0) {
+    await invoke('push_overlay_data', { actions }).catch(() => {})
+  }
+}
+
 watch(
   () => sessionData.phase,
   async phase => {
+    if (nextActionTimer) {
+      clearInterval(nextActionTimer)
+      nextActionTimer = null
+    }
+
     if (phase === 'InProgress') {
-      const myPlayer = orderedSubteams.value
-        .find(s => s.subteamId === sessionData.mySubteamId)
-        ?.players.find(p => p.summoner.puuid === mySummonerPuuid.value)
-      const myChampionId = myPlayer?.championId ?? 0
-      const myGameName = myPlayer?.summoner?.gameName ?? ''
-      nextActions.value = await getNextActions(
-        myChampionId,
-        myGameName,
-        mySummonerPuuid.value,
-        sessionData.queueId
-      )
+      await invoke('show_overlay_window').catch(() => {})
+      await updateNextActionsAndPushOverlay()
+      nextActionTimer = setInterval(updateNextActionsAndPushOverlay, 2000)
     } else {
+      await invoke('hide_overlay_window').catch(() => {})
       nextActions.value = []
     }
-  }
+  },
+  { immediate: true }
 )
+
+onBeforeUnmount(() => {
+  if (nextActionTimer) {
+    clearInterval(nextActionTimer)
+    nextActionTimer = null
+  }
+})
 
 const showConfig = ref(false)
 const matchCount = ref(4)

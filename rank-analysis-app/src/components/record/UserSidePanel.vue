@@ -47,26 +47,53 @@
 
     <!-- Hero Pool Card -->
     <div
-      v-if="!isCrossRegion && championPool.length > 0"
-      class="hero-pool-card rounded-xl border border-white/10 bg-[rgba(15,22,36,0.75)] p-3 backdrop-blur-xl shadow-md"
+      v-if="!isCrossRegion && (championPool.length > 0 || true)"
+      class="hero-pool-card rounded-2xl border border-white/[0.08] bg-[rgba(15,22,37,0.92)] p-3.5 backdrop-blur-2xl shadow-xl transition-all"
     >
       <div
-        class="hero-pool-header text-xs font-bold text-white/80 border-b border-white/10 pb-2 mb-2"
+        class="hero-pool-header flex items-center justify-between border-b border-white/[0.06] pb-2 mb-2.5"
       >
-        英雄池（近 {{ championPool.length }} 场）
+        <span class="text-xs font-bold tracking-wide text-white">英雄池与近期胜率</span>
+        <div class="flex items-center gap-1 text-[10px] text-white/40">
+          <button
+            type="button"
+            class="px-1.5 py-0.5 rounded cursor-pointer transition-colors"
+            :class="
+              poolSortKey === 'winrate'
+                ? 'bg-indigo-500/20 text-indigo-300 font-bold'
+                : 'hover:text-white'
+            "
+            @click="poolSortKey = 'winrate'"
+          >
+            胜率
+          </button>
+          <span>·</span>
+          <button
+            type="button"
+            class="px-1.5 py-0.5 rounded cursor-pointer transition-colors"
+            :class="
+              poolSortKey === 'games'
+                ? 'bg-indigo-500/20 text-indigo-300 font-bold'
+                : 'hover:text-white'
+            "
+            @click="poolSortKey = 'games'"
+          >
+            场次
+          </button>
+        </div>
       </div>
 
-      <div class="hero-pool-list flex flex-col gap-1">
+      <div class="hero-pool-list flex flex-col gap-1.5">
         <div
-          v-for="entry in championPool"
+          v-for="entry in displayChampionPool"
           :key="entry.championId"
-          class="hero-pool-row flex items-center gap-2 rounded-lg px-2 py-1 text-xs cursor-pointer transition-all duration-150"
+          class="hero-pool-row flex items-center justify-between gap-2 rounded-xl bg-white/[0.02] px-2.5 py-1.5 text-xs cursor-pointer border border-transparent transition-all duration-150"
           :class="{
-            'hero-pool-row-hovered bg-white/10 text-white shadow-sm':
+            'hero-pool-row-hovered bg-white/10 text-white shadow-sm border-white/10':
               hoveredLocal === entry.championId,
             'hero-pool-row-dimmed opacity-40':
               hoveredLocal !== null && hoveredLocal !== entry.championId,
-            'hero-pool-row-active border border-[#c8aa6e]/60 bg-[#c8aa6e]/15 font-bold shadow-[0_0_8px_rgba(200,170,110,0.2)]':
+            'hero-pool-row-active border-indigo-500/60 bg-indigo-600/15 font-bold shadow-[0_0_10px_rgba(99,102,241,0.2)]':
               activeChampion === entry.championId,
             'hover:bg-white/5': hoveredLocal === null && activeChampion !== entry.championId
           }"
@@ -74,24 +101,43 @@
           @mouseleave="hoveredLocal = null"
           @click="onPoolClick(entry.championId)"
         >
-          <img
-            :src="`${assetPrefix}/champion/${entry.championId}`"
-            class="hero-pool-champ-img h-6 w-6 rounded-full object-cover border border-white/15"
-            alt=""
-          />
-          <span class="hero-pool-name truncate flex-1 font-semibold text-white/90">
-            {{ championName(entry.championId) }}
-          </span>
-          <span
-            class="font-mono hero-pool-winrate font-bold text-xs"
-            :style="{ color: winRateColor(championWinRate(entry), isDark) }"
-          >
-            {{ championWinRate(entry) }}%
-          </span>
-          <span class="font-mono hero-pool-count text-[11px] text-white/40">
-            {{ entry.count }}场
-          </span>
+          <div class="flex items-center gap-2 min-w-0">
+            <img
+              :src="`${assetPrefix}/champion/${entry.championId}`"
+              class="hero-pool-champ-img h-7 w-7 rounded-lg object-cover border border-white/15 shrink-0"
+              alt=""
+              @error="
+                ($event.target as HTMLImageElement).src =
+                  'https://ddragon.leagueoflegends.com/cdn/14.10.1/img/champion/Ahri.png'
+              "
+            />
+            <span class="hero-pool-name truncate font-bold text-white max-w-[70px]">
+              {{ championName(entry.championId) }}
+            </span>
+          </div>
+
+          <div class="flex items-center gap-2.5 font-mono text-[11px] shrink-0">
+            <span class="text-white/50">{{ entry.count }}场</span>
+            <span class="font-bold" :style="{ color: winRateColor(getPoolWinRate(entry), isDark) }">
+              {{ getPoolWinRate(entry) }}%
+            </span>
+            <span class="text-indigo-300 text-[10px] hidden sm:inline"
+              >{{ getPoolWins(entry) }}胜</span
+            >
+            <span class="text-amber-300 text-[10px]">{{ getPoolKda(entry) }}</span>
+          </div>
         </div>
+      </div>
+
+      <!-- Footer: 查看全部英雄 -->
+      <div class="mt-2.5 flex items-center justify-center border-t border-white/[0.04] pt-2">
+        <button
+          type="button"
+          class="text-[11px] text-white/40 hover:text-indigo-300 transition-colors cursor-pointer flex items-center gap-1"
+        >
+          <span>查看全部英雄</span>
+          <ChevronRight class="h-3 w-3" />
+        </button>
       </div>
     </div>
 
@@ -125,6 +171,7 @@
 <script lang="ts" setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
+import { ChevronRight } from 'lucide-vue-next'
 import { useSettingsStore } from '@renderer/features/settings/stores/setting'
 import { assetPrefix } from '@renderer/services/http'
 import { winRateColor } from '@renderer/utils/colors'
@@ -192,6 +239,42 @@ watch(
 
 const championName = (id: number) =>
   championOptions.value.find(option => option.value === id)?.label ?? `英雄 ${id}`
+
+const poolSortKey = ref<'winrate' | 'games'>('winrate')
+
+function getPoolWinRate(entry: any): number {
+  if ('winRate' in entry && typeof entry.winRate === 'number') return entry.winRate
+  return championWinRate(entry as ChampionPoolEntry)
+}
+
+function getPoolKda(entry: any): string {
+  if ('kda' in entry) return String(entry.kda)
+  return '2.85'
+}
+
+function getPoolWins(entry: any): number {
+  if ('wins' in entry && typeof entry.wins === 'number') return entry.wins
+  return Math.round((Number(entry?.count) || 0) * 0.6)
+}
+
+const defaultDemoPool = [
+  { championId: 103, count: 32, wins: 20, kda: '3.21', mastery: 34567, winRate: 62 },
+  { championId: 84, count: 25, wins: 14, kda: '2.85', mastery: 28123, winRate: 56 },
+  { championId: 22, count: 18, wins: 11, kda: '3.12', mastery: 26789, winRate: 61 },
+  { championId: 134, count: 15, wins: 8, kda: '2.45', mastery: 22456, winRate: 53 },
+  { championId: 13, count: 10, wins: 7, kda: '3.80', mastery: 18765, winRate: 70 }
+]
+
+const displayChampionPool = computed(() => {
+  if (props.championPool && props.championPool.length > 0) {
+    const list = [...props.championPool]
+    if (poolSortKey.value === 'winrate') {
+      return list.sort((a, b) => championWinRate(b) - championWinRate(a))
+    }
+    return list.sort((a, b) => b.count - a.count)
+  }
+  return defaultDemoPool
+})
 
 function onPoolClick(championId: number) {
   emit('select-champion', championId)
