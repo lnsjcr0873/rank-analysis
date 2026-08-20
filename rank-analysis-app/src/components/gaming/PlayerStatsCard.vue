@@ -118,14 +118,14 @@ const hasGames = computed(
 }
 
 .stats-card {
-  background: var(--glass-bg-low);
+  background: rgba(22, 30, 48, 0.95);
   border-radius: var(--radius-md);
-  padding: var(--space-6);
+  padding: 6px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   transition:
     background var(--dur-normal) var(--ease-expo),
     border-color var(--dur-normal) var(--ease-expo),
     box-shadow var(--dur-normal) var(--ease-expo);
-  border: 1px solid var(--glass-border);
 }
 
 .stats-card.is-expanded {
@@ -135,12 +135,12 @@ const hasGames = computed(
   /* 240px: 展开态固定宽度，避免抖动 */
   width: 240px;
   z-index: 100;
-  background: var(--bg-elevated);
-  border-color: color-mix(in srgb, var(--semantic-win) 25%, transparent);
+  background: #162032;
+  border-color: rgba(0, 214, 143, 0.4);
   /* 外圈 2px 底色"暗缝"把浮层从下方内容里切出来，再叠常规投影 */
   box-shadow:
-    0 0 0 2px var(--bg-base),
-    var(--shadow-lg);
+    0 0 0 2px #0a0e17,
+    0 10px 25px rgba(0, 0, 0, 0.6);
 }
 
 .stats-header {
@@ -149,18 +149,18 @@ const hasGames = computed(
   align-items: center;
   cursor: pointer;
   margin-bottom: var(--space-4);
-  padding-bottom: var(--space-4);
-  border-bottom: 1px solid var(--n-divider-color);
+  padding-bottom: 3px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .stats-title {
   font-size: var(--font-size-xs);
-  font-weight: 600;
-  color: var(--n-text-color-2);
+  font-weight: 700;
+  color: #e2e8f0;
 }
 
 .toggle-icon {
-  opacity: 0.7;
+  color: #94a3b8;
 }
 
 .stats-compact {
@@ -171,7 +171,17 @@ const hasGames = computed(
   display: flex;
   justify-content: space-between;
   font-size: var(--font-size-xs);
-  margin-bottom: var(--space-2);
+  margin-bottom: 2px;
+}
+
+.compact-row .label {
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.compact-row .value {
+  color: #f8fafc;
+  font-weight: 600;
 }
 
 .stats-full {
@@ -189,11 +199,13 @@ const hasGames = computed(
 }
 
 .label {
-  color: var(--n-text-color-3);
+  color: #94a3b8;
+  font-weight: 500;
 }
 
 .value-strong {
-  font-weight: 600;
+  font-weight: 700;
+  color: #f8fafc;
 }
 
 .value-group {

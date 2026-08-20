@@ -68,19 +68,23 @@ defineProps<{ games: Game[] }>()
 }
 
 .history-item {
-  background: var(--glass-bg-low);
+  background: rgba(22, 30, 48, 0.95);
   border-radius: var(--radius-sm);
   /* P0 收紧到 4px 配合 1 屏 4 场布局 */
   padding: var(--space-4) 5px;
   font-size: var(--font-size-2xs);
-  border: 1px solid var(--glass-border);
-  /* P1: 左侧锚点 2px + 半透明，更轻盈 */
-  border-left-width: 2px;
-  border-left-color: color-mix(in srgb, var(--semantic-loss) 70%, transparent);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-left-width: 3px;
+  border-left-color: #ff4655;
+  transition: background 0.15s ease;
+}
+
+.history-item:hover {
+  background: rgba(30, 42, 68, 0.95);
 }
 
 .history-item.is-win {
-  border-left-color: color-mix(in srgb, var(--semantic-win) 70%, transparent);
+  border-left-color: #00d68f;
 }
 
 /* 列宽策略：胜负(定宽) / 头像(自适应图) / KDA(max-content 永不裁数字) / 模式(弹性+省略号)。
@@ -95,14 +99,14 @@ defineProps<{ games: Game[] }>()
 
 .win-status {
   /* 11→16px 随 viewport 平滑放大 (900→3000) */
-  font-size: clamp(11px, calc(11px + (100vw - 900px) * 5 / 2100), 16px);
-  font-weight: var(--font-weight-bold);
-  color: var(--semantic-loss);
+  font-size: clamp(11px, calc(11px + (100vw - 900px) * 5 / 2100), 15px);
+  font-weight: 800;
+  color: #ff4655;
   text-align: center;
 }
 
 .win-status.is-win {
-  color: var(--semantic-win);
+  color: #00d68f;
 }
 
 /* 22→36px 随 viewport 平滑放大 (900→3000) */
@@ -110,6 +114,7 @@ defineProps<{ games: Game[] }>()
   width: clamp(22px, calc(22px + (100vw - 900px) * 14 / 2100), 36px);
   height: clamp(22px, calc(22px + (100vw - 900px) * 14 / 2100), 36px);
   border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.15);
 }
 
 .history-champ-img :deep(img) {
@@ -117,7 +122,7 @@ defineProps<{ games: Game[] }>()
 }
 
 .kda-text {
-  font-weight: var(--font-weight-bold);
+  font-weight: 700;
   /* 12→18px 随 viewport 平滑放大 (900→3000) */
   font-size: clamp(12px, calc(12px + (100vw - 900px) * 6 / 2100), 18px);
   /* tabular-nums: 数字等宽，确保 5/17/20 与 23/12/39 的斜杠纵向对齐 */
@@ -137,27 +142,31 @@ defineProps<{ games: Game[] }>()
 }
 
 .kill {
-  color: var(--semantic-win);
+  color: #00d68f;
+  font-weight: 700;
 }
 
 .death {
-  color: var(--semantic-loss);
+  color: #ff4655;
+  font-weight: 700;
 }
 
 .assist {
-  color: var(--text-secondary);
+  color: #e2e8f0;
+  font-weight: 600;
 }
 
 .kda-sep {
-  color: var(--text-tertiary);
-  font-weight: var(--font-weight-normal, 400);
+  color: #64748b;
+  font-weight: 400;
   margin: 0 1px;
 }
 
 .queue-name {
   /* 10→14px 随 viewport 平滑放大 (900→3000) */
-  font-size: clamp(10px, calc(10px + (100vw - 900px) * 4 / 2100), 14px);
-  color: var(--n-text-color-3);
+  font-size: clamp(10px, calc(10px + (100vw - 900px) * 4 / 2100), 13px);
+  color: #94a3b8;
+  font-weight: 500;
   text-align: right;
   white-space: nowrap;
   overflow: hidden;

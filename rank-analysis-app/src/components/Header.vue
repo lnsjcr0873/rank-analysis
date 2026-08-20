@@ -6,22 +6,22 @@
     <!-- Left: Brand Logo & Title -->
     <div class="flex items-center gap-2.5" data-tauri-drag-region>
       <div
-        class="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-[#c8aa6e] via-[#94733c] to-[#463714] text-xs font-black text-black shadow-[0_0_12px_rgba(200,170,110,0.35)] border border-[#f0e6d2]/40"
+        class="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-[#c8aa6e] to-[#785a28] text-xs font-black text-black border border-[#f0e6d2]/50 shadow-sm"
       >
         R
       </div>
       <div class="flex flex-col" data-tauri-drag-region>
-        <span class="text-xs font-bold tracking-wider gold-gradient-text uppercase">
+        <span class="text-xs font-bold tracking-wider text-[#f0e6d2] uppercase font-sans">
           Rank Analysis
         </span>
-        <span class="text-[9px] text-white/40 font-mono leading-none">v2.0 PRO</span>
+        <span class="text-[10px] text-white/60 font-sans leading-tight">对局助手</span>
       </div>
     </div>
 
     <!-- Center: Search & Region Selector -->
     <div class="flex items-center">
       <div
-        class="flex h-8 items-center rounded-md border border-white/10 bg-white/5 px-1.5 transition-all focus-within:border-[#c8aa6e]/60 focus-within:bg-white/10 focus-within:ring-1 focus-within:ring-[#c8aa6e]/30"
+        class="flex h-8 items-center rounded-md border border-white/15 bg-white/5 px-2 transition-all focus-within:border-[#c8aa6e] focus-within:bg-white/10"
       >
         <!-- Region Dropdown Trigger -->
         <n-dropdown
@@ -32,27 +32,27 @@
         >
           <button
             type="button"
-            class="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-white/70 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+            class="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-white/90 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
           >
-            <span>{{ selectedRegionLabel }}</span>
-            <ChevronDown class="h-3 w-3 text-white/50" />
+            <span class="font-medium">{{ selectedRegionLabel }}</span>
+            <ChevronDown class="h-3 w-3 text-white/60" />
           </button>
         </n-dropdown>
 
-        <span class="mx-1.5 h-3.5 w-[1px] bg-white/15" />
+        <span class="mx-1.5 h-3.5 w-[1px] bg-white/20" />
 
         <!-- Search Input -->
         <input
           v-model="searchValue"
           type="text"
           placeholder="召唤师名#Tag"
-          class="w-48 bg-transparent text-xs text-white/90 placeholder:text-white/40 focus:outline-none"
+          class="w-48 bg-transparent text-xs text-white placeholder:text-white/50 focus:outline-none"
           @keyup.enter="onClinkSearch"
         />
 
         <button
           type="button"
-          class="flex h-6 w-6 items-center justify-center rounded text-white/60 hover:bg-white/10 hover:text-white cursor-pointer transition-colors"
+          class="flex h-6 w-6 items-center justify-center rounded text-white/70 hover:bg-white/10 hover:text-white cursor-pointer transition-colors"
           title="搜索战绩"
           @click="onClinkSearch"
         >

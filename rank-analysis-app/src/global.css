@@ -9,19 +9,23 @@
   -moz-osx-font-smoothing: grayscale;
 
   /* ========== 设计 Token（深色主题） ========== */
-  --bg-base: #0d0d0f;
-  --bg-surface: #141418;
-  --bg-elevated: #1a1a1e;
-  --border-subtle: rgba(255, 255, 255, 0.06);
-  --text-primary: rgba(255, 255, 255, 0.92);
-  --text-secondary: rgba(255, 255, 255, 0.65);
-  --text-tertiary: rgba(255, 255, 255, 0.45);
-  --semantic-win: #3d9b7a;
-  --semantic-loss: #c45c5c;
+  --bg-base: #0a0e17;
+  --bg-surface: #111724;
+  --bg-elevated: #161e2e;
+  --border-subtle: rgba(255, 255, 255, 0.12);
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-tertiary: #94a3b8;
+  --semantic-win: #00d68f;
+  --semantic-loss: #ff4655;
+  --semantic-win-bright: #00f5a0;
+  --semantic-loss-bright: #ff5e6d;
+  --accent-blue: #38bdf8;
+  --accent-gold: #f59e0b;
   /* 警示/同情色（如"被打爆 / 被连累"），介于胜负之间的琥珀 */
-  --semantic-warn: #d39a4e;
-  --team-blue: rgba(59, 130, 246, 0.35);
-  --team-red: rgba(239, 68, 68, 0.35);
+  --semantic-warn: #fbbf24;
+  --team-blue: rgba(56, 189, 248, 0.45);
+  --team-red: rgba(244, 63, 94, 0.45);
 
   --radius-sm: 6px;
   --radius-md: 8px;

@@ -1,9 +1,22 @@
 <template>
-  <!-- 我方标识只保留头部「我方」tag——外层绿框/发光按用户反馈移除，降低视觉噪音 -->
-  <div class="subteam-card">
+  <div class="subteam-card" :class="isMine ? 'subteam-card-mine' : 'subteam-card-enemy'">
     <div class="subteam-card-header">
-      <span class="subteam-card-title">队伍 {{ subteam.subteamId }}</span>
-      <n-tag v-if="isMine" size="small" type="success" :bordered="false">我方</n-tag>
+      <div class="flex items-center gap-2">
+        <span
+          class="h-2.5 w-2.5 rounded-full"
+          :class="
+            isMine
+              ? 'bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]'
+              : 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.6)]'
+          "
+        />
+        <span class="subteam-card-title">{{ isMine ? '我方队伍' : '敌方队伍' }}</span>
+        <n-tag v-if="isMine" size="tiny" type="info" round :bordered="false">我方</n-tag>
+        <n-tag v-else size="tiny" type="error" round :bordered="false">敌方</n-tag>
+      </div>
+      <span class="text-xs text-slate-400 font-mono"
+        >{{ subteam.players.length }}/{{ expectedSize }} 人</span
+      >
     </div>
     <div class="subteam-card-body">
       <template
@@ -105,37 +118,45 @@ const placeholderCount = computed(() =>
 .subteam-card {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
-  padding: var(--space-6);
-  border-radius: var(--radius-md);
-  background: var(--glass-bg-mid);
-  border: 1px solid var(--glass-border);
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(14, 20, 32, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   min-height: 0;
-  height: 100%;
+  width: 100%;
   box-sizing: border-box;
+}
+
+.subteam-card-mine {
+  border-top: 2px solid #38bdf8;
+}
+
+.subteam-card-enemy {
+  border-top: 2px solid #f43f5e;
 }
 
 .subteam-card-header {
   display: flex;
   align-items: center;
-  gap: var(--space-6);
-  padding: 0 var(--space-4);
+  justify-content: space-between;
+  padding: 2px 4px 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .subteam-card-title {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-bold);
-  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 700;
+  color: #f8fafc;
 }
 
 .subteam-card-body {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: 8px;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  /* 显式锁掉横向滚动 (避免内部元素溢出时底部出滚动条) */
   overflow-x: hidden;
 }
 
@@ -144,10 +165,10 @@ const placeholderCount = computed(() =>
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px dashed var(--border-subtle);
-  border-radius: var(--radius-sm);
-  color: var(--text-tertiary);
-  font-size: var(--font-size-xs);
+  border: 1px dashed rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: #94a3b8;
+  font-size: 12px;
   min-height: 60px;
 }
 </style>

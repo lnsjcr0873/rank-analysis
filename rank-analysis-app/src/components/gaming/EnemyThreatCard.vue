@@ -87,10 +87,10 @@ function formatScore(v: number): string {
 
 <style scoped>
 .threat-card {
-  margin: 0 0 12px;
+  margin: 8px 0 0;
   border-radius: 8px;
-  background: var(--bg-card, rgba(255, 255, 255, 0.04));
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+  background: rgba(18, 25, 38, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   overflow: hidden;
 }
 
@@ -101,17 +101,18 @@ function formatScore(v: number): string {
   padding: 8px 12px;
   border-bottom: 2px solid;
   border-color: inherit;
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .threat-label {
   font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary, #e5e5e5);
+  font-weight: 700;
+  color: #f8fafc;
 }
 
 .threat-value {
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 800;
 }
 
 .threat-list {
@@ -120,7 +121,7 @@ function formatScore(v: number): string {
 
 .threat-row {
   padding: 8px 12px;
-  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.04));
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .threat-row:last-child {
@@ -128,7 +129,7 @@ function formatScore(v: number): string {
 }
 
 .threat-row-low {
-  opacity: 0.6;
+  opacity: 0.8;
 }
 
 .threat-row-header {
@@ -143,19 +144,21 @@ function formatScore(v: number): string {
   padding: 1px 6px;
   border-radius: 4px;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   color: #fff;
 }
 
 .threat-pos {
   font-size: 12px;
-  color: var(--text-secondary, #999);
+  color: #cbd5e1;
+  font-weight: 600;
   text-transform: capitalize;
 }
 
 .threat-encounter {
   font-size: 11px;
-  color: var(--text-tertiary, #888);
+  color: #fbbf24;
+  font-weight: 500;
   margin-left: auto;
 }
 
@@ -167,7 +170,8 @@ function formatScore(v: number): string {
 
 .threat-stat {
   font-size: 12px;
-  color: var(--text-secondary, #aaa);
+  color: #cbd5e1;
+  font-weight: 500;
 }
 
 .threat-tags {
@@ -182,8 +186,9 @@ function formatScore(v: number): string {
   padding: 1px 6px;
   border-radius: 4px;
   font-size: 11px;
-  background: var(--bg-tag, rgba(255, 255, 255, 0.08));
-  color: var(--text-secondary, #aaa);
+  background: rgba(255, 255, 255, 0.1);
+  color: #e2e8f0;
+  font-weight: 500;
 }
 
 .threat-caveats {
@@ -194,7 +199,7 @@ function formatScore(v: number): string {
 
 .threat-caveat {
   font-size: 11px;
-  color: var(--text-tertiary, #777);
-  font-style: italic;
+  color: #fbbf24;
+  font-style: normal;
 }
 </style>

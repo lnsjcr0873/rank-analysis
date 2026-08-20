@@ -420,28 +420,29 @@ watch(
   display: flex;
   flex-direction: column;
   border-radius: var(--radius-md);
-  background: var(--glass-bg-mid) !important;
-  border: 1px solid var(--glass-border) !important;
-  box-shadow: var(--shadow-md), var(--glass-highlight) !important;
-  transition: box-shadow var(--dur-normal) var(--ease-expo);
+  background: rgba(18, 26, 42, 0.95) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+  transition:
+    border-color var(--dur-fast) var(--ease-expo),
+    box-shadow var(--dur-fast) var(--ease-expo);
   animation: fade-up var(--dur-normal) var(--ease-expo) both;
   animation-delay: calc(var(--stagger) * var(--stagger-i, 0));
 }
 
 .player-card:hover {
-  box-shadow: var(--shadow-lg), var(--glass-highlight) !important;
+  border-color: rgba(200, 170, 110, 0.4) !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45) !important;
 }
 
-.player-card-team-blue {
-  border-left: 2px solid var(--team-blue);
-  border-color: var(--border-subtle);
-  border-left-color: rgba(59, 130, 246, 0.6);
+.player-card-team-blue,
+.player-card-team-mine {
+  border-left: 3px solid #38bdf8 !important;
 }
 
-.player-card-team-red {
-  border-left: 2px solid var(--team-red);
-  border-color: var(--border-subtle);
-  border-left-color: rgba(239, 68, 68, 0.6);
+.player-card-team-red,
+.player-card-team-enemy {
+  border-left: 3px solid #f43f5e !important;
 }
 
 .light-mode-strip {
@@ -647,8 +648,9 @@ watch(
 }
 
 .tag-line {
-  color: var(--n-text-color-3);
+  color: #94a3b8;
   font-size: var(--font-size-sm);
+  font-weight: 500;
 }
 
 .tier-icon {
@@ -672,12 +674,13 @@ watch(
   width: clamp(20px, calc(20px + (100vw - 900px) * 12 / 2100), 32px);
   height: clamp(20px, calc(20px + (100vw - 900px) * 12 / 2100), 32px);
   font-size: clamp(18px, calc(18px + (100vw - 900px) * 11 / 2100), 29px);
-  color: var(--text-tertiary);
+  color: #94a3b8;
 }
 
 .tier-text {
   font-size: var(--font-size-sm);
-  color: var(--n-text-color-2);
+  color: #e2e8f0;
+  font-weight: 600;
 }
 
 .custom-spin {
@@ -685,8 +688,8 @@ watch(
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  border: 2px solid var(--border-subtle);
-  border-top-color: var(--semantic-win);
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  border-top-color: #00d68f;
   animation: player-spin 1s linear infinite;
   flex-shrink: 0;
 }
@@ -698,33 +701,24 @@ watch(
 }
 
 :deep(.n-tag--success-type) {
-  background: rgba(61, 155, 122, 0.12) !important;
-  color: var(--semantic-win) !important;
-  border: 1px solid rgba(61, 155, 122, 0.2) !important;
+  background: rgba(0, 214, 143, 0.15) !important;
+  color: #00d68f !important;
+  border: 1px solid rgba(0, 214, 143, 0.35) !important;
+  font-weight: 600;
 }
 
 :deep(.n-tag--error-type) {
-  background: rgba(196, 92, 92, 0.1) !important;
-  color: var(--semantic-loss) !important;
-  border: 1px solid rgba(196, 92, 92, 0.18) !important;
+  background: rgba(255, 70, 85, 0.15) !important;
+  color: #ff4655 !important;
+  border: 1px solid rgba(255, 70, 85, 0.35) !important;
+  font-weight: 600;
 }
 
 :deep(.n-tag--warning-type) {
-  background: rgba(251, 191, 36, 0.1) !important;
-  color: var(--semantic-warn) !important;
-  border: 1px solid rgba(251, 191, 36, 0.2) !important;
-}
-
-.player-card-team-mine {
-  border-left: 2px solid var(--team-blue);
-  border-color: var(--border-subtle);
-  border-left-color: rgba(34, 197, 94, 0.7);
-}
-
-.player-card-team-enemy {
-  border-left: 2px solid var(--team-red);
-  border-color: var(--border-subtle);
-  border-left-color: rgba(239, 68, 68, 0.5);
+  background: rgba(251, 191, 36, 0.15) !important;
+  color: #fbbf24 !important;
+  border: 1px solid rgba(251, 191, 36, 0.35) !important;
+  font-weight: 600;
 }
 
 .player-card-density-compact .right-section {

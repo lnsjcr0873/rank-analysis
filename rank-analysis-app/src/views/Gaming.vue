@@ -274,7 +274,7 @@
           <div
             v-for="(hint, i) in lineupScores.scores.value.matchupHints"
             :key="i"
-            class="matchup-hint rounded bg-white/5 px-2.5 py-1 text-xs text-amber-200/90 border border-white/5"
+            class="matchup-hint rounded bg-[rgba(251,191,36,0.12)] px-2.5 py-1 text-xs text-amber-200 border border-amber-500/20 font-medium"
           >
             {{ hint }}
           </div>
@@ -283,17 +283,14 @@
         <!-- Jungle Pattern Line -->
         <div
           v-if="lineupScores.scores.value.junglePatternLine"
-          class="jungle-pattern mt-1 rounded bg-white/5 px-2.5 py-1 text-xs text-cyan-200/90 border border-white/5"
+          class="jungle-pattern mt-1.5 rounded bg-[rgba(56,189,248,0.12)] px-2.5 py-1 text-xs text-cyan-200 border border-cyan-500/20 font-medium"
         >
           {{ lineupScores.scores.value.junglePatternLine }}
         </div>
       </div>
 
       <!-- Battlefield Subteam 5v5 Grid -->
-      <div
-        class="gaming-grid flex flex-col gap-4"
-        :class="{ 'gaming-grid-multi': sessionData.isMultiTeam }"
-      >
+      <div class="gaming-grid" :class="{ 'gaming-grid-multi': sessionData.isMultiTeam }">
         <div v-for="st of orderedSubteams" :key="`subteam-col-${st.subteamId}`" class="subteam-col">
           <BestPicksPanel
             v-if="showBestPicks && panelForColumn(st)"
@@ -802,6 +799,35 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.gaming-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  width: 100%;
+  max-width: 2600px;
+  margin: 0 auto;
+  align-items: start;
+}
+
+@media (max-width: 960px) {
+  .gaming-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.subteam-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+}
+
+.gaming-grid-multi {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+}
+
 .banner-main-split {
   display: flex;
   align-items: center;

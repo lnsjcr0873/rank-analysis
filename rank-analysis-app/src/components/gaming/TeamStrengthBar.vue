@@ -133,70 +133,71 @@ function detailHasChange(d: LineupHeroDetail): boolean {
 .lineup-strength {
   display: flex;
   flex-direction: column;
-  gap: var(--space-6);
-  padding: var(--space-8) var(--space-12);
-  margin-top: var(--space-8);
-  border-radius: var(--radius-md);
-  background: var(--glass-bg-low);
+  gap: 8px;
+  padding: 10px 14px;
+  margin-top: 8px;
+  border-radius: 8px;
+  background: rgba(18, 25, 38, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .ls-head {
   display: flex;
   align-items: baseline;
-  gap: var(--space-8);
+  gap: 8px;
 }
 
 .ls-label {
-  font-size: var(--font-size-xs);
-  color: var(--text-tertiary);
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .ls-label-mine {
-  color: var(--accent-blue);
+  color: #38bdf8;
 }
 
 .ls-label-enemy {
-  color: var(--semantic-loss-bright);
+  color: #fb7185;
 }
 
 .ls-value {
-  font-size: var(--font-size-md);
-  font-weight: var(--font-weight-bold);
+  font-size: 16px;
+  font-weight: 800;
 }
 
 .ls-value-mine {
-  color: var(--accent-blue);
+  color: #38bdf8;
 }
 
 .ls-value-enemy {
-  color: var(--semantic-loss-bright);
+  color: #fb7185;
 }
 
 .ls-delta {
   flex: 1;
   text-align: center;
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-medium);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .delta-even {
-  color: var(--text-tertiary);
+  color: #94a3b8;
 }
 
 .delta-ahead {
-  color: var(--semantic-win-bright);
+  color: #00d68f;
 }
 
 .delta-behind {
-  color: var(--semantic-loss-bright);
+  color: #ff4655;
 }
 
 .ls-bar {
   display: flex;
-  height: 6px;
-  border-radius: var(--radius-pill);
+  height: 7px;
+  border-radius: 999px;
   overflow: hidden;
-  background: var(--glass-bg-mid);
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .ls-bar-segment {
@@ -205,58 +206,56 @@ function detailHasChange(d: LineupHeroDetail): boolean {
 }
 
 .ls-bar-mine {
-  background: linear-gradient(
-    90deg,
-    var(--accent-blue),
-    color-mix(in srgb, var(--accent-blue) 55%, var(--semantic-win))
-  );
+  background: linear-gradient(90deg, #0284c7, #38bdf8);
 }
 
 .ls-bar-enemy {
-  background: linear-gradient(90deg, var(--semantic-loss), var(--semantic-loss-bright));
+  background: linear-gradient(90deg, #e11d48, #fb7185);
 }
 
 .ls-detail {
   display: flex;
-  gap: var(--space-16);
-  font-size: var(--font-size-xs);
-  color: var(--text-secondary);
+  gap: 28px;
+  font-size: 12px;
+  color: #e2e8f0;
 }
 
 .ls-detail-col {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  min-width: 120px;
+  gap: 3px;
+  min-width: 140px;
 }
 
 .ls-detail-col-title {
-  font-weight: var(--font-weight-semibold);
-  margin-bottom: var(--space-2);
+  font-weight: 700;
+  margin-bottom: 2px;
 }
 
 .ls-detail-mine-title {
-  color: var(--accent-blue);
+  color: #38bdf8;
 }
 
 .ls-detail-enemy-title {
-  color: var(--semantic-loss-bright);
+  color: #fb7185;
 }
 
 .ls-detail-row {
   white-space: nowrap;
+  color: #cbd5e1;
 }
 
 .ls-detail-changed {
-  color: var(--accent-gold);
+  color: #fbbf24;
+  font-weight: 600;
 }
 
 .ls-foot {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  font-size: var(--font-size-xs);
-  color: var(--text-tertiary);
+  font-size: 11px;
+  color: #94a3b8;
 }
 
 .ls-note {
@@ -264,6 +263,6 @@ function detailHasChange(d: LineupHeroDetail): boolean {
 }
 
 .ls-covered {
-  font-size: var(--font-size-xs);
+  font-size: 11px;
 }
 </style>

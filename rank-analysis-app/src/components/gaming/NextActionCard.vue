@@ -35,7 +35,7 @@ function urgencyLabel(u: string): string {
 
 <style scoped>
 .next-action-card {
-  margin-top: 4px;
+  margin-top: 6px;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -43,22 +43,23 @@ function urgencyLabel(u: string): string {
 
 .next-action-item {
   padding: 6px 10px;
-  border-radius: 8px;
-  background: var(--glass-bg-mid);
+  border-radius: 6px;
+  background: rgba(18, 25, 38, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-left: 3px solid transparent;
   font-size: 12px;
 }
 
 .next-action-high {
-  border-left-color: #e65454;
+  border-left-color: #ff4655;
 }
 
 .next-action-medium {
-  border-left-color: #e6a854;
+  border-left-color: #f59e0b;
 }
 
 .next-action-low {
-  border-left-color: #54a8e6;
+  border-left-color: #38bdf8;
 }
 
 .na-left {
@@ -69,16 +70,17 @@ function urgencyLabel(u: string): string {
 }
 
 .na-kind {
-  font-weight: 600;
-  color: var(--text-primary);
+  font-weight: 700;
+  color: #f8fafc;
 }
 
 .na-urgency {
   font-size: 11px;
+  font-weight: 600;
 }
 
 .na-reason {
-  color: var(--text-secondary);
+  color: #cbd5e1;
   line-height: 1.5;
 }
 </style>
