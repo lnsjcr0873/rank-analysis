@@ -73,7 +73,7 @@
         >
           <LazyImg
             :src="assets.srcOf('spell', spell1Id)"
-            class="h-full w-full object-cover"
+            class="record-card-spell-img h-full w-full object-cover"
             alt="spell"
           />
         </span>
@@ -83,7 +83,7 @@
         >
           <LazyImg
             :src="assets.srcOf('spell', spell2Id)"
-            class="h-full w-full object-cover"
+            class="record-card-spell-img h-full w-full object-cover"
             alt="spell"
           />
         </span>
@@ -135,12 +135,11 @@
     <!-- Kill Participation Rate -->
     <div class="min-w-[65px] text-right">
       <span
-        class="font-mono text-xs font-semibold"
+        class="record-card-group-rate font-mono text-xs font-semibold"
         :style="{ color: groupRateColor(games.participants[0].stats?.groupRate ?? 0, isDark) }"
       >
-        {{ Math.round(games.participants[0].stats?.groupRate ?? 0) }}%
+        {{ Math.round(games.participants[0].stats?.groupRate ?? 0) }}%参团
       </span>
-      <span class="block text-[9px] text-white/40">参团率</span>
     </div>
 
     <!-- Items / Augments Slots -->
