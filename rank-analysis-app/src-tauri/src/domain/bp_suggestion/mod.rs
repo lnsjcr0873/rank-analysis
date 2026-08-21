@@ -256,11 +256,11 @@ pub fn build_suggestions(
             let (gb, wb) = my_champs.get(b_id).copied().unwrap_or((0, 0));
             (gb, wb).cmp(&(ga, wa))
         });
-        // ban 向：按 OP.GG 胜率降序
+        // ban 向：按 OP.GG ban_rate 降序
         ban_candidates.sort_by(|(_, a_meta), (_, b_meta)| {
             b_meta
-                .win_rate
-                .partial_cmp(&a_meta.win_rate)
+                .ban_rate
+                .partial_cmp(&a_meta.ban_rate)
                 .unwrap_or(std::cmp::Ordering::Equal)
         });
 
