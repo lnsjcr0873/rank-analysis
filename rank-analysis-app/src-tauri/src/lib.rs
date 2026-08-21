@@ -1,6 +1,7 @@
 pub mod automation;
 pub mod backtest;
 pub mod bp_decision;
+pub mod cache;
 pub mod cdragon;
 pub mod cn_patch_notes;
 pub mod command;

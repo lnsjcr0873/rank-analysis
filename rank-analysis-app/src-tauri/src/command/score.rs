@@ -29,45 +29,11 @@ use moka::future::Cache;
 use serde::{Deserialize, Serialize};
 
 use crate::command::match_history::get_game_by_id;
+pub use crate::domain::scoring::math::*;
 use crate::lcu::api::model::{Participant, ParticipantIdentity};
 
 /// Akari 总分上限（9 维满分之和）。
 pub const AKARI_MAX_SCORE: f64 = 17.0;
-
-/// KDA 维基准与评分斜率（Akari constants）：baseline=2，满分 1 分。
-const KDA_BASELINE: f64 = 2.0;
-const KDA_SLOPE: f64 = 3.0 / 7.0;
-
-const FULL_SCORE_KDA: f64 = 1.0;
-const FULL_SCORE_WIN: f64 = 1.0;
-const FULL_SCORE_DAMAGE: f64 = 3.0;
-const FULL_SCORE_TAKEN: f64 = 2.0;
-const FULL_SCORE_HEAL: f64 = 2.0;
-const FULL_SCORE_CS: f64 = 2.0;
-const FULL_SCORE_GOLD: f64 = 2.0;
-const FULL_SCORE_PARTICIPATION: f64 = 2.0;
-const FULL_SCORE_VISION: f64 = 2.0;
-
-/// 线性维的「理应贡献比」区间：ratio ∈ [min, max] → [0, 满分]。
-const RATIO_MIN_DAMAGE: f64 = 1.0;
-const RATIO_MAX_DAMAGE: f64 = 2.0;
-const RATIO_MIN_TAKEN: f64 = 1.0;
-const RATIO_MAX_TAKEN: f64 = 2.0;
-/// 治疗基准：达到队均承伤的 20% 起算，满 2 倍基准满分。
-const HEAL_RATIO_MIN: f64 = 0.2;
-const HEAL_RATIO_MAX: f64 = 1.4;
-/// 补刀：5 补刀/分 起算，10 补刀/分 满分。
-const CS_MIN_PER_MIN: f64 = 5.0;
-const CS_MAX_PER_MIN: f64 = 10.0;
-/// 经济：达到人均等分起算，1.5 倍人均满分。
-const RATIO_MIN_GOLD: f64 = 1.0;
-const RATIO_MAX_GOLD: f64 = 1.5;
-/// 参团：30% 起算，100% 满分。
-const KP_MIN: f64 = 0.3;
-const KP_MAX: f64 = 1.0;
-/// 视野：人均等分起算，2 倍人均满分。
-const RATIO_MIN_VISION: f64 = 1.0;
-const RATIO_MAX_VISION: f64 = 2.0;
 
 // 队总承伤为 0 且治疗>0 时治疗维的兜底：仍按满价值记 0（无基准），
 // 不编造任何分数（纪律）。`linear` 的 min==max 时输出 0。
@@ -164,23 +130,6 @@ fn input_from_lcu_participant(
         vision_score: p.stats.vision_score,
         game_duration,
     }
-}
-
-/// 线性归一：`(value-min)/(max-min)` clamp 0..1 后乘满分。
-fn linear(value: f64, min: f64, max: f64, full: f64) -> f64 {
-    if max <= min {
-        return 0.0;
-    }
-    ((value - min) / (max - min)).clamp(0.0, 1.0) * full
-}
-
-/// 「理应贡献比」：玩家值 / 队总值 * 队伍人数（Akari
-/// `getExpectedContributionRatio`；队总值为 0 时返回 0，不编造）。
-fn contribution_ratio(value: f64, team_total: f64, team_size: usize) -> f64 {
-    if team_total <= 0.0 || team_size == 0 {
-        return 0.0;
-    }
-    value / team_total * team_size as f64
 }
 
 /// 9 维逐一评分（Akari 公式全集）。

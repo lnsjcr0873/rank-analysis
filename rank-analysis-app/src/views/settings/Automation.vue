@@ -72,29 +72,15 @@
               >+ 添加规则</n-button
             >
           </div>
-          <VueDraggable
-            :model-value="pickRules"
-            @update:model-value="(next: PickRule[]) => savePickRules(next)"
-          >
-            <div v-for="rule in pickRules" :key="rule.id" class="rule-row">
-              <n-checkbox
-                :checked="rule.enabled"
-                @update:checked="(v: boolean) => togglePickRule(rule.id, v)"
-              />
-              <span class="rule-name">{{ rule.name }}</span>
-              <n-avatar
-                :src="assetPrefix + '/champion/' + rule.action.champion_id"
-                :fallback-src="`${assetPrefix}/champion/-1`"
-                :size="24"
-                style="flex-shrink: 0"
-              />
-              <span class="rule-summary">{{ summarize(rule) }}</span>
-              <n-button quaternary size="small" @click="openPickEdit(rule)">编辑</n-button>
-              <n-button quaternary type="error" size="small" @click="deletePickRule(rule.id)"
-                >删除</n-button
-              >
-            </div>
-          </VueDraggable>
+          <DraggableRuleList
+            :rules="pickRules"
+            :asset-prefix="assetPrefix"
+            :champion-options="options"
+            @update:rules="(next: any) => savePickRules(next)"
+            @toggle="togglePickRule"
+            @edit="(r: PickRule) => openPickEdit(r)"
+            @delete="deletePickRule"
+          />
         </div>
 
         <div class="section-title">兜底（规则都没命中时按顺序选）</div>
@@ -168,29 +154,15 @@
             规则（按顺序匹配，第一条命中即用）
             <n-button size="small" type="primary" ghost @click="openBanEdit()">+ 添加规则</n-button>
           </div>
-          <VueDraggable
-            :model-value="banRules"
-            @update:model-value="(next: BanRule[]) => saveBanRules(next)"
-          >
-            <div v-for="rule in banRules" :key="rule.id" class="rule-row">
-              <n-checkbox
-                :checked="rule.enabled"
-                @update:checked="(v: boolean) => toggleBanRule(rule.id, v)"
-              />
-              <span class="rule-name">{{ rule.name }}</span>
-              <n-avatar
-                :src="assetPrefix + '/champion/' + rule.action.champion_id"
-                :fallback-src="`${assetPrefix}/champion/-1`"
-                :size="24"
-                style="flex-shrink: 0"
-              />
-              <span class="rule-summary">{{ summarize(rule) }}</span>
-              <n-button quaternary size="small" @click="openBanEdit(rule)">编辑</n-button>
-              <n-button quaternary type="error" size="small" @click="deleteBanRule(rule.id)"
-                >删除</n-button
-              >
-            </div>
-          </VueDraggable>
+          <DraggableRuleList
+            :rules="banRules"
+            :asset-prefix="assetPrefix"
+            :champion-options="options"
+            @update:rules="(next: any) => saveBanRules(next)"
+            @toggle="toggleBanRule"
+            @edit="(r: BanRule) => openBanEdit(r)"
+            @delete="deleteBanRule"
+          />
         </div>
 
         <div class="section-title">兜底（规则都没命中时按顺序选）</div>
@@ -359,10 +331,11 @@ import {
 import { useOpggTier } from '@renderer/composables/useOpggTier'
 import { useAutomationSettings } from '@renderer/features/settings/composables/useAutomationSettings'
 import type { OpggTier } from '@renderer/services/opgg'
+import DraggableRuleList from '@renderer/components/automation/DraggableRuleList.vue'
 import RuleEditModal from '@renderer/components/automation/RuleEditModal.vue'
 import BpSuggestModal from '@renderer/components/automation/BpSuggestModal.vue'
 import { hasNoExecutableTarget } from '@renderer/components/automation/autoBpHint'
-import type { PickRule, BanRule, PickAction } from '@renderer/types/rules'
+import type { PickRule, BanRule } from '@renderer/types/rules'
 
 const message = useMessage()
 const { rules: pickRules, reload: reloadPickRules, save: savePickRules } = usePickRules()
@@ -488,36 +461,7 @@ async function toggleBanRule(id: string, enabled: boolean) {
   await saveBanRules(banRules.value.map(r => (r.id === id ? { ...r, enabled } : r)))
 }
 
-function summarize(rule: PickRule | BanRule): string {
-  const positionLabel = (p: string) =>
-    ({ top: '上路', jungle: '打野', middle: '中路', bottom: '下路', utility: '辅助' })[p] ?? p
-  const parts: string[] = []
-  for (const c of rule.conditions) {
-    switch (c.type) {
-      case 'Position':
-        parts.push(positionLabel(c.value))
-        break
-      case 'AllyChampionsContains':
-        parts.push(`自家含 ${c.ids.length} 个`)
-        break
-      case 'AllyChampionsNotContains':
-        parts.push(`自家无 ${c.ids.length} 个`)
-        break
-      case 'EnemyChampionsContains':
-        parts.push(`对面含 ${c.ids.length} 个`)
-        break
-      case 'EnemyChampionsNotContains':
-        parts.push(`对面无 ${c.ids.length} 个`)
-        break
-    }
-  }
-  const target =
-    options.value?.find(c => c.value === rule.action.champion_id)?.label ??
-    `#${rule.action.champion_id}`
-  const isPick = 'lock' in rule.action
-  const lockTag = isPick && (rule.action as PickAction).lock ? ' [锁]' : ''
-  return `${parts.join(' + ')} → ${isPick ? '选' : 'Ban'} ${target}${lockTag}`
-}
+
 
 /** 自动选择开着但规则与兜底池皆空——本局不会有任何动作 */
 const pickHasNoTarget = computed(
