@@ -240,8 +240,13 @@ mod tests {
         fn on_dispose(&self) {}
     }
 
+    static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     #[test]
     fn dispose_all_runs_in_reverse_registration_order() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        MANAGER.shards.lock().unwrap().clear();
+
         let order: Arc<Mutex<Vec<&'static str>>> = Arc::new(Mutex::new(Vec::new()));
 
         struct OrderShard {
@@ -291,6 +296,9 @@ mod tests {
 
     #[test]
     fn register_and_snapshot_preserves_order() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        MANAGER.shards.lock().unwrap().clear();
+
         let a: Arc<dyn AppShard> = Arc::new(FakeShard { name: "a" });
         let b: Arc<dyn AppShard> = Arc::new(FakeShard { name: "b" });
         register(a);
