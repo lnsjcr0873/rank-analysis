@@ -37,6 +37,17 @@
             >
             <span v-else class="match-detail-runes-name">{{ player.displayName }}</span>
             <n-tag v-if="player.isMe" size="small" :bordered="false" type="success">我</n-tag>
+            <n-button
+              v-if="hasFullPerks(player)"
+              size="tiny"
+              quaternary
+              type="primary"
+              style="margin-left: auto"
+              :loading="applyingParticipantId === player.participantId"
+              @click="applyPerks(player)"
+            >
+              应用符文
+            </n-button>
           </div>
 
           <div class="match-detail-runes-body">
@@ -203,19 +214,67 @@
 </template>
 
 <script lang="ts" setup>
-import { inject } from 'vue'
-import { NTag, NTooltip } from 'naive-ui'
+import { inject, ref } from 'vue'
+import { NButton, NTag, NTooltip, useMessage } from 'naive-ui'
 import { searchSummoner } from '@renderer/utils/navigation'
 import { assetPrefix } from '@renderer/services/http'
+import { importCustomRunePage } from '@renderer/services/importRunes'
 import LazyImg from '@renderer/components/common/LazyImg.vue'
 import type { GamePerks, GamePerkSelection } from '@renderer/types/domain/match'
 import { matchDetailContextKey } from '../matchDetailContext'
-import { fillPerkDescription } from './runesTable'
+let message: ReturnType<typeof useMessage> | null = null
+try {
+  message = useMessage()
+} catch {
+  // outside message provider in unit test
+}
+const applyingParticipantId = ref<number | null>(null)
 
 const injected = inject(matchDetailContextKey)
 if (!injected) throw new Error('MatchDetailRunesTab 必须在 MatchDetailInline 容器内使用')
 /** 注入非空：上方守卫保证容器内使用 */
 const ctx = injected as NonNullable<typeof injected>
+
+function hasFullPerks(player: { perks?: GamePerks }): boolean {
+  const p = player.perks
+  return !!(p?.styles?.[0] && p?.styles?.[1] && p?.styles[0].style && p?.styles[1].style)
+}
+
+async function applyPerks(player: {
+  participantId?: number
+  championId: number
+  perks?: GamePerks
+  displayName: string
+}) {
+  const p = player.perks
+  if (!p || !p.styles?.[0] || !p.styles?.[1]) return
+  applyingParticipantId.value = player.participantId ?? -1
+
+  const primaryStyleId = p.styles[0].style
+  const subStyleId = p.styles[1].style
+  const selectedPerkIds: number[] = [
+    ...(p.styles[0].selections?.map(s => s.perk) ?? []),
+    ...(p.styles[1].selections?.map(s => s.perk) ?? []),
+    p.statPerks?.offense ?? 5008,
+    p.statPerks?.flex ?? 5008,
+    p.statPerks?.defense ?? 5001
+  ]
+
+  try {
+    const res = await importCustomRunePage({
+      championId: player.championId,
+      pageName: `RA-${player.displayName || player.championId}`,
+      primaryStyleId,
+      subStyleId,
+      selectedPerkIds
+    })
+    message?.success(`已导入符文页 [${res.pageName}] 到英雄联盟客户端`)
+  } catch (err: any) {
+    message?.error(`导入符文失败: ${err?.message || err}`)
+  } finally {
+    applyingParticipantId.value = null
+  }
+}
 
 /** 基石符文图标（无 id 时返回空串，模板不渲染） */
 function perkSrc(perkId: number) {

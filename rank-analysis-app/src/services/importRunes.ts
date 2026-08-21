@@ -22,6 +22,23 @@ export async function importRunePage(championId: number): Promise<ImportRuneResu
   return await invoke<ImportRuneResult>('import_rune_page', { championId })
 }
 
+/** 一键导入指定符文配置到客户端 */
+export async function importCustomRunePage(params: {
+  championId: number
+  pageName?: string
+  primaryStyleId: number
+  subStyleId: number
+  selectedPerkIds: number[]
+}): Promise<ImportRuneResult> {
+  return await invoke<ImportRuneResult>('import_custom_perk_page', {
+    championId: params.championId,
+    pageName: params.pageName,
+    primaryStyleId: params.primaryStyleId,
+    subStyleId: params.subStyleId,
+    selectedPerkIds: params.selectedPerkIds
+  })
+}
+
 /** 一键导入召唤师技能（仅选人阶段可用）：写入我的选人动作 */
 export async function importSummonerSpells(): Promise<[number, number]> {
   return await invoke<[number, number]>('import_summoner_spells')

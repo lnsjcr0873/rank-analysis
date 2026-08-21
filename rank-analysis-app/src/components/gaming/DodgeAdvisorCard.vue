@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div
     class="dodge-advisor-card rounded-2xl border border-white/[0.08] bg-[rgba(15,22,37,0.92)] p-3.5 backdrop-blur-2xl shadow-xl transition-all"
   >
@@ -83,17 +83,59 @@
         <span class="text-white/70">{{ adv.detail }}</span>
       </div>
     </div>
+
+    <!-- 建议秒退时提供一键安全秒退（退出客户端）动作闭环 -->
+    <div
+      v-if="result.recommendation === 'dodge'"
+      class="mt-3 pt-2.5 border-t border-white/[0.08] flex items-center justify-between"
+    >
+      <span class="text-[11px] text-rose-300/80">检测到当前阵容/队友严重劣势，建议及时止损</span>
+      <n-popconfirm
+        positive-text="确认秒退"
+        negative-text="取消"
+        @positive-click="handleDodgeClient"
+      >
+        <template #trigger>
+          <n-button size="tiny" type="error" :loading="dodging" ghost>
+            🚪 一键秒退 (退出客户端)
+          </n-button>
+        </template>
+        确认要立即退出英雄联盟客户端以秒退本局吗？
+      </n-popconfirm>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import { NButton, NPopconfirm, useMessage } from 'naive-ui'
 import { ShieldAlert, AlertCircle, CheckCircle2 } from 'lucide-vue-next'
+import { closeLeagueByIpc } from '@renderer/services/ipc'
 import type { DodgeAdvisorResult } from '@renderer/features/gaming/services/dodgeAdvisor'
 
 const props = defineProps<{
   result: DodgeAdvisorResult
 }>()
+
+let message: ReturnType<typeof useMessage> | null = null
+try {
+  message = useMessage()
+} catch {
+  // outside message provider in unit test
+}
+const dodging = ref(false)
+
+async function handleDodgeClient() {
+  dodging.value = true
+  try {
+    await closeLeagueByIpc()
+    message?.success('已关闭英雄联盟客户端')
+  } catch (err: any) {
+    message?.error(`关闭客户端失败: ${err?.message || err}`)
+  } finally {
+    dodging.value = false
+  }
+}
 
 const recommendationLabel = computed(() => {
   switch (props.result.recommendation) {

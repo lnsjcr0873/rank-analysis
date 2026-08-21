@@ -110,10 +110,33 @@
         >
       </div>
 
-      <!-- 手动备注（隐私开关开启且有备注时） -->
-      <div v-if="profile.note" class="profile-section profile-note">
-        <span class="profile-note-label">备注</span>
-        <span class="profile-note-text">{{ profile.note }}</span>
+      <!-- 手动备注（支持即时查看与编辑/打标） -->
+      <div class="profile-section profile-note">
+        <div class="profile-note-header">
+          <span class="profile-note-label">便签</span>
+          <button
+            v-if="!editingNote"
+            class="profile-note-btn"
+            type="button"
+            @click.stop="startEditNote"
+          >
+            {{ profile.note ? '编辑' : '+ 标记' }}
+          </button>
+        </div>
+        <div v-if="editingNote" class="profile-note-edit-wrap">
+          <n-input
+            v-model:value="draftNote"
+            size="tiny"
+            placeholder="输入便签 (如: 绝活哥 / 连败稳住)"
+            @keydown.enter="saveNote"
+          />
+          <div class="profile-note-actions">
+            <n-button size="tiny" quaternary @click.stop="cancelEditNote">取消</n-button>
+            <n-button size="tiny" type="primary" @click.stop="saveNote">保存</n-button>
+          </div>
+        </div>
+        <span v-else-if="profile.note" class="profile-note-text">{{ profile.note }}</span>
+        <span v-else class="profile-note-empty">暂无便签备注</span>
       </div>
     </template>
   </div>
@@ -129,11 +152,12 @@
  * 无上下文时（不传 championId）自动跳过「本局英雄」小节。
  */
 import { computed, ref, watchEffect } from 'vue'
-import { NEllipsis, NSpin } from 'naive-ui'
+import { NButton, NEllipsis, NInput, NSpin } from 'naive-ui'
 import { assetPrefix } from '@renderer/services/http'
 import LazyImg from '@renderer/components/common/LazyImg.vue'
 import { fetchPlayerProfile } from '@renderer/services/ai/shared/recentProfile.batch'
 import { queryMeetSummary } from '@renderer/features/settings/services/meet'
+import { usePlayerNotesStore } from '@renderer/features/settings/stores/playerNotes'
 import type { MeetSummary } from '@renderer/types/domain/meet'
 import type { RecentPlayerProfile } from '@renderer/services/ai/shared/types'
 
@@ -150,11 +174,51 @@ const props = withDefaults(
   { name: '', championId: 0, region: '' }
 )
 
+import { getActivePinia } from 'pinia'
+
+const editingNote = ref(false)
+const draftNote = ref('')
+
 const profile = ref<RecentPlayerProfile | null>(null)
 const loading = ref(true)
 const error = ref(false)
 /** 遇见过摘要（meet.db 查询失败/无记录为 null，不阻塞画像卡） */
 const meet = ref<MeetSummary | null>(null)
+
+function startEditNote() {
+  draftNote.value = profile.value?.note ?? ''
+  editingNote.value = true
+}
+
+function cancelEditNote() {
+  editingNote.value = false
+}
+
+async function saveNote() {
+  if (!props.puuid) return
+  const text = draftNote.value.trim()
+  const store = getActivePinia() ? usePlayerNotesStore() : null
+  if (text) {
+    const rawName = displayName.value
+    const [gameName, tagLine] = rawName.includes('#')
+      ? rawName.split('#')
+      : [rawName, '']
+    if (store) {
+      await store.setNote(props.puuid, {
+        note: text,
+        label: 'normal',
+        gameName: gameName || '玩家',
+        tagLine: tagLine || ''
+      })
+    }
+  } else if (store) {
+    await store.removeNote(props.puuid)
+  }
+  if (profile.value) {
+    profile.value.note = text || undefined
+  }
+  editingNote.value = false
+}
 
 /**
  * 请求序号竞态保护：hover 快速滑过多个玩家名时，慢的旧请求结果不得
@@ -420,19 +484,66 @@ function positionLabel(pos: string): string {
 
 .profile-note {
   display: flex;
-  gap: 6px;
-  align-items: baseline;
-  padding: 4px 8px;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 8px;
   border-radius: 6px;
   background: var(--glass-bg-mid);
 }
 
+.profile-note-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
 .profile-note-label {
   color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 600;
   flex-shrink: 0;
 }
 
+.profile-note-btn {
+  background: none;
+  border: none;
+  padding: 0 4px;
+  font-size: 11px;
+  color: var(--accent-gold, #f0a020);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: opacity 0.2s ease;
+}
+
+.profile-note-btn:hover {
+  opacity: 0.8;
+  text-decoration: underline;
+}
+
+.profile-note-edit-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+}
+
+.profile-note-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
 .profile-note-text {
-  color: var(--text-secondary);
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1.4;
+  word-break: break-all;
+}
+
+.profile-note-empty {
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-style: italic;
 }
 </style>

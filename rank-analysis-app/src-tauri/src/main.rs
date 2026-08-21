@@ -190,6 +190,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             command::backtest::get_decision_backtest,
             command::backtest::get_adoption_stats,
             command::import::import_rune_page,
+            command::import::import_custom_perk_page,
             command::import::import_summoner_spells,
             command::insight::get_habit_tags,
             command::insight::list_habit_goals,

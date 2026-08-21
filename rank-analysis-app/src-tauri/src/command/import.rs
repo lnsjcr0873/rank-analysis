@@ -81,6 +81,64 @@ pub async fn import_rune_page(champion_id: i32) -> Result<ImportRuneResult, Stri
     })
 }
 
+/// 一键导入自定义/指定符文页（如战绩详情页直接套用某局某人的完整符文）。
+#[tauri::command]
+pub async fn import_custom_perk_page(
+    champion_id: i32,
+    page_name: Option<String>,
+    primary_style_id: i32,
+    sub_style_id: i32,
+    selected_perk_ids: Vec<i32>,
+) -> Result<ImportRuneResult, String> {
+    let name = page_name.unwrap_or_else(|| format!("{RUNE_PAGE_PREFIX}{champion_id}"));
+    let (defense, flex, offense) = if selected_perk_ids.len() >= 9 {
+        (
+            selected_perk_ids[8],
+            selected_perk_ids[7],
+            selected_perk_ids[6],
+        )
+    } else {
+        (5001, 5008, 5008)
+    };
+    let perk_ids = if selected_perk_ids.len() >= 6 {
+        selected_perk_ids[0..6].to_vec()
+    } else {
+        selected_perk_ids
+    };
+
+    let page = NewPerkPage {
+        name: name.clone(),
+        primary_style_id,
+        sub_style_id,
+        selected_perk_ids: perk_ids,
+        stat_perks: Some(crate::lcu::api::perks::PerkStatPerks {
+            defense,
+            flex,
+            offense,
+        }),
+    };
+
+    let pages = perks::get_perk_pages().await?;
+    let (page_id, created) = if let Some(existing) = perks::find_page_by_name(&pages, &name) {
+        perks::update_perk_page(existing.id, &page).await?;
+        log::info!("[import] 覆盖符文页 {} (id={})", name, existing.id);
+        (existing.id, false)
+    } else {
+        let id = perks::create_perk_page(&page).await?;
+        log::info!("[import] 新建符文页 {} (id={})", name, id);
+        (id, true)
+    };
+    perks::set_current_perk_page(page_id).await?;
+    log::info!("[import] 已切换当前符文页 {} (id={})", name, page_id);
+
+    Ok(ImportRuneResult {
+        page_id,
+        page_name: name,
+        created,
+        champion_id,
+    })
+}
+
 /// 找「我」在选人会话里的 pick 动作（cellId 对齐 + 未完成 + type=pick）。
 fn my_pick_action(session: &SelectSession) -> Option<&crate::lcu::api::champion_select::Action> {
     session.actions.iter().flatten().find(|a| {
