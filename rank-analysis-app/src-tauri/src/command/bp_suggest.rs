@@ -21,17 +21,6 @@ use tauri::State;
 const SAMPLE_GAMES: i32 = 30;
 /// 样本下限：不足时返回空结果让前端显示「打几局再来」。
 const MIN_SAMPLE_GAMES: usize = 10;
-/// 常用英雄入选门槛（场次）。
-const FREQUENT_MIN_GAMES: i32 = 3;
-/// 常输英雄入选门槛（败局出现次数）。
-const NEMESIS_MIN_ENCOUNTERS: i32 = 2;
-/// 各分区候选上限。
-const SECTION_CAP: usize = 8;
-/// 「会玩」判据：≥3 场且胜率 ≥50%。
-const PROFICIENT_MIN_GAMES: i32 = 3;
-const PROFICIENT_MIN_WIN_RATE: f64 = 0.5;
-/// 主玩分路投票的最低场次（≥2 场才算「玩过」）。
-const POSITION_VOTE_MIN_GAMES: i32 = 2;
 /// 排位队列（单双/灵活）。
 const RANKED_QUEUES: [i32; 2] = [420, 440];
 

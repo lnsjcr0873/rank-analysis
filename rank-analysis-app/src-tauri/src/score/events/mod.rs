@@ -52,9 +52,7 @@ mod tests {
     use crate::lcu::api::sgp::{
         SgpFrame, SgpFrameDamageStats, SgpFrameEvent, SgpFrameParticipantStats,
     };
-    use crate::score::events::types::{
-        fmt_mmss, DELTA_CS_STALL, DELTA_PARTICIPATION_MISS, DELTA_VISION_GAP,
-    };
+    use crate::score::events::types::{fmt_mmss, DELTA_PARTICIPATION_MISS};
     use std::collections::HashMap;
 
     fn ev(

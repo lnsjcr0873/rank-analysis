@@ -17,7 +17,9 @@
       />
       <span class="rule-summary">{{ summarize(rule) }}</span>
       <n-button quaternary size="small" @click="$emit('edit', rule)">编辑</n-button>
-      <n-button quaternary type="error" size="small" @click="$emit('delete', rule.id)">删除</n-button>
+      <n-button quaternary type="error" size="small" @click="$emit('delete', rule.id)"
+        >删除</n-button
+      >
     </div>
   </VueDraggable>
 </template>
