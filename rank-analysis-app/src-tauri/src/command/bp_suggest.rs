@@ -12,9 +12,7 @@ use crate::config::{get_config, Value};
 pub use crate::domain::bp_suggestion::*;
 use crate::lcu::api::match_history::{Game, MatchHistory};
 use crate::lcu::api::summoner::Summoner;
-use crate::opgg::data::OpggSnapshot;
 use crate::state::AppState;
-use std::collections::HashMap;
 use tauri::State;
 
 /// 参与统计的最大场次（LCU 可靠窗口 50 场内取近 30）。
