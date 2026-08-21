@@ -242,14 +242,16 @@ const { isDark } = useTheme()
 const currentSummoner = ref<Summoner | null>(null)
 const fullGame = ref<Game | null>(null)
 
-/** 优先使用当前登录用户匹配"我"，未获取到则回退到 game 的第一个参与者 */
+/** 优先使用被查战绩目标玩家（game.participantIdentities[0]），未获取到则回退当前登录用户 */
 const currentPlayerKey = computed(() => {
+  const identity = props.game?.participantIdentities?.[0]?.player
+  if (identity && identity.gameName) {
+    return `${identity.gameName}#${identity.tagLine}`
+  }
   if (currentSummoner.value) {
     return `${currentSummoner.value.gameName}#${currentSummoner.value.tagLine}`
   }
-  const identity = props.game?.participantIdentities?.[0]?.player
-  if (!identity) return ''
-  return `${identity.gameName}#${identity.tagLine}`
+  return ''
 })
 
 const gameRef = computed(() => fullGame.value ?? props.game)
@@ -404,7 +406,8 @@ async function loadSgpDetail() {
   if (!g) return
   sgpDetailStatus.value = 'loading'
   try {
-    const resp = await getSgpMatchDetail(g.platformId, g.gameId)
+    const targetRegion = props.region || g.platformId || ''
+    const resp = await getSgpMatchDetail(targetRegion, g.gameId)
     if (resp === null) {
       // 服务层吞错返回 null（网络/token/主机映射失败）——置 error，tab 展示错误态 + 重试
       sgpDetail.value = null

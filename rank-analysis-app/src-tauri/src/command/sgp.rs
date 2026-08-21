@@ -87,7 +87,15 @@ pub async fn get_sgp_match_detail(
     game_id: i64,
 ) -> Result<sgp::SgpGameDetailResponse, String> {
     crate::observability::track_feature("sgp_match_detail");
-    sgp::fetch_match_detail(&region, game_id).await
+    let platform_id = if region.trim().is_empty() {
+        sgp::get_current_platform_id().await.unwrap_or_default()
+    } else {
+        region
+    };
+    if platform_id.is_empty() {
+        return Err("无法确定对局所在大区".to_string());
+    }
+    sgp::fetch_match_detail(&platform_id, game_id).await
 }
 
 /// 跨区按「名字#TAG」查玩家段位。

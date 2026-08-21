@@ -216,12 +216,20 @@ pub async fn get_jungle_gank_pattern(
     puuid: Option<String>,
     name: Option<String>,
 ) -> Result<Option<GankPatternRaw>, String> {
+    let platform_id = if region.trim().is_empty() {
+        sgp::get_current_platform_id().await.unwrap_or_default()
+    } else {
+        region
+    };
+    if platform_id.is_empty() {
+        return Ok(None);
+    }
     match (
         puuid.filter(|p| !p.is_empty()),
         name.filter(|n| !n.is_empty()),
     ) {
-        (Some(p), _) => fetch_jungle_gank_pattern_sgp_by_puuid(&region, &p).await,
-        (None, Some(n)) => fetch_jungle_gank_pattern_sgp(&region, &n).await,
+        (Some(p), _) => fetch_jungle_gank_pattern_sgp_by_puuid(&platform_id, &p).await,
+        (None, Some(n)) => fetch_jungle_gank_pattern_sgp(&platform_id, &n).await,
         (None, None) => Ok(None),
     }
 }
