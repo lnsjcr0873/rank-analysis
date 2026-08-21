@@ -736,12 +736,14 @@ onBeforeUnmount(() => {
   window.removeEventListener('resize', onViewportResize)
 })
 
-// 切换玩家（路由 name 变化）时列表与趋势条一起刷新
+// 切换玩家或主动刷新（路由 query 变化）时列表与趋势条一起刷新
 watch(
-  () => route.query.name,
-  newName => {
+  () => [route.query.name, route.query.region, route.query.t],
+  ([newName]) => {
     if (newName && typeof newName === 'string') {
       void getHistoryMatch(newName)
+    } else {
+      void getHistoryMatch()
     }
   }
 )

@@ -35,26 +35,98 @@ impl Summoner {
         SUMMONER_CACHE
             .insert(puuid.to_string(), summoner.clone())
             .await;
+        let full_name = format!("{}#{}", summoner.game_name, summoner.tag_line);
+        SUMMONER_CACHE.insert(full_name, summoner.clone()).await;
         Ok(summoner)
     }
 
-    /// 按召唤师名称获取召唤师信息（带缓存）。
+    /// 按召唤师名称获取召唤师信息（支持 Riot ID `gameName#tagLine`、自身匹配与带缓存）。
     pub async fn get_summoner_by_name(name: &str) -> Result<Self, String> {
-        let url_encoding = urlencoding::encode(name);
-        if let Some(cached) = SUMMONER_CACHE.get(name).await {
+        let trimmed = name.trim();
+        if trimmed.is_empty() {
+            return Err("Summoner name cannot be empty".to_string());
+        }
+
+        if let Some(cached) = SUMMONER_CACHE.get(trimmed).await {
             return Ok(cached.clone());
         }
+
+        // 1. 如果包含 '#'（Riot ID 格式：game_name#tag_line）
+        if let Some((game_name, tag_line)) = trimmed.split_once('#') {
+            // 优先检查是否是当前登录玩家
+            if let Ok(me) = Self::get_my_summoner().await {
+                if (me.game_name.eq_ignore_ascii_case(game_name)
+                    && me.tag_line.eq_ignore_ascii_case(tag_line))
+                    || me.game_name.eq_ignore_ascii_case(trimmed)
+                {
+                    SUMMONER_CACHE.insert(trimmed.to_string(), me.clone()).await;
+                    SUMMONER_CACHE.insert(me.puuid.clone(), me.clone()).await;
+                    return Ok(me);
+                }
+            }
+
+            // 尝试通过 Riot Client 的 alias lookup 解析 PUUID
+            if let Ok(puuid) =
+                crate::lcu::api::sgp::resolve_puuid_by_riot_id(game_name, tag_line).await
+            {
+                if let Ok(summoner) = Self::get_summoner_by_puuid(&puuid).await {
+                    SUMMONER_CACHE
+                        .insert(trimmed.to_string(), summoner.clone())
+                        .await;
+                    return Ok(summoner);
+                }
+            }
+        } else {
+            // 没有 '#'，检查是否为当前登录玩家的 game_name
+            if let Ok(me) = Self::get_my_summoner().await {
+                if me.game_name.eq_ignore_ascii_case(trimmed) {
+                    SUMMONER_CACHE.insert(trimmed.to_string(), me.clone()).await;
+                    SUMMONER_CACHE.insert(me.puuid.clone(), me.clone()).await;
+                    return Ok(me);
+                }
+            }
+        }
+
+        // 2. 传统 LCU endpoint 请求
+        let url_encoding = urlencoding::encode(trimmed);
         let uri = format!("lol-summoner/v1/summoners/?name={}", url_encoding);
-        let summoner = lcu_get::<Self>(&uri).await?;
-        SUMMONER_CACHE
-            .insert(name.to_string(), summoner.clone())
-            .await;
-        Ok(summoner)
+        match lcu_get::<Self>(&uri).await {
+            Ok(summoner) => {
+                SUMMONER_CACHE
+                    .insert(trimmed.to_string(), summoner.clone())
+                    .await;
+                SUMMONER_CACHE
+                    .insert(summoner.puuid.clone(), summoner.clone())
+                    .await;
+                let full_name = format!("{}#{}", summoner.game_name, summoner.tag_line);
+                SUMMONER_CACHE.insert(full_name, summoner.clone()).await;
+                Ok(summoner)
+            }
+            Err(e) => {
+                // 如果传统 endpoint 失败，最后再尝试比对一次当前登录玩家
+                if let Ok(me) = Self::get_my_summoner().await {
+                    if me.game_name.eq_ignore_ascii_case(trimmed)
+                        || format!("{}#{}", me.game_name, me.tag_line).eq_ignore_ascii_case(trimmed)
+                    {
+                        return Ok(me);
+                    }
+                }
+                Err(e)
+            }
+        }
     }
 
     /// 获取当前登录客户端的召唤师信息。
     pub async fn get_my_summoner() -> Result<Self, String> {
         let summoner = lcu_get::<Self>("lol-summoner/v1/current-summoner").await?;
+        let full_name = format!("{}#{}", summoner.game_name, summoner.tag_line);
+        SUMMONER_CACHE.insert(full_name, summoner.clone()).await;
+        SUMMONER_CACHE
+            .insert(summoner.game_name.clone(), summoner.clone())
+            .await;
+        SUMMONER_CACHE
+            .insert(summoner.puuid.clone(), summoner.clone())
+            .await;
         Ok(summoner)
     }
 }
