@@ -24,8 +24,16 @@ export interface ParticipantStats {
   item5: number
   item6: number
   perk0: number
+  perk1?: number
+  perk2?: number
+  perk3?: number
+  perk4?: number
+  perk5?: number
   perkPrimaryStyle: number
   perkSubStyle: number
+  statPerk0?: number
+  statPerk1?: number
+  statPerk2?: number
   playerAugment1: number
   playerAugment2: number
   playerAugment3: number

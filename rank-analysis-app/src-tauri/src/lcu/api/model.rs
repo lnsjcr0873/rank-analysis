@@ -134,6 +134,22 @@ pub struct Stats {
     pub perk_sub_style: i32,
     #[serde(rename = "perk0", default)]
     pub perk0: i32,
+    #[serde(rename = "perk1", default)]
+    pub perk1: i32,
+    #[serde(rename = "perk2", default)]
+    pub perk2: i32,
+    #[serde(rename = "perk3", default)]
+    pub perk3: i32,
+    #[serde(rename = "perk4", default)]
+    pub perk4: i32,
+    #[serde(rename = "perk5", default)]
+    pub perk5: i32,
+    #[serde(rename = "statPerk0", default)]
+    pub stat_perk0: i32,
+    #[serde(rename = "statPerk1", default)]
+    pub stat_perk1: i32,
+    #[serde(rename = "statPerk2", default)]
+    pub stat_perk2: i32,
     #[serde(rename = "playerAugment1", default)]
     pub player_augment1: i32,
     #[serde(rename = "playerAugment2", default)]

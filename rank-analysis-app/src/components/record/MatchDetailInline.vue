@@ -232,12 +232,15 @@ import MatchDetailTimelineTab from './tabs/MatchDetailTimelineTab.vue'
 import MatchDetailScoreTab from './tabs/MatchDetailScoreTab.vue'
 import MatchDetailBacktestTab from './tabs/MatchDetailBacktestTab.vue'
 
+import { getGameById } from '@renderer/features/record/services/gameById'
+
 const props = defineProps<{ game: Game | null; region?: string }>()
 const emit = defineEmits<{ close: [] }>()
 
 const { isDark } = useTheme()
 
 const currentSummoner = ref<Summoner | null>(null)
+const fullGame = ref<Game | null>(null)
 
 /** 优先使用当前登录用户匹配"我"，未获取到则回退到 game 的第一个参与者 */
 const currentPlayerKey = computed(() => {
@@ -249,7 +252,7 @@ const currentPlayerKey = computed(() => {
   return `${identity.gameName}#${identity.tagLine}`
 })
 
-const gameRef = toRef(() => props.game)
+const gameRef = computed(() => fullGame.value ?? props.game)
 const regionRef = toRef(() => props.region ?? '')
 const players = useMatchDetailPlayers(gameRef, currentPlayerKey)
 const { detailPlayers, mySummary } = players
@@ -493,13 +496,26 @@ onMounted(async () => {
 
 watch(
   () => props.game?.gameId,
-  () => {
+  async newGameId => {
+    fullGame.value = null
     ai.resetOnGameChange(
       mySummary.value?.participantId ?? detailPlayers.value[0]?.participantId ?? null
     )
     loadAssetsIfNeeded()
     sgpDetail.value = null
     sgpDetailStatus.value = 'idle'
+
+    if (newGameId && !props.region) {
+      try {
+        const detail = await getGameById(newGameId)
+        if (detail && detail.gameId === newGameId) {
+          fullGame.value = detail
+          loadAssetsIfNeeded()
+        }
+      } catch (err) {
+        console.error('获取完整对局详情失败:', err)
+      }
+    }
   },
   { immediate: true }
 )

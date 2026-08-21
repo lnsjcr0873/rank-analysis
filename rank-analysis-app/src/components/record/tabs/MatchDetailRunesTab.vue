@@ -220,8 +220,9 @@ import { searchSummoner } from '@renderer/utils/navigation'
 import { assetPrefix } from '@renderer/services/http'
 import { importCustomRunePage } from '@renderer/services/importRunes'
 import LazyImg from '@renderer/components/common/LazyImg.vue'
-import type { GamePerks, GamePerkSelection } from '@renderer/types/domain/match'
+import type { GamePerks, GamePerkSelection, ParticipantStats } from '@renderer/types/domain/match'
 import { matchDetailContextKey } from '../matchDetailContext'
+import { fillPerkDescription } from './runesTable'
 let message: ReturnType<typeof useMessage> | null = null
 try {
   message = useMessage()
@@ -299,14 +300,53 @@ const styleName = (styleId: number) =>
   styleId <= 0 ? '未选择' : (ctx.assets.detailOf('perk', styleId)?.name ?? `风格 #${styleId}`)
 
 /** 完整符文页切分：主系（styles[0]，基石在 selections[0]）/ 副系（styles[1]）/ 属性碎片 */
-function perksOf(player: { perks?: GamePerks }) {
-  const p = player.perks
+function perksOf(player: { perks?: GamePerks; stats?: ParticipantStats }) {
+  let p = player.perks
+  if (!p || !p.styles || p.styles.length === 0) {
+    const s = player.stats
+    if (s && s.perkPrimaryStyle > 0 && s.perk0 > 0) {
+      p = {
+        statPerks:
+          (s.statPerk0 ?? 0) > 0 || (s.statPerk1 ?? 0) > 0 || (s.statPerk2 ?? 0) > 0
+            ? {
+                offense: s.statPerk0 ?? 0,
+                flex: s.statPerk1 ?? 0,
+                defense: s.statPerk2 ?? 0
+              }
+            : undefined,
+        styles: [
+          {
+            style: s.perkPrimaryStyle,
+            selections: [
+              { perk: s.perk0, var1: 0, var2: 0, var3: 0 },
+              ...(s.perk1 ? [{ perk: s.perk1, var1: 0, var2: 0, var3: 0 }] : []),
+              ...(s.perk2 ? [{ perk: s.perk2, var1: 0, var2: 0, var3: 0 }] : []),
+              ...(s.perk3 ? [{ perk: s.perk3, var1: 0, var2: 0, var3: 0 }] : [])
+            ]
+          },
+          ...(s.perkSubStyle > 0
+            ? [
+                {
+                  style: s.perkSubStyle,
+                  selections: [
+                    ...(s.perk4 ? [{ perk: s.perk4, var1: 0, var2: 0, var3: 0 }] : []),
+                    ...(s.perk5 ? [{ perk: s.perk5, var1: 0, var2: 0, var3: 0 }] : [])
+                  ]
+                }
+              ]
+            : [])
+        ]
+      }
+    }
+  }
   const primary = p?.styles?.[0]
   const sub = p?.styles?.[1]
   return {
     primary,
     sub,
-    statIds: p?.statPerks ? [p.statPerks.offense, p.statPerks.flex, p.statPerks.defense] : []
+    statIds: p?.statPerks
+      ? [p.statPerks.offense, p.statPerks.flex, p.statPerks.defense].filter(id => id > 0)
+      : []
   }
 }
 
