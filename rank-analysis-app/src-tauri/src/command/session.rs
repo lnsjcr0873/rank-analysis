@@ -217,9 +217,7 @@ fn clear_stale_gameflow_session(session: &mut Session) {
 /// 10. 处理历史对局记录
 /// 11. 发送完成事件
 async fn process_session_data(app_handle: AppHandle, seq: u64) -> Result<(), String> {
-    let my_summoner = Summoner::get_my_summoner().await?;
-
-    let phase = get_phase().await?;
+    let phase = get_phase().await.unwrap_or_default();
     let valid_phases = ["ChampSelect", "InProgress", "PreEndOfGame", "EndOfGame"];
     if !valid_phases.contains(&phase.as_str()) {
         log::info!("Not in a valid game phase: {}", phase);
@@ -227,11 +225,11 @@ async fn process_session_data(app_handle: AppHandle, seq: u64) -> Result<(), Str
             return Ok(());
         }
         let empty_data = SessionData::default();
-        app_handle
-            .emit("session-complete", &empty_data)
-            .map_err(|e| e.to_string())?;
+        let _ = app_handle.emit("session-complete", &empty_data);
         return Ok(());
     }
+
+    let my_summoner = Summoner::get_my_summoner().await?;
 
     let mut session = Session::get_session().await?;
 
