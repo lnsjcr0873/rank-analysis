@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 极地大乱斗 ARAM 备选席与阵容平衡建议引擎（ARAM Bench & Comp Advisor）
  */
 
@@ -20,9 +20,9 @@ export interface AramCompAnalysis {
 
 // 常见英雄主要伤害类型分类（简易映射与兜底）
 const AP_CHAMPIONS = new Set([
-  1, 4, 7, 9, 13, 25, 26, 27, 30, 31, 34, 38, 43, 45, 55, 61, 63, 68, 69, 74,
-  82, 84, 85, 90, 99, 101, 103, 105, 112, 115, 127, 131, 134, 136, 142, 143,
-  161, 163, 245, 268, 516, 517, 518, 526, 711, 777, 887, 888, 895, 902
+  1, 4, 7, 9, 13, 25, 26, 27, 30, 31, 34, 38, 43, 45, 55, 61, 63, 68, 69, 74, 82, 84, 85, 90, 99,
+  101, 103, 105, 112, 115, 127, 131, 134, 136, 142, 143, 161, 163, 245, 268, 516, 517, 518, 526,
+  711, 777, 887, 888, 895, 902
 ])
 
 export function analyzeAramComp(
@@ -54,7 +54,7 @@ export function analyzeAramComp(
 
   const total = validTeam.length
   const apPercent = Math.round((apCount / total) * 100)
-  const adPercent = 100 - apPercent
+  const adPercent = Math.round((adCount / total) * 100)
 
   let balanceStatus: AramCompAnalysis['balanceStatus'] = 'balanced'
   let statusText = '阵容物理与魔法伤害均衡'

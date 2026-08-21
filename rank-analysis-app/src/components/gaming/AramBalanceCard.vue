@@ -1,11 +1,13 @@
-﻿<template>
+<template>
   <div
     class="aram-balance-card rounded-2xl border border-white/[0.08] bg-[rgba(15,22,37,0.92)] p-3.5 backdrop-blur-2xl shadow-xl transition-all"
   >
     <!-- Header -->
     <div class="flex items-center justify-between border-b border-white/[0.06] pb-2 mb-2.5">
       <div class="flex items-center gap-1.5">
-        <span class="text-xs font-bold tracking-wide text-white">大乱斗平衡性 & 备选席诊断 (ARAM)</span>
+        <span class="text-xs font-bold tracking-wide text-white"
+          >大乱斗平衡性 & 备选席诊断 (ARAM)</span
+        >
       </div>
       <div class="flex items-center gap-1.5">
         <button
@@ -34,8 +36,14 @@
         <span class="text-indigo-400 font-bold">魔法伤害 (AP): {{ compAnalysis.apPercent }}%</span>
       </div>
       <div class="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden flex">
-        <div class="bg-gradient-to-r from-amber-500 to-orange-500 h-full" :style="{ width: `${compAnalysis.adPercent}%` }" />
-        <div class="bg-gradient-to-r from-indigo-500 to-cyan-500 h-full" :style="{ width: `${compAnalysis.apPercent}%` }" />
+        <div
+          class="bg-gradient-to-r from-amber-500 to-orange-500 h-full"
+          :style="{ width: `${compAnalysis.adPercent}%` }"
+        />
+        <div
+          class="bg-gradient-to-r from-indigo-500 to-cyan-500 h-full"
+          :style="{ width: `${compAnalysis.apPercent}%` }"
+        />
       </div>
       <div class="mt-1.5 text-[10px] text-white/70">
         {{ compAnalysis.statusText }}
@@ -56,7 +64,9 @@
             <span class="text-[10px] text-white/70">{{ rec.reason }}</span>
           </div>
         </div>
-        <span class="rounded bg-indigo-500/20 px-1.5 py-0.5 text-[9px] font-mono text-indigo-300 border border-indigo-500/40 shrink-0">
+        <span
+          class="rounded bg-indigo-500/20 px-1.5 py-0.5 text-[9px] font-mono text-indigo-300 border border-indigo-500/40 shrink-0"
+        >
           {{ rec.buffSummary }}
         </span>
       </div>
@@ -107,7 +117,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { X, ChevronRight, RefreshCw, Sparkles } from 'lucide-vue-next'
-import { invoke } from '@tauri-apps/api/core'
+import { updateFandomData } from '@renderer/services/fandom'
 import { analyzeAramComp } from '@renderer/features/gaming/services/aramAdvisor'
 
 const props = withDefaults(
@@ -124,10 +134,8 @@ const props = withDefaults(
 const isUpdating = ref(false)
 
 const compAnalysis = computed(() =>
-  analyzeAramComp(
-    props.myTeamChampionIds,
-    props.benchChampionIds,
-    id => (id === 15 ? '希维尔' : id === 11 ? '无极剑圣' : `英雄${id}`)
+  analyzeAramComp(props.myTeamChampionIds, props.benchChampionIds, id =>
+    id === 15 ? '希维尔' : id === 11 ? '无极剑圣' : `英雄${id}`
   )
 )
 
@@ -135,7 +143,7 @@ async function handleUpdateFandom() {
   if (isUpdating.value) return
   isUpdating.value = true
   try {
-    await invoke('update_fandom_data')
+    await updateFandomData()
   } catch (error) {
     console.warn('[fandom] update failed', error)
   } finally {

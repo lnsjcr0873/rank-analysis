@@ -346,10 +346,10 @@ import {
   BulbOutline,
   ColorWandOutline
 } from '@vicons/ionicons5'
-import { getConfigByIpc, putConfigByIpc } from '@renderer/services/ipc'
+import { getConfigByIpc } from '@renderer/services/ipc'
 import { assetPrefix } from '@renderer/services/http'
 import type { championOption } from '@renderer/types/domain/champion'
-import { invoke } from '@tauri-apps/api/core'
+import { getChampionOptions } from '@renderer/services/config'
 import {
   usePickRules,
   useBanRules,
@@ -357,6 +357,7 @@ import {
   type RuneRule
 } from '@renderer/composables/useRules'
 import { useOpggTier } from '@renderer/composables/useOpggTier'
+import { useAutomationSettings } from '@renderer/features/settings/composables/useAutomationSettings'
 import type { OpggTier } from '@renderer/services/opgg'
 import RuleEditModal from '@renderer/components/automation/RuleEditModal.vue'
 import BpSuggestModal from '@renderer/components/automation/BpSuggestModal.vue'
@@ -398,39 +399,45 @@ const onSuggestAdopted = async (pool: 'pick' | 'ban') => {
   }
 }
 
+const {
+  autoAccept,
+  autoPick,
+  autoBan,
+  autoStart,
+  autoTradeConfirm,
+  executeAtSecs,
+  autoRune,
+  myPickData,
+  myBanData,
+  configLoaded,
+  loadAutomationSettings,
+  updateAcceptSwitch,
+  updateStartSwitch,
+  updatePickSwitch,
+  updateBanSwitch,
+  updateTradeConfirmSwitch,
+  updateRuneSwitch,
+  saveExecuteAtSecs,
+  addPickData,
+  deletePickData,
+  addBanData,
+  deleteBanData
+} = useAutomationSettings()
+
+const options = ref<championOption[]>([])
+const selectPickChampionId = ref(null)
+const selectBanChampionId = ref(null)
+
 onMounted(async () => {
-  const opts = await invoke<championOption[]>('get_champion_options')
+  const opts = await getChampionOptions()
   options.value = opts.filter(opt => opt.value > 0)
-  autoAccept.value = (await getConfigByIpc<boolean>('settings.auto.acceptMatchSwitch')) ?? false
-  autoPick.value = (await getConfigByIpc<boolean>('settings.auto.pickChampionSwitch')) ?? false
-  autoBan.value = (await getConfigByIpc<boolean>('settings.auto.banChampionSwitch')) ?? false
-  myPickData.value = (await getConfigByIpc<number[]>('settings.auto.pickChampionSlice')) ?? []
-  myBanData.value = (await getConfigByIpc<number[]>('settings.auto.banChampionSlice')) ?? []
-  autoStart.value = (await getConfigByIpc<boolean>('settings.auto.startMatchSwitch')) ?? false
-  autoTradeConfirm.value =
-    (await getConfigByIpc<boolean>('settings.auto.tradeConfirmSwitch')) ?? false
-  executeAtSecs.value = (await getConfigByIpc<number>('settings.auto.executeAtSecs')) ?? 5
-  autoRune.value = (await getConfigByIpc<boolean>('settings.auto.runeSwitch')) ?? false
+  await loadAutomationSettings()
   await loadOpggTier()
   await reloadPickRules()
   await reloadBanRules()
   await reloadRuneRules()
   configLoaded.value = true
 })
-
-async function updateTradeConfirmSwitch() {
-  await putConfigByIpc('settings.auto.tradeConfirmSwitch', autoTradeConfirm.value)
-}
-
-async function saveExecuteAtSecs() {
-  const v = executeAtSecs.value
-  if (v == null) return
-  await putConfigByIpc('settings.auto.executeAtSecs', Math.min(35, Math.max(3, v)))
-}
-
-const updateRuneSwitch = async () => {
-  await putConfigByIpc('settings.auto.runeSwitch', autoRune.value)
-}
 
 /** 新映射行：championId 占位让列表非空，待用户选择后即保存 */
 async function addRuneRule() {
@@ -512,33 +519,6 @@ function summarize(rule: PickRule | BanRule): string {
   return `${parts.join(' + ')} → ${isPick ? '选' : 'Ban'} ${target}${lockTag}`
 }
 
-const options = ref<championOption[]>([])
-const autoAccept = ref(false)
-const autoPick = ref(false)
-const autoBan = ref(false)
-const autoStart = ref(false)
-/** 自动确认换人请求（P1-2，队友发起时自动接受） */
-const autoTradeConfirm = ref(false)
-/** 锁定执行时刻（剩余秒数，3~35） */
-const executeAtSecs = ref(5)
-/** 自动符文（P1-3）：选人锁定后按「英雄 → 符文页」切换 LCU 当前页 */
-const autoRune = ref(false)
-
-const selectPickChampionId = ref(null)
-const selectBanChampionId = ref(null)
-
-const myPickData = ref<number[]>([])
-const myBanData = ref<number[]>([])
-
-/**
- * onMounted 里的配置读取是串行 await（开关早、兜底池晚、规则最晚落地）。
- * 在这串 await 落定前，pickHasNoTarget/banHasNoTarget 会拿着「开关已开、规则/池仍是
- * 初始空值」的中间态去判定，对「只配了规则、没配兜底池」这种合法配置会误判成
- * 「没有可执行目标」，在设置页首屏闪一条说错了的橙色警告。用这个门禁把两个 computed
- * 锁到 onMounted 全部落定之后，未加载完一律不提示。
- */
-const configLoaded = ref(false)
-
 /** 自动选择开着但规则与兜底池皆空——本局不会有任何动作 */
 const pickHasNoTarget = computed(
   () =>
@@ -548,45 +528,6 @@ const pickHasNoTarget = computed(
 const banHasNoTarget = computed(
   () => configLoaded.value && hasNoExecutableTarget(autoBan.value, banRules.value, myBanData.value)
 )
-
-const updateAcceptSwitch = async () => {
-  await putConfigByIpc('settings.auto.acceptMatchSwitch', autoAccept.value)
-}
-
-const updatePickSwitch = async () => {
-  await putConfigByIpc('settings.auto.pickChampionSwitch', autoPick.value)
-}
-const updateBanSwitch = async () => {
-  await putConfigByIpc('settings.auto.banChampionSwitch', autoBan.value)
-}
-const updatePickData = async () => {
-  await putConfigByIpc('settings.auto.pickChampionSlice', myPickData.value)
-}
-const updateBanData = async () => {
-  await putConfigByIpc('settings.auto.banChampionSlice', myBanData.value)
-}
-const updateStartSwitch = async () => {
-  await putConfigByIpc('settings.auto.startMatchSwitch', autoStart.value)
-}
-
-const deleteBanData = async (value: any) => {
-  myBanData.value = myBanData.value.filter(item => item !== value)
-  await updateBanData()
-}
-const deletePickData = async (value: any) => {
-  myPickData.value = myPickData.value.filter(item => item !== value)
-  await updatePickData()
-}
-const addBanData = async (value: any) => {
-  if (value === 0 || myBanData.value.includes(value)) return
-  myBanData.value?.push(value)
-  await updateBanData()
-}
-const addPickData = async (value: any) => {
-  if (myPickData.value.includes(value) || value === 0) return
-  myPickData.value?.push(value)
-  await updatePickData()
-}
 </script>
 
 <style scoped>

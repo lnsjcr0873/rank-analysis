@@ -180,3 +180,24 @@ export async function requestAIContent(
     )
   })
 }
+
+export interface TestAiProviderRequest {
+  prompt?: string
+  systemPrompt?: string
+  model?: string
+  provider?: string
+  baseUrl?: string
+  apiKey?: string
+  responseFormat?: any
+}
+
+export interface TestAiProviderResponse {
+  model?: string
+  totalTokens?: number
+}
+
+export async function testAiProviderConnection(
+  request: TestAiProviderRequest
+): Promise<TestAiProviderResponse> {
+  return await invoke<TestAiProviderResponse>('test_ai_provider_connection', { request })
+}

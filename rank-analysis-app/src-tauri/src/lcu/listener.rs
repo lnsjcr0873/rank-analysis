@@ -143,18 +143,46 @@ impl LcuListener {
 
     async fn handle_event(&self, event: &Value) {
         if let Some(uri) = event.get("uri").and_then(|v| v.as_str()) {
-            // 检查是否也是 data 字段，有些事件结构不一样
             let data = event.get("data");
 
-            // 如果是 phase 变化事件，更新缓存
-            if uri == "/lol-gameflow/v1/gameflow-phase" {
-                if let Some(phase) = data.and_then(|d| d.as_str()) {
-                    crate::lcu::api::phase::update_phase_cache(phase.to_string());
+            // 发布领域事件到全局事件总线
+            match uri {
+                "/lol-gameflow/v1/gameflow-phase" => {
+                    if let Some(phase) = data.and_then(|d| d.as_str()) {
+                        crate::lcu::api::phase::update_phase_cache(phase.to_string());
+                        crate::event_bus::publish_lcu_event(
+                            crate::event_bus::LcuEvent::PhaseChanged(phase.to_string()),
+                        );
+                    }
+                }
+                "/lol-champ-select/v1/session" => {
+                    crate::event_bus::publish_lcu_event(
+                        crate::event_bus::LcuEvent::ChampSelectSession(
+                            data.cloned().unwrap_or_default(),
+                        ),
+                    );
+                }
+                "/lol-lobby/v2/lobby" => {
+                    crate::event_bus::publish_lcu_event(crate::event_bus::LcuEvent::LobbyUpdated(
+                        data.cloned().unwrap_or_default(),
+                    ));
+                }
+                "/lol-gameflow/v1/session" => {
+                    crate::event_bus::publish_lcu_event(
+                        crate::event_bus::LcuEvent::GameflowSession(
+                            data.cloned().unwrap_or_default(),
+                        ),
+                    );
+                }
+                _ => {
+                    crate::event_bus::publish_lcu_event(crate::event_bus::LcuEvent::Generic {
+                        uri: uri.to_string(),
+                        data: data.cloned(),
+                    });
                 }
             }
 
-            // 分发事件
-            // 根据需要的 URI 进行过滤，避免无效刷新
+            // 根据需要的 URI 进行过滤，刷新前端会话状态
             if uri == "/lol-gameflow/v1/gameflow-phase"
                 || uri == "/lol-champ-select/v1/session"
                 || uri == "/lol-lobby/v2/lobby"
@@ -162,7 +190,6 @@ impl LcuListener {
             {
                 log::info!("收到 LCU 事件: {}", uri);
 
-                // 触发后端的会话数据刷新逻辑
                 if let Err(e) =
                     crate::command::session::get_session_data(self.app_handle.clone()).await
                 {

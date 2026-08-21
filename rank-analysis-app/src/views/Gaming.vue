@@ -4,14 +4,20 @@
   vnode，与元素并列会让根变成 Fragment，离场过渡卡死。
 -->
 <template>
-  <template v-if="!sessionData.phase && currentPhase !== 'ChampSelect' && currentPhase !== 'InProgress'">
+  <template
+    v-if="!sessionData.phase && currentPhase !== 'ChampSelect' && currentPhase !== 'InProgress'"
+  >
     <LoadingComponent :hint="isConnected ? '进入英雄选择后这里会自动展示对局分析' : undefined">
       {{ isConnected ? '等待加入游戏...' : '未连接到客户端' }}
     </LoadingComponent>
   </template>
   <template v-else-if="!sessionData.phase">
     <LoadingComponent
-      :hint="currentPhase === 'ChampSelect' ? '已进入英雄选择，正在同步双方队伍与英雄数据...' : '对局已开始，正在同步实时战况...'"
+      :hint="
+        currentPhase === 'ChampSelect'
+          ? '已进入英雄选择，正在同步双方队伍与英雄数据...'
+          : '对局已开始，正在同步实时战况...'
+      "
     >
       {{ currentPhase === 'ChampSelect' ? '正在载入选人数据...' : '正在载入对局数据...' }}
     </LoadingComponent>
@@ -352,9 +358,9 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
-import { invoke } from '@tauri-apps/api/core'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
+import { getChampionOptions } from '@renderer/services/config'
 import { getConfigByIpc, putConfigByIpc } from '@renderer/services/ipc'
 import { SettingsOutline, SparklesOutline } from '@vicons/ionicons5'
 import { useMessage } from 'naive-ui'
@@ -368,12 +374,16 @@ import EnemyThreatCard from '@renderer/components/gaming/EnemyThreatCard.vue'
 import NextActionCard from '@renderer/components/gaming/NextActionCard.vue'
 import DodgeAdvisorCard from '@renderer/components/gaming/DodgeAdvisorCard.vue'
 import AramBalanceCard from '@renderer/components/gaming/AramBalanceCard.vue'
-import RivalFriendAlertBanner, { type RadarAlert } from '@renderer/components/gaming/RivalFriendAlertBanner.vue'
-import { evaluateDodgeQuality, type DodgeAdvisorResult } from '@renderer/features/gaming/services/dodgeAdvisor'
+import RivalFriendAlertBanner, {
+  type RadarAlert
+} from '@renderer/components/gaming/RivalFriendAlertBanner.vue'
+import {
+  evaluateDodgeQuality,
+  type DodgeAdvisorResult
+} from '@renderer/features/gaming/services/dodgeAdvisor'
 import { usePlayerNotesStore } from '@renderer/features/settings/stores/playerNotes'
-import { useGamingAIAnalysis } from '@renderer/composables/useGamingAIAnalysis'
-import { useLiveAIAnalysis } from '@renderer/composables/useLiveAIAnalysis'
-import { renderAnalysisReport } from '@renderer/services/ai/matchDetail/renderReport'
+import { useGamingOverlay } from '@renderer/features/gaming/composables/useGamingOverlay'
+import { useGamingAIWorkflow } from '@renderer/features/gaming/composables/useGamingAIWorkflow'
 import { useBpDecision } from '@renderer/composables/useBpDecision'
 import { useLineupScore } from '@renderer/composables/useLineupScore'
 import { useSessionSync } from '@renderer/composables/useSessionSync'
@@ -394,10 +404,8 @@ import { buildRuleDraft } from '@renderer/features/gaming/services/bpRuleDraft'
 import { normalizeLcuPosition } from '@renderer/features/gaming/services/counterIntel'
 import { getChampionName, loadChampionNames } from '@renderer/services/ai/champion-names'
 import { getThreatRatings, type ThreatRating } from '@renderer/services/scouting'
-import { getNextActions, type NextAction } from '@renderer/services/nextAction'
 import type { Position, PickRule, BanRule } from '@renderer/types/rules'
 import type { ChampSelect, Subteam } from '@renderer/types/domain/gaming'
-import type { championOption } from '@renderer/types/domain/champion'
 
 /** 选人阶段 stepper 的四步定义，顺序与展示文案固定 */
 const STAGE_STEPS: Array<{ key: string; label: string }> = [
@@ -500,7 +508,7 @@ let championOptionsLoaded = false
 async function ensureChampionOptions(): Promise<void> {
   if (championOptionsLoaded) return
   try {
-    const options = await invoke<championOption[]>('get_champion_options')
+    const options = await getChampionOptions()
     allChampionIds.value = options.map(o => o.value)
     championOptionsLoaded = true
   } catch (e) {
@@ -636,7 +644,7 @@ const lineupScores = useLineupScore(sessionData, opggMode, {
 })
 
 const threatRatings = ref<ThreatRating[]>([])
-const nextActions = ref<NextAction[]>([])
+const router = useRouter()
 
 let notesStore: ReturnType<typeof usePlayerNotesStore> | null = null
 try {
@@ -691,143 +699,27 @@ watch(
   { immediate: true }
 )
 
-let nextActionTimer: ReturnType<typeof setInterval> | null = null
-
-async function updateNextActionsAndPushOverlay() {
-  if (sessionData.phase !== 'InProgress') return
-  const myPlayer = orderedSubteams.value
-    .find(s => s.subteamId === sessionData.mySubteamId)
-    ?.players.find(p => p.summoner.puuid === mySummonerPuuid.value)
-  const myChampionId = myPlayer?.championId ?? 0
-  const myGameName = myPlayer?.summoner?.gameName ?? ''
-  const actions = await getNextActions(
-    myChampionId,
-    myGameName,
-    mySummonerPuuid.value,
-    sessionData.queueId
-  )
-  nextActions.value = actions
-  if (actions && actions.length > 0) {
-    await invoke('push_overlay_data', { actions }).catch(() => {})
-  }
-}
-
-watch(
-  () => sessionData.phase,
-  async phase => {
-    if (nextActionTimer) {
-      clearInterval(nextActionTimer)
-      nextActionTimer = null
-    }
-
-    if (phase === 'InProgress') {
-      await invoke('show_overlay_window').catch(() => {})
-      await updateNextActionsAndPushOverlay()
-      nextActionTimer = setInterval(updateNextActionsAndPushOverlay, 2000)
-    } else {
-      await invoke('hide_overlay_window').catch(() => {})
-      nextActions.value = []
-    }
-  },
-  { immediate: true }
-)
-
-onBeforeUnmount(() => {
-  if (nextActionTimer) {
-    clearInterval(nextActionTimer)
-    nextActionTimer = null
-  }
-})
+const { nextActions } = useGamingOverlay(sessionData, orderedSubteams, mySummonerPuuid)
 
 const showConfig = ref(false)
 const matchCount = ref(4)
 const showAITooltip = ref(false)
 let hasShownAITip = false
 
-const router = useRouter()
-const route = useRoute()
 const message = useMessage()
 
-watch(
-  () => route.query.openAi,
-  openAi => {
-    if (openAi) {
-      handleOpenPanel()
-    }
-  },
-  { immediate: true }
-)
-
-const ai = useGamingAIAnalysis(sessionData, opggMode, {
-  champSelectExtras: computed(() => ({
-    bpDecision: bp.decision.value,
-    lineupScore: lineupScores.scores.value
-  }))
-})
-const live = useLiveAIAnalysis(sessionData, { mySummoner })
-
-type AITabKey = 'champSelect' | 'live' | 'game'
-const aiTab = ref<AITabKey>('champSelect')
-
-const defaultAiTab = computed<AITabKey>(() => {
-  if (sessionData.phase === 'ChampSelect') return 'champSelect'
-  if (sessionData.phase === 'InProgress') return 'live'
-  return 'game'
-})
-
-watch(
-  () => sessionData.phase,
-  () => {
-    aiTab.value = defaultAiTab.value
-  }
-)
-
-const champSelectRendered = computed<string>(() => {
-  const raw = ai.kindState.champSelect.result.value
-  return raw ? renderAnalysisReport(raw) : ''
-})
-
-const gameRendered = computed<string>(() => {
-  const raw = ai.kindState.game.result.value
-  return raw ? renderAnalysisReport(raw) : ''
-})
-
-const liveUpdatedAt = computed<string>(() => {
-  const t = live.lastPollAt.value
-  if (!t) return ''
-  const d = new Date(t)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
-})
-
-const currentTabLoading = computed<boolean>(() => {
-  if (aiTab.value === 'live') return live.loading.value
-  return ai.kindState[aiTab.value].loading.value
-})
-
-const aiPanelTitle = computed<string>(() => {
-  const phase = sessionData.phase
-  const name =
-    phase === 'ChampSelect'
-      ? '选人期阵容分析'
-      : phase === 'InProgress'
-        ? '对局实时分析'
-        : '赛后整局复盘'
-  return `AI 战术军师 · ${name}`
-})
-
-function handleOpenPanel(): void {
-  const tab = defaultAiTab.value
-  aiTab.value = tab
-  ai.showPanel.value = true
-  if (tab === 'live') live.ensureStarted()
-  else ai.openPanel()
-}
-
-function rerunCurrentTab(): void {
-  if (aiTab.value === 'live') void live.rerun()
-  else void ai.rerunKind(aiTab.value)
-}
+const {
+  ai,
+  live,
+  aiTab,
+  champSelectRendered,
+  gameRendered,
+  liveUpdatedAt,
+  currentTabLoading,
+  aiPanelTitle,
+  handleOpenPanel,
+  rerunCurrentTab
+} = useGamingAIWorkflow(sessionData, opggMode, mySummoner, bp.decision, lineupScores.scores)
 
 const savingRule = ref(false)
 

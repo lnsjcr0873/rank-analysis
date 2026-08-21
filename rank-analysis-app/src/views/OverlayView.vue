@@ -10,7 +10,9 @@
       class="mini-capsule-card flex items-center gap-2 rounded-full border border-indigo-500/40 bg-[rgba(10,15,26,0.92)] px-3 py-1.5 shadow-2xl backdrop-blur-xl transition-all cursor-pointer hover:border-cyan-400/60"
       @click="isMiniMode = false"
     >
-      <div class="flex h-4 w-4 items-center justify-center rounded-full bg-cyan-500/20 text-cyan-300 animate-pulse shrink-0">
+      <div
+        class="flex h-4 w-4 items-center justify-center rounded-full bg-cyan-500/20 text-cyan-300 animate-pulse shrink-0"
+      >
         <Sparkles class="h-2.5 w-2.5" />
       </div>
       <span

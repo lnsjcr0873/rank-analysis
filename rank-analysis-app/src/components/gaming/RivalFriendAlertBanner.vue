@@ -52,7 +52,9 @@
       </div>
 
       <div class="flex items-center gap-2 shrink-0">
-        <span class="text-[10px] font-mono opacity-60">{{ alert.side === 'enemy' ? '敌方阵营' : '己方队伍' }}</span>
+        <span class="text-[10px] font-mono opacity-60">{{
+          alert.side === 'enemy' ? '敌方阵营' : '己方队伍'
+        }}</span>
         <button
           type="button"
           class="text-white/40 hover:text-white transition-colors cursor-pointer p-1"

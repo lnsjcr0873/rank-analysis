@@ -56,7 +56,7 @@ describe('dodgeAdvisor', () => {
         encounterCount: 1,
         laneAggression: 60,
         recentPerformance: 75,
-        mainChampionWinRate: 0.60
+        mainChampionWinRate: 0.6
       }
     ]
     const res = evaluateDodgeQuality({

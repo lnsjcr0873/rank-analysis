@@ -1,18 +1,22 @@
 ﻿<template>
-  <div class="dodge-advisor-card rounded-2xl border border-white/[0.08] bg-[rgba(15,22,37,0.92)] p-3.5 backdrop-blur-2xl shadow-xl transition-all">
+  <div
+    class="dodge-advisor-card rounded-2xl border border-white/[0.08] bg-[rgba(15,22,37,0.92)] p-3.5 backdrop-blur-2xl shadow-xl transition-all"
+  >
     <!-- Header -->
     <div class="flex items-center justify-between border-b border-white/[0.06] pb-2.5 mb-3">
       <div class="flex items-center gap-2">
-        <div
-          class="flex h-6 w-6 items-center justify-center rounded-lg border"
-          :class="badgeClass"
-        >
+        <div class="flex h-6 w-6 items-center justify-center rounded-lg border" :class="badgeClass">
           <ShieldAlert v-if="result.recommendation === 'dodge'" class="h-3.5 w-3.5 text-rose-400" />
-          <AlertCircle v-else-if="result.recommendation === 'caution'" class="h-3.5 w-3.5 text-amber-400" />
+          <AlertCircle
+            v-else-if="result.recommendation === 'caution'"
+            class="h-3.5 w-3.5 text-amber-400"
+          />
           <CheckCircle2 v-else class="h-3.5 w-3.5 text-emerald-400" />
         </div>
         <div>
-          <span class="text-xs font-bold text-white tracking-wide">对局质量与秒退诊断 (Dodge Advisor)</span>
+          <span class="text-xs font-bold text-white tracking-wide"
+            >对局质量与秒退诊断 (Dodge Advisor)</span
+          >
         </div>
       </div>
 
@@ -29,22 +33,31 @@
     <div class="grid grid-cols-3 gap-2 rounded-xl bg-white/[0.03] p-2.5 border border-white/5 mb-3">
       <div class="flex flex-col items-center justify-center">
         <span class="text-[10px] text-white/50">对局质量分</span>
-        <span class="text-lg font-black font-mono" :class="scoreColorClass">{{ result.qualityScore }}</span>
+        <span class="text-lg font-black font-mono" :class="scoreColorClass">{{
+          result.qualityScore
+        }}</span>
       </div>
       <div class="flex flex-col items-center justify-center border-x border-white/10">
         <span class="text-[10px] text-white/50">预测胜率</span>
-        <span class="text-lg font-black font-mono text-cyan-300">{{ result.predictedWinRate }}%</span>
+        <span class="text-lg font-black font-mono text-cyan-300"
+          >{{ result.predictedWinRate }}%</span
+        >
       </div>
       <div class="flex flex-col items-center justify-center">
         <span class="text-[10px] text-white/50">排位净期望 (EV)</span>
-        <span class="text-lg font-black font-mono" :class="result.expectedLpEv >= 0 ? 'text-emerald-400' : 'text-rose-400'">
+        <span
+          class="text-lg font-black font-mono"
+          :class="result.expectedLpEv >= 0 ? 'text-emerald-400' : 'text-rose-400'"
+        >
           {{ result.expectedLpEv >= 0 ? '+' : '' }}{{ result.expectedLpEv }} LP
         </span>
       </div>
     </div>
 
     <!-- Summary Text -->
-    <div class="text-xs leading-relaxed text-white/80 bg-white/[0.02] p-2.5 rounded-lg border border-white/5 mb-3">
+    <div
+      class="text-xs leading-relaxed text-white/80 bg-white/[0.02] p-2.5 rounded-lg border border-white/5 mb-3"
+    >
       💡 <span class="font-medium">{{ result.summary }}</span>
     </div>
 

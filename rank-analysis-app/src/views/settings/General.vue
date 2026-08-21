@@ -240,7 +240,8 @@ import {
   forceUpdateKnowledge,
   type KnowledgeStatus
 } from '@renderer/services/knowledge'
-import { invoke } from '@tauri-apps/api/core'
+import { testAiProviderConnection } from '@renderer/services/ai'
+import { cacheCdragonIcons } from '@renderer/services/system'
 import { useMessage } from 'naive-ui'
 
 const matchCount = ref(4)
@@ -539,22 +540,20 @@ const handleTestConnection = async () => {
   if (testing.value) return
   testing.value = true
   try {
-    const result = (await invoke('test_ai_provider_connection', {
-      request: {
-        prompt: '',
-        systemPrompt: '只回复 OK',
-        model: aiModel.value.trim() || undefined,
-        provider: aiProvider.value === 'dashscope' ? undefined : aiProvider.value,
-        baseUrl: aiBaseUrl.value.trim() || undefined,
-        apiKey:
-          aiProvider.value === 'dashscope'
-            ? dashscopeKey.value.trim() || undefined
-            : aiProvider.value === 'openai'
-              ? aiApiKey.value.trim() || undefined
-              : undefined,
-        responseFormat: undefined
-      }
-    })) as { model?: string; totalTokens?: number }
+    const result = await testAiProviderConnection({
+      prompt: '',
+      systemPrompt: '只回复 OK',
+      model: aiModel.value.trim() || undefined,
+      provider: aiProvider.value === 'dashscope' ? undefined : aiProvider.value,
+      baseUrl: aiBaseUrl.value.trim() || undefined,
+      apiKey:
+        aiProvider.value === 'dashscope'
+          ? dashscopeKey.value.trim() || undefined
+          : aiProvider.value === 'openai'
+            ? aiApiKey.value.trim() || undefined
+            : undefined,
+      responseFormat: undefined
+    })
     message.success(`连接成功：${result.model || '模型'} · ${result.totalTokens ?? 0} tokens`)
   } catch (e: any) {
     message.error(e?.message || String(e) || '连接失败')
@@ -568,7 +567,7 @@ const handleCdragonCache = async () => {
   cdragonCaching.value = true
   cdragonCacheResult.value = ''
   try {
-    const [ok, total] = (await invoke('cache_cdragon_icons')) as [number, number]
+    const [ok, total] = await cacheCdragonIcons()
     if (total === 0) {
       cdragonCacheResult.value = '缓存任务进行中，请稍候…'
       return

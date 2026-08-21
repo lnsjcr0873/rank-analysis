@@ -62,7 +62,9 @@
             >
               {{ summoner?.gameName || '等待召唤师信息...' }}
             </span>
-            <span v-if="summoner?.tagLine" class="text-xs text-white/40 font-mono">#{{ summoner.tagLine }}</span>
+            <span v-if="summoner?.tagLine" class="text-xs text-white/40 font-mono"
+              >#{{ summoner.tagLine }}</span
+            >
 
             <button
               type="button"

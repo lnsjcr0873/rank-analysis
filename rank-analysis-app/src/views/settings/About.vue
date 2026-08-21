@@ -132,7 +132,7 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
 import { useMessage } from 'naive-ui'
-import { invoke } from '@tauri-apps/api/core'
+import { getDeviceId } from '@renderer/services/system'
 import { getVersion } from '@tauri-apps/api/app'
 import { openUrl } from '@tauri-apps/plugin-opener'
 import { CONFIG_KEYS } from '@renderer/services/configKeys'
@@ -164,7 +164,7 @@ const copyDeviceId = () => {
 
 onMounted(() => {
   fetchAppVersion()
-  invoke<string>('get_device_id')
+  getDeviceId()
     .then(id => (deviceId.value = id))
     .catch(e => console.error('获取设备标识失败:', e))
   getConfigByIpc<boolean>(CONFIG_KEYS.updateCheckEnabled)

@@ -9,7 +9,7 @@
  * 不需要额外去重逻辑。
  */
 import { ref, watch, computed } from 'vue'
-import { invoke } from '@tauri-apps/api/core'
+import { getBpSuggest } from '@renderer/services/bpSuggest'
 import {
   NModal,
   NCard,
@@ -72,7 +72,7 @@ async function load(position: string | null) {
   loading.value = true
   error.value = null
   try {
-    result.value = await invoke<BpSuggestResult>('get_bp_suggest', { position })
+    result.value = await getBpSuggest(position as any)
     // 只有自动模式（未显式指定分路）才用响应回填下拉；用户显式选择后
     // （含选「全部分路」的空串）不再被覆写，否则用户的选择会被弹回。
     if (position === null) selectedPosition.value = result.value.main_position

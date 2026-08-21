@@ -203,7 +203,7 @@
 import { computed, ref, watch, onMounted, toRef, provide } from 'vue'
 import { CloseOutline, PlayCircleOutline, SparklesOutline } from '@vicons/ionicons5'
 import { NButton, NIcon, NTooltip } from 'naive-ui'
-import { invoke } from '@tauri-apps/api/core'
+import { getMySummoner } from '@renderer/services/summoner'
 import { useCopy } from '@renderer/composables/useCopy'
 
 import { useTheme } from '@renderer/composables/useTheme'
@@ -484,7 +484,7 @@ const activeTabComponent = computed(() => {
 
 onMounted(async () => {
   try {
-    currentSummoner.value = await invoke<Summoner>('get_my_summoner')
+    currentSummoner.value = await getMySummoner()
   } catch (error) {
     console.error('获取当前用户信息失败:', error)
   }

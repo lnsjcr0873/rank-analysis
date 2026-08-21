@@ -203,7 +203,7 @@
  */
 import { computed, onMounted, ref, watch } from 'vue'
 import { NCheckbox, NInputNumber, NPopover, NScrollbar, NSelect } from 'naive-ui'
-import { invoke } from '@tauri-apps/api/core'
+import { getMatchHistoryByName } from '@renderer/services/matchHistory'
 import { useAssetUrl } from '@renderer/composables/useAssetUrl'
 import {
   formatCounterLine,
@@ -222,7 +222,6 @@ import {
   filterChampionPoolByThresholds,
   type ChampionPoolEntry
 } from '@renderer/components/record/championPool'
-import type { MatchHistory } from '@renderer/types/domain/match'
 
 const props = withDefaults(
   defineProps<{
@@ -382,11 +381,7 @@ async function loadMyPool(): Promise<void> {
       poolEntries.value = cached
       return
     }
-    const mh = await invoke<MatchHistory>('get_match_history_by_name', {
-      name: props.mySummonerName,
-      begIndex: 0,
-      endIndex: 49
-    })
+    const mh = await getMatchHistoryByName(props.mySummonerName, 0, 49)
     const entries = aggregateChampionPool(mh?.games?.games ?? [])
     myPoolCache.set(props.mySummonerName, entries)
     poolEntries.value = entries

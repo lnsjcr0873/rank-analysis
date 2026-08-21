@@ -120,7 +120,7 @@
 import { ref, computed } from 'vue'
 import { useMessage } from 'naive-ui'
 import { save, open } from '@tauri-apps/plugin-dialog'
-import { invoke } from '@tauri-apps/api/core'
+import { exportBackup, readTextFile, applyConfigSnapshot } from '@renderer/services/backup'
 import { usePlayerNotesStore } from '@renderer/features/settings/stores/playerNotes'
 import { useCloudSyncStore } from '@renderer/features/settings/stores/cloudSync'
 import { useSettingsStore } from '@renderer/features/settings/stores/setting'
@@ -163,7 +163,7 @@ async function handleExport(): Promise<void> {
   })
   if (!path) return
   try {
-    await invoke('export_backup', { path })
+    await exportBackup(path)
     message.success('已导出全量备份')
   } catch (e) {
     message.error(String(e))
@@ -181,7 +181,7 @@ async function handleImport(): Promise<void> {
   // 读文件与 parse 分开 catch：Rust 侧的「文件过大」「仅支持 .json」等文案需原样透传
   let content: string
   try {
-    content = await invoke<string>('read_text_file', { path })
+    content = await readTextFile(path)
   } catch (e) {
     message.error(String(e))
     return
@@ -208,7 +208,7 @@ async function handleImport(): Promise<void> {
     `备注新增 ${stats.added},更新 ${stats.replaced},保留本地 ${stats.kept}` +
     (stats.invalid ? `,跳过损坏 ${stats.invalid}` : '')
   try {
-    await invoke('apply_config_snapshot', { snapshot: parsed.appConfig })
+    await applyConfigSnapshot(parsed.appConfig)
     await settingsStore.initTheme()
     message.success(`导入完成:配置已恢复;${notesSummary}`)
   } catch (e) {

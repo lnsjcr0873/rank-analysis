@@ -130,9 +130,7 @@
         </div>
       </div>
 
-      <div v-else class="py-6 text-center text-xs text-white/40">
-        暂无常用英雄数据
-      </div>
+      <div v-else class="py-6 text-center text-xs text-white/40">暂无常用英雄数据</div>
 
       <!-- Footer: 查看全部英雄 -->
       <div class="mt-2.5 flex items-center justify-center border-t border-white/[0.04] pt-2">
@@ -175,7 +173,7 @@
 
 <script lang="ts" setup>
 import { computed, onMounted, ref, watch } from 'vue'
-import { invoke } from '@tauri-apps/api/core'
+import { getChampionOptions } from '@renderer/services/config'
 import { ChevronRight } from 'lucide-vue-next'
 import { useSettingsStore } from '@renderer/features/settings/stores/setting'
 import { assetPrefix } from '@renderer/services/http'
@@ -228,7 +226,7 @@ const updateMode = (value: string | number, option: { label?: string }) => {
 const championOptions = ref<championOption[]>([])
 onMounted(async () => {
   try {
-    championOptions.value = await invoke<championOption[]>('get_champion_options')
+    championOptions.value = await getChampionOptions()
   } catch {
     championOptions.value = []
   }

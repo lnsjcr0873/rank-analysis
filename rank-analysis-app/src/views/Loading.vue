@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { invoke } from '@tauri-apps/api/core'
+import { relaunchAsAdmin } from '@renderer/services/system'
 import router from '../router'
 import LoadingComponent from '../components/LoadingComponent.vue'
 import { useGameState } from '../composables/useGameState'
@@ -66,11 +66,11 @@ const hint = computed(() => {
 
 const relaunching = ref(false)
 
-async function relaunchAsAdmin() {
+async function handleRelaunch() {
   if (relaunching.value) return
   relaunching.value = true
   try {
-    await invoke('relaunch_as_admin')
+    await relaunchAsAdmin()
   } catch (e) {
     console.error('以管理员身份重启失败:', e)
     relaunching.value = false
@@ -108,7 +108,7 @@ async function launchLeague() {
         v-if="isAccessDenied && canRelaunchAsAdmin"
         class="admin-btn"
         :disabled="relaunching"
-        @click="relaunchAsAdmin"
+        @click="handleRelaunch"
       >
         {{ relaunching ? '正在重启...' : '以管理员身份重启' }}
       </button>

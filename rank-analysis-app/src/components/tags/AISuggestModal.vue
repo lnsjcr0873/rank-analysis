@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
-import { invoke } from '@tauri-apps/api/core'
+import { saveTagConfigs, getAllTagConfigs } from '@renderer/services/tags'
 import { NModal, NCard, NButton, NSpace, NText, NTag, NEmpty, NSpin } from 'naive-ui'
 import {
   requestTagSuggestions,
   markAdopted,
   type TagSuggestOutcome
 } from '@renderer/services/ai/tagSuggest'
-import type { TagSuggestion, TagConfig } from '@renderer/types/tagSuggest'
+import type { TagSuggestion } from '@renderer/types/tagSuggest'
 
 const props = defineProps<{ show: boolean }>()
 const emit = defineEmits<{
@@ -65,10 +65,10 @@ async function adopt(s: TagSuggestion) {
 
   adoptingIds.value.add(s.id)
   try {
-    const existing = await invoke<TagConfig[]>('get_all_tag_configs')
+    const existing = await getAllTagConfigs()
     // Strip adopted marker before saving
     const { adopted: _adopted, ...clean } = s
-    await invoke('save_tag_configs', { configs: [...existing, clean] })
+    await saveTagConfigs([...existing, clean])
     markAdopted(puuid, s.id)
 
     // Reflect adopted state in current view

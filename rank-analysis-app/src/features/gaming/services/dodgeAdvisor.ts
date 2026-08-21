@@ -85,7 +85,9 @@ export function evaluateDodgeQuality(input: DodgeAdvisorInput): DodgeAdvisorResu
   }
 
   // 2. 敌方高危威胁画像（绝活哥 / 连胜 / 代练嫌疑）
-  const highThreats = threatRatings.filter(t => t.threatLevel === 'High' || t.threatLevel === 'Critical')
+  const highThreats = threatRatings.filter(
+    t => t.threatLevel === 'High' || t.threatLevel === 'Critical'
+  )
   if (highThreats.length > 0) {
     baseScore -= highThreats.length * 8
     highThreats.forEach(t => {
@@ -146,7 +148,8 @@ export function evaluateDodgeQuality(input: DodgeAdvisorInput): DodgeAdvisorResu
   const predictedWinRate = Math.max(20, Math.min(80, Math.round(40 + (qualityScore / 100) * 20)))
 
   // 标准胜 +20 / 败 -20 LP 计算期望收益
-  const expectedLpEv = Math.round(((predictedWinRate / 100) * 20 - ((100 - predictedWinRate) / 100) * 20) * 10) / 10
+  const expectedLpEv =
+    Math.round(((predictedWinRate / 100) * 20 - ((100 - predictedWinRate) / 100) * 20) * 10) / 10
 
   let recommendation: DodgeRecommendation = 'play'
   let summary = '当前对局各线势均力敌，推荐正常开局。'

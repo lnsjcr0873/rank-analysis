@@ -255,3 +255,9 @@ export async function analyzeMatchDetailWithAI(
     )
   })
 }
+
+export {
+  testAiProviderConnection,
+  type TestAiProviderRequest,
+  type TestAiProviderResponse
+} from './stream'

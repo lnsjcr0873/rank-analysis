@@ -77,7 +77,8 @@ import {
   NFlex,
   useThemeVars
 } from 'naive-ui'
-import { invoke } from '@tauri-apps/api/core'
+import { saveTagConfigs, getAllTagConfigs } from '@renderer/services/tags'
+import { getChampionOptions, getGameModes } from '@renderer/services/config'
 import TagConditionNode from './TagConditionNode.vue'
 import AISuggestModal from '@renderer/components/tags/AISuggestModal.vue'
 import type { championOption } from '@renderer/types/domain/champion'
@@ -85,15 +86,7 @@ import type { championOption } from '@renderer/types/domain/champion'
 const themeVars = useThemeVars()
 
 // Backend Interfaces
-interface TagConfig {
-  id: string
-  name: string
-  desc: string
-  good: boolean
-  enabled: boolean
-  condition: any // Complex tree structure, using any to delegate to component
-  isDefault?: boolean
-}
+import type { TagConfig } from '@renderer/types/tagSuggest'
 
 const message = useMessage()
 const tags = ref<TagConfig[]>([])
@@ -116,7 +109,8 @@ const currentTag = ref<TagConfig>({
   desc: '',
   good: false,
   enabled: true,
-  condition: null
+  condition: { type: 'and', conditions: [] },
+  isDefault: false
 })
 
 const modeOptions = ref<{ label: string; value: number }[]>([])
@@ -188,7 +182,7 @@ onMounted(async () => {
 async function loadTags() {
   loading.value = true
   try {
-    const res = await invoke<TagConfig[]>('get_all_tag_configs')
+    const res = await getAllTagConfigs()
     // No transformation needed now, assume backend sends valid tree
     tags.value = res
   } catch (e: any) {
@@ -200,7 +194,7 @@ async function loadTags() {
 
 async function fetchModes() {
   try {
-    const res: any = await invoke('get_game_modes')
+    const res: any = await getGameModes()
     // Filter out "All" (0) if not needed, or keep it.
     modeOptions.value = res.filter((m: any) => m.value !== 0)
   } catch (e) {
@@ -210,7 +204,7 @@ async function fetchModes() {
 
 async function fetchChampions() {
   try {
-    const res: any = await invoke('get_champion_options')
+    const res: any = await getChampionOptions()
     championOptions.value = res
   } catch (e) {
     message.error('加载英雄列表失败')
@@ -221,7 +215,7 @@ async function toggleEnabled(row: TagConfig, val: boolean) {
   row.enabled = val
   // Save all tags
   try {
-    await invoke('save_tag_configs', { configs: tags.value })
+    await saveTagConfigs(tags.value)
     message.success(val ? '已启用' : '已禁用')
   } catch (e: any) {
     message.error(e)
@@ -287,7 +281,7 @@ async function saveTag() {
   }
 
   try {
-    await invoke('save_tag_configs', { configs: newTags })
+    await saveTagConfigs(newTags)
     message.success('保存成功')
     showModal.value = false
     loadTags()
@@ -299,7 +293,7 @@ async function saveTag() {
 async function deleteTag(id: string) {
   const newTags = tags.value.filter(t => t.id !== id)
   try {
-    await invoke('save_tag_configs', { configs: newTags })
+    await saveTagConfigs(newTags)
     message.success('删除成功')
     loadTags()
   } catch (e: any) {

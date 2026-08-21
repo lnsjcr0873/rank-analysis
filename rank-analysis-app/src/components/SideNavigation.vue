@@ -294,7 +294,7 @@ import {
   Play
 } from 'lucide-vue-next'
 import { useMessage } from 'naive-ui'
-import { invoke } from '@tauri-apps/api/core'
+import { showOverlayWindow } from '@renderer/services/overlay'
 import router, { getFirstPath } from '../router'
 import { useGameState } from '@renderer/composables/useGameState'
 import { useCloudSyncStore } from '@renderer/features/settings/stores/cloudSync'
@@ -392,7 +392,7 @@ const handleTacticalClick = () => {
 
 const handleOverlayClick = async () => {
   try {
-    await invoke('show_overlay_window')
+    await showOverlayWindow()
     message?.success('游戏内 HUD 置顶悬浮窗已激活')
   } catch {
     message?.info('游戏内 HUD 已就绪，进入对局后自动激活')

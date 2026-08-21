@@ -179,7 +179,9 @@ import { NEmpty, NButton, useLoadingBar } from 'naive-ui'
 import { useRoute } from 'vue-router'
 import { renderSingleSelectTag, renderLabel, filterChampionFunc } from '../composition'
 import { modeOptions, initModeOptions } from './composition'
-import { invoke } from '@tauri-apps/api/core'
+import { getMySummoner } from '@renderer/services/summoner'
+import { getMatchHistoryByName } from '@renderer/services/matchHistory'
+import { getChampionOptions } from '@renderer/services/config'
 import { getConfigByIpc } from '@renderer/services/ipc'
 import { getGameById } from '@renderer/features/record/services/gameById'
 import {
@@ -193,7 +195,6 @@ import {
 } from '@renderer/features/record/services/sgp'
 import { championOption } from '../type'
 import type { Game, MatchHistory } from './match'
-import type { Summoner } from '@renderer/types/domain/player'
 import MatchDetailInline from './MatchDetailInline.vue'
 import { useRecordAssets } from '@renderer/composables/useRecordAssets'
 import { recordAssetsKey } from '@renderer/composables/recordAssetsKey'
@@ -475,7 +476,7 @@ const getHistoryMatch = async (summonerName?: string) => {
   let targetName = summonerName || name.value
   if (!targetName) {
     try {
-      const cur = await invoke<Summoner>('get_my_summoner')
+      const cur = await getMySummoner()
       if (cur?.gameName) {
         targetName = `${cur.gameName}#${cur.tagLine}`
       }
@@ -507,11 +508,7 @@ const getHistoryMatch = async (summonerName?: string) => {
       }
       sgpStartIndex.value = result.games?.games?.length ?? 50
     } else {
-      result = await invoke<MatchHistory>('get_match_history_by_name', {
-        name: targetName,
-        begIndex: 0,
-        endIndex: 49
-      })
+      result = await getMatchHistoryByName(targetName, 0, 49)
       // 本区（LCU 50 场窗口）也恢复「收集全部」的持久化成果，续收游标对齐
       const saved = await loadCollectedGames(sgpRegion.value, targetName)
       hasCollected.value = !!saved
@@ -727,7 +724,7 @@ function selectTrendGame(gameId: number) {
 
 onMounted(async () => {
   await initModeOptions()
-  championOptions.value = await invoke<championOption[]>('get_champion_options')
+  championOptions.value = await getChampionOptions()
   await loadPageSizeConfig()
   // 本区深翻页依赖当前登录大区 platformId（SGP 网关支持本区查询）
   currentRegion.value = (await getCurrentSgpRegion()) ?? ''

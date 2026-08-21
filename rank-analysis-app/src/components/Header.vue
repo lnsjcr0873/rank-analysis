@@ -119,7 +119,11 @@
       <!-- User Profile Chip -->
       <div
         class="flex items-center gap-2 rounded-lg bg-white/5 hover:bg-white/10 px-2 py-1 border border-white/10 cursor-pointer transition-all"
-        :title="summoner?.gameName ? `点击查看 ${summoner.gameName}#${summoner.tagLine} 的战绩` : '未连接到客户端'"
+        :title="
+          summoner?.gameName
+            ? `点击查看 ${summoner.gameName}#${summoner.tagLine} 的战绩`
+            : '未连接到客户端'
+        "
         @click="toMyRecord"
       >
         <div

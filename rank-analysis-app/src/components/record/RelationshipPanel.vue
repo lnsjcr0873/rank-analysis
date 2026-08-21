@@ -85,9 +85,7 @@
       </div>
     </div>
 
-    <div v-else class="py-4 text-center text-xs text-white/40">
-      暂无宿敌与好友记录
-    </div>
+    <div v-else class="py-4 text-center text-xs text-white/40">暂无宿敌与好友记录</div>
   </div>
 </template>
 
