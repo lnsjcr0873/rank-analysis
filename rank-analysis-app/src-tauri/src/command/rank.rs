@@ -207,10 +207,21 @@ pub async fn get_win_rate_by_puuid_mode(puuid: String, mode: i32) -> Result<WinR
     for game in match_history.games.games {
         if game.queue_id == mode {
             total_games += 1;
-            if !game.participants.is_empty() && game.participants[0].stats.win {
-                win_games += 1;
+            let target_p = if game.participant_identities.is_empty() {
+                game.participants.first()
             } else {
-                loss_games += 1;
+                game.participant_identities
+                    .iter()
+                    .position(|i| i.player.puuid == puuid)
+                    .and_then(|idx| game.participants.get(idx))
+                    .or_else(|| game.participants.first())
+            };
+            if let Some(p) = target_p {
+                if p.stats.win {
+                    win_games += 1;
+                } else {
+                    loss_games += 1;
+                }
             }
         }
     }

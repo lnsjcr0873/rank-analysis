@@ -369,7 +369,8 @@ const toMe = () => {
 
 const handleMenuClick = (key: string) => {
   if (key === 'Record') {
-    const currentName = router.currentRoute.value.query.name as string
+    const isAlreadyRecord = router.currentRoute.value.path === '/Record'
+    const currentName = isAlreadyRecord ? (router.currentRoute.value.query.name as string) : ''
     const fallbackName = gameStateSummoner.value?.gameName
       ? `${gameStateSummoner.value.gameName}#${gameStateSummoner.value.tagLine}`
       : ''

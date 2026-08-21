@@ -42,9 +42,17 @@ use crate::lcu::api::summoner::Summoner;
 #[tauri::command]
 pub async fn get_platform_name_by_name(name: String) -> Result<String, String> {
     let puuid = Summoner::get_summoner_by_name(&name).await?.puuid;
-    let match_history = MatchHistory::get_match_history_by_puuid(&puuid, 0, 1).await?;
-    constant::game::SGP_SERVER_ID_TO_NAME
-        .get(match_history.platform_id.as_str())
-        .map(|&v| v.to_string())
-        .ok_or_else(|| "未找到对应的服务器名称".to_string())
+    if let Ok(match_history) = MatchHistory::get_match_history_by_puuid(&puuid, 0, 1).await {
+        if let Some(&v) =
+            constant::game::SGP_SERVER_ID_TO_NAME.get(match_history.platform_id.as_str())
+        {
+            return Ok(v.to_string());
+        }
+    }
+    if let Ok(pid) = crate::lcu::api::sgp::get_current_platform_id().await {
+        if let Some(&v) = constant::game::SGP_SERVER_ID_TO_NAME.get(pid.as_str()) {
+            return Ok(v.to_string());
+        }
+    }
+    Ok("未知大区".to_string())
 }
