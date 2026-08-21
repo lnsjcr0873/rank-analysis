@@ -112,7 +112,8 @@ mod tests {
     use super::*;
     use crate::lcu::api::game_detail::GameDetail;
     use crate::lcu::api::model::{Participant, ParticipantIdentity, Player, Stats};
-    use crate::opgg::data::ChampionMeta;
+    use crate::opgg::data::{ChampionMeta, OpggSnapshot};
+    use std::collections::HashMap;
 
     /// 构造一场对局：我用 my_champ，胜负 win，敌方阵容 enemy_champs。
     fn game(my_champ: i32, win: bool, enemy_champs: &[i32], queue_id: i32) -> Game {
