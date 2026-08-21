@@ -9,6 +9,7 @@ pub async fn fetch_aram_balance_data(
 ) -> Result<FandomBalanceParams, Box<dyn std::error::Error + Send + Sync>> {
     let client = Client::builder()
         .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        .timeout(std::time::Duration::from_secs(15))
         .build()?;
 
     log::info!("Fetching Fandom API: {}", DATA_URL);

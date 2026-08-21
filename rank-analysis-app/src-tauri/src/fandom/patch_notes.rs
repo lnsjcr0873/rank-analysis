@@ -275,6 +275,7 @@ async fn fetch_patch_wikitext(
     );
     let client = reqwest::Client::builder()
         .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        .timeout(std::time::Duration::from_secs(15))
         .build()?;
     log::info!("Fetching patch notes: {}", url);
     // 尽量贴近真实浏览器请求头：Fandom 前面有 Cloudflare，请求特征太"裸"容易吃挑战页
