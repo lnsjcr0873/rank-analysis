@@ -1,8 +1,6 @@
 use crate::command::user_tag::RankTag;
 use crate::constant::game::{QUEUE_FLEX, QUEUE_SOLO_5X5};
-use crate::domain::tags::model::{
-    MatchFilter, MatchRefresh, Operator, StreakType, TagCondition, TagConfig,
-};
+use crate::domain::tags::model::{MatchFilter, MatchRefresh, StreakType, TagCondition, TagConfig};
 use crate::lcu::api::match_history::MatchHistory;
 
 impl TagConfig {

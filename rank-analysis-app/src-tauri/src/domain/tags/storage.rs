@@ -33,7 +33,7 @@ pub async fn save_config(configs: Vec<TagConfig>) -> Result<(), String> {
 }
 
 /// 将标签配置列表转换为 config::Value。
-pub fn tags_to_value(tags: &Vec<TagConfig>) -> config::Value {
+pub fn tags_to_value(tags: &[TagConfig]) -> config::Value {
     let json = serde_json::to_value(tags).unwrap();
     json_to_config_value(json)
 }

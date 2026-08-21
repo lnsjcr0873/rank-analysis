@@ -49,7 +49,7 @@
 //! });
 //! ```
 
-use crate::command::user_tag::{OneGamePlayer, UserTag};
+use crate::command::user_tag::UserTag;
 use crate::constant::game::QUEUE_TYPE_TO_CN;
 use crate::lcu::api::champion_select::get_champion_select_session;
 use crate::lcu::api::match_history::MatchHistory;
@@ -57,7 +57,7 @@ use crate::lcu::api::phase::get_phase;
 use crate::lcu::api::rank::Rank;
 use crate::lcu::api::session::Session;
 use crate::lcu::api::summoner::Summoner;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;

@@ -98,9 +98,7 @@ pub fn remove_subsets(arrays: &[Vec<String>]) -> Vec<Vec<String>> {
 
     let mut result: Vec<Vec<String>> = Vec::new();
     for arr in sorted_arrays {
-        let is_subset_flag = result
-            .iter()
-            .any(|res_arr: &Vec<String>| is_subset(&arr, res_arr));
+        let is_subset_flag = result.iter().any(|res_arr| is_subset(&arr, res_arr));
 
         if !is_subset_flag {
             result.push(arr);

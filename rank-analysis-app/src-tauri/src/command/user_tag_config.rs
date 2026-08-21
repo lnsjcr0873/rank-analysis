@@ -49,13 +49,6 @@ mod tests {
         }
     }
 
-    fn default_tag(id: &str) -> TagConfig {
-        get_default_tags()
-            .into_iter()
-            .find(|t| t.id == id)
-            .unwrap_or_else(|| panic!("默认标签不存在: {}", id))
-    }
-
     #[test]
     fn current_champion_hits_when_injected() {
         let cfg = TagConfig {
