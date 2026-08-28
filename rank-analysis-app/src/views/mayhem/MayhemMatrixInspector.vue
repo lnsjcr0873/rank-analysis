@@ -139,7 +139,28 @@ function augTooltip(id: number): string {
 }
 
 function topExtensions(b: MayhemBuild): ItemExtension[] {
-  return [...(b.itemExtensions ?? [])].sort((x, y) => y.games - x.games)
+  const map = new Map<number, ItemExtension>()
+  // 核心装备组合中的装备 id 集合（延伸件不重复推荐已包含在主要核心中的装备）
+  const primaryCoreIds = new Set<number>(b.coreItems?.[0]?.itemIds ?? [])
+
+  for (const ext of b.itemExtensions ?? []) {
+    const itemId = ext.itemIds[0]
+    if (!itemId || primaryCoreIds.has(itemId)) continue
+    const existing = map.get(itemId)
+    if (!existing) {
+      map.set(itemId, { ...ext })
+    } else {
+      const totalGames = existing.games + ext.games
+      const totalWins =
+        (existing.wins ?? Math.round(existing.winRate * existing.games)) +
+        (ext.wins ?? Math.round(ext.winRate * ext.games))
+      existing.games = totalGames
+      existing.wins = totalWins
+      existing.winRate = totalGames > 0 ? totalWins / totalGames : existing.winRate
+    }
+  }
+
+  return Array.from(map.values()).sort((x, y) => y.games - x.games)
 }
 
 function buildTitle(b: MayhemBuild, index: number): string {
