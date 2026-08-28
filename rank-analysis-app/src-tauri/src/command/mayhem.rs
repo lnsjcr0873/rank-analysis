@@ -297,7 +297,11 @@ pub async fn mayhem_draft_context() -> Result<Option<Value>, String> {
     let gf: Value = crate::lcu::util::http::lcu_get("lol-gameflow/v1/session")
         .await
         .unwrap_or(Value::Null);
-    let queue_id = gf["queue"]["id"].as_i64().map(|x| x as i32);
+    let queue_id = gf["gameData"]["queue"]["id"]
+        .as_i64()
+        .or_else(|| gf["queue"]["id"].as_i64())
+        .or_else(|| gf["gameData"]["queueId"].as_i64())
+        .map(|x| x as i32);
 
     let v = serde_json::to_value(&session).map_err(|e| e.to_string())?;
     Ok(Some(serde_json::json!({

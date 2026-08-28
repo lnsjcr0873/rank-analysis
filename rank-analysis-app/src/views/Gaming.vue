@@ -118,8 +118,11 @@
         </n-drawer-content>
       </n-drawer>
 
-      <!-- ================= 情报舱：结论区 → 阶段区 → 信号区 ================= -->
-      <div class="intel-bay">
+      <!-- ================= 2400 狂暴大乱斗专属选人面板（替换峡谷 BP 情报舱） ================= -->
+      <MayhemDraftPanel v-if="sessionData.queueId === 2400" :queue-id="sessionData.queueId" />
+
+      <!-- ================= 情报舱：结论区 → 阶段区 → 信号区（非狂暴大乱斗时展示） ================= -->
+      <div v-else class="intel-bay">
         <!-- ① 结论区：VerdictBanner + 梯度选择（梯度影响推荐依据，就近放结论旁）；
              兜底态追加「存为规则」入口，把兜底转化为用户自己的规则 -->
         <div class="intel-bay__verdict">
@@ -278,12 +281,10 @@
         </div>
       </div>
 
-      <MayhemDraftPanel v-if="sessionData.queueId === 2400" />
-
       <div class="gaming-grid" :class="{ 'gaming-grid-multi': sessionData.isMultiTeam }">
         <div v-for="st of orderedSubteams" :key="`subteam-col-${st.subteamId}`" class="subteam-col">
           <BestPicksPanel
-            v-if="showBestPicks && panelForColumn(st)"
+            v-if="showBestPicks && sessionData.queueId !== 2400 && panelForColumn(st)"
             :enemy-ids="enemyLockedIds"
             :candidate-ids="bestPickCandidates"
             :teammate-ids="teammatePickedIds"

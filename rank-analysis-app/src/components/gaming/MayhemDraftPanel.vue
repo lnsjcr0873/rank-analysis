@@ -55,6 +55,10 @@ interface DraftContext {
   bench: number[]
 }
 
+const props = defineProps<{
+  queueId?: number
+}>()
+
 const MAYHEM_QUEUE_ID = 2400
 
 const router = useRouter()
@@ -79,7 +83,7 @@ const metaMap = computed<ChampMetaMap>(() => {
   return map
 })
 
-const isMayhem = computed(() => ctx.value?.queueId === MAYHEM_QUEUE_ID)
+const isMayhem = computed(() => ctx.value?.queueId === MAYHEM_QUEUE_ID || props.queueId === MAYHEM_QUEUE_ID)
 
 const myHandChampionId = computed<number>(() => {
   if (!ctx.value) return 0
@@ -281,7 +285,7 @@ async function poll() {
   try {
     const data = (await invoke('mayhem_draft_context')) as DraftContext | null
     ctx.value = data
-    if (data && data.queueId === MAYHEM_QUEUE_ID) {
+    if (isMayhem.value) {
       if (!champions.value.length) {
         void loadMeta()
       }
@@ -290,7 +294,7 @@ async function poll() {
         void loadDetail(myHandChampionId.value)
         void loadBalanceTag(myHandChampionId.value)
       }
-      if (data.bench?.length) {
+      if (data?.bench?.length) {
         for (const bid of data.bench) void loadBalanceTag(bid)
       }
     }

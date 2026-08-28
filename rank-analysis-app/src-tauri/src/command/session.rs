@@ -409,9 +409,9 @@ async fn process_session_data(app_handle: AppHandle, seq: u64) -> Result<(), Str
         // 会把对局页误导成「上一局结算」视图。
         phase: phase.clone(),
         queue_type: session.game_data.queue.queue_type.clone(),
-        type_cn: QUEUE_TYPE_TO_CN
-            .get(session.game_data.queue.queue_type.as_str())
-            .unwrap_or(&"其他")
+        type_cn: crate::constant::game::get_queue_id_to_cn(session.game_data.queue.id as u32)
+            .or_else(|| QUEUE_TYPE_TO_CN.get(session.game_data.queue.queue_type.as_str()).copied())
+            .unwrap_or("其他")
             .to_string(),
         queue_id: session.game_data.queue.id,
         game_mode: game_mode.clone(),
