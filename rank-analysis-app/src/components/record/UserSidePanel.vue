@@ -319,27 +319,31 @@ function onPoolClick(championId: number) {
   align-items: center;
   gap: var(--space-8);
   padding: var(--space-4) var(--space-8);
-  border-radius: var(--radius-sm);
+  clip-path: var(--clip-corner-sm);
+  border: 1px solid transparent;
   cursor: pointer;
-  transition:
-    background var(--dur-fast) var(--ease-expo),
-    opacity var(--dur-fast) var(--ease-expo),
-    transform var(--dur-fast) var(--ease-expo);
+  transition: all var(--dur-fast) var(--ease-expo);
 }
 
 .hero-pool-row:hover {
   background: var(--glass-bg-mid);
+  border-color: var(--brand-border);
   transform: translateX(2px);
 }
 
 .hero-pool-row-hovered {
-  background: var(--glass-bg-mid);
-  box-shadow: inset 2px 0 0 var(--accent-gold);
+  background: color-mix(in srgb, var(--brand) 12%, transparent);
+  border-color: var(--brand);
 }
 
 .hero-pool-row-active {
-  background: var(--glass-bg-high);
-  box-shadow: inset 2px 0 0 var(--accent-gold);
+  background: color-mix(in srgb, var(--brand) 18%, transparent);
+  border-color: var(--brand);
+}
+
+.theme-light .hero-pool-row:hover {
+  background: linear-gradient(180deg, #f7f4ed, #ebe5d8);
+  border-color: var(--brand-border);
 }
 
 .hero-pool-row-dimmed {

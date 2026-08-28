@@ -18,8 +18,8 @@
     <div class="record-card-grid">
       <!-- 胜负标记 + 时长（hover 看日期/模式，斗魂补名次） -->
       <span
-        class="record-card-result-label"
-        :class="isWin ? 'record-card-text-win' : 'record-card-text-loss'"
+        class="record-card-result-badge record-card-result-label"
+        :class="isWin ? 'is-win' : 'is-loss'"
       >
         {{ resultLabel }}
       </span>
@@ -315,24 +315,21 @@ function openDetail() {
 </script>
 
 <style scoped>
-/* === 紧凑行卡：高 44px 级，信息密度对标 op.gg 行卡 === */
+/* === 奥术金工 Hextech Forge 战绩行卡 === */
 .record-card {
+  position: relative;
   cursor: pointer;
-  height: 46px;
-  border-radius: var(--radius-md);
-  background: rgba(18, 22, 28, 0.45);
-  border: 1px solid color-mix(in srgb, var(--border-subtle) 90%, transparent);
-  backdrop-filter: blur(8px);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
-  transition:
-    transform var(--dur-fast) var(--ease-expo),
-    box-shadow var(--dur-fast) var(--ease-expo),
-    border-color var(--dur-fast) var(--ease-expo),
-    background var(--dur-fast) var(--ease-expo);
+  height: 48px;
+  background: linear-gradient(180deg, rgba(21, 29, 41, 0.75), rgba(12, 16, 24, 0.85));
+  border: 1px solid var(--border-subtle);
+  clip-path: var(--clip-corner-sm);
+  transition: all var(--dur-fast) var(--ease-expo);
 }
 
 .theme-light .record-card {
-  background: var(--bg-elevated);
+  background: linear-gradient(180deg, #f7f4ed 0%, #ebe5d8 100%);
+  border: 1px solid rgba(168, 146, 112, 0.35);
+  box-shadow: 0 1px 3px rgba(60, 50, 30, 0.08);
 }
 
 /* 键盘可达性（R22-3）：焦点环仅键盘触发时出现，不干扰鼠标点击 */
@@ -342,9 +339,14 @@ function openDetail() {
 }
 
 .record-card:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-  border-color: var(--glass-bg-high);
+  border-color: rgba(212, 165, 72, 0.45);
+  transform: translateX(2px);
+  background: linear-gradient(180deg, rgba(28, 38, 54, 0.85), rgba(16, 22, 32, 0.95));
+}
+
+.theme-light .record-card:hover {
+  background: linear-gradient(180deg, #fffdf8 0%, #f0ebd9 100%);
+  border-color: var(--brand-border);
 }
 
 .record-card:active {
@@ -352,33 +354,31 @@ function openDetail() {
   transition-duration: var(--dur-instant);
 }
 
-/* 胜负左缘色条：列表扫读时先看颜色再看字（op.gg 同式） */
+/* 胜负左侧微镶嵌光晕 */
 .record-card-win {
-  box-shadow:
-    inset 3px 0 0 var(--semantic-win),
-    0 2px 10px rgba(16, 185, 129, 0.08);
+  border-left: 2px solid var(--win);
 }
 .record-card-loss {
-  box-shadow:
-    inset 3px 0 0 var(--semantic-loss),
-    0 2px 10px rgba(239, 68, 68, 0.08);
+  border-left: 2px solid var(--loss);
 }
 .record-card-win:hover {
-  box-shadow:
-    inset 3px 0 0 var(--semantic-win),
-    0 4px 16px rgba(16, 185, 129, 0.18);
+  border-left-color: var(--win-bright);
 }
 .record-card-loss:hover {
-  box-shadow:
-    inset 3px 0 0 var(--semantic-loss),
-    0 4px 16px rgba(239, 68, 68, 0.18);
+  border-left-color: var(--loss-bright);
+}
+
+/* v3 宽屏详情栏选中态：品牌金描边高亮当前行 */
+.record-card--sel {
+  border-color: var(--brand) !important;
+  box-shadow: 0 0 12px var(--glow-brand);
 }
 
 .record-card-grid {
   display: grid;
   /* 固定列收窄 + 可伸缩列 minmax：窄窗下整体收缩而非溢出（列间 gap 同步收紧） */
   grid-template-columns:
-    34px
+    36px
     54px
     36px
     minmax(56px, 1fr)
@@ -391,24 +391,53 @@ function openDetail() {
   justify-content: start;
   gap: var(--space-8);
   height: 100%;
-  padding: 0 var(--space-12);
+  padding: 0 var(--space-10);
   min-width: 0;
   overflow: hidden;
 }
 
-/* 胜负字 */
-.record-card-result-label {
+/* 胜负切角印章（Hextech Notched Badge） */
+.record-card-result-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 26px;
+  clip-path: var(--clip-notch);
+  font-family: 'Space Mono', 'Bahnschrift', monospace;
+  font-size: var(--font-size-base);
   font-weight: 800;
-  font-size: var(--font-size-md);
-  text-align: center;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
 }
 
-.record-card-text-win {
-  color: var(--semantic-win);
+.record-card-result-badge.is-win {
+  color: var(--win-bright);
+  background: linear-gradient(135deg, rgba(63, 191, 143, 0.28), rgba(20, 80, 55, 0.5));
+  border: 1px solid rgba(63, 191, 143, 0.6);
+  box-shadow: inset 0 0 6px rgba(63, 191, 143, 0.3);
+  text-shadow: 0 0 8px rgba(92, 217, 171, 0.4);
 }
 
-.record-card-text-loss {
-  color: var(--semantic-loss);
+.record-card-result-badge.is-loss {
+  color: var(--loss-bright);
+  background: linear-gradient(135deg, rgba(224, 92, 92, 0.22), rgba(100, 30, 30, 0.45));
+  border: 1px solid rgba(224, 92, 92, 0.55);
+  box-shadow: inset 0 0 6px rgba(224, 92, 92, 0.25);
+}
+
+.theme-light .record-card-result-badge.is-win {
+  color: #1f6e52;
+  background: linear-gradient(135deg, rgba(46, 143, 108, 0.18), rgba(46, 143, 108, 0.3));
+  border: 1px solid rgba(46, 143, 108, 0.55);
+  text-shadow: none;
+}
+
+.theme-light .record-card-result-badge.is-loss {
+  color: #9c2e2e;
+  background: linear-gradient(135deg, rgba(192, 68, 68, 0.16), rgba(192, 68, 68, 0.28));
+  border: 1px solid rgba(192, 68, 68, 0.5);
+  text-shadow: none;
 }
 
 /* 时长 + 日期/模式（日期常显：R5 回溯不用悬停） */

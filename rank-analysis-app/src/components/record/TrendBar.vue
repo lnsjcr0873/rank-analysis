@@ -101,17 +101,18 @@ const tooltipKda = (game: Game) => {
   gap: var(--space-10);
   min-height: 32px;
   padding: var(--space-4) var(--space-12);
-  background: rgba(18, 22, 28, 0.45);
-  border: 1px solid color-mix(in srgb, var(--border-subtle) 90%, transparent);
-  border-radius: var(--radius-md);
+  background: linear-gradient(180deg, rgba(21, 29, 41, 0.75), rgba(12, 16, 24, 0.85));
+  border: 1px solid var(--border-subtle);
+  clip-path: var(--clip-corner-sm);
   backdrop-filter: blur(8px);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
   overflow-x: auto;
   scrollbar-width: none;
 }
 
 .theme-light .trend-bar {
-  background: var(--bg-elevated);
+  background: linear-gradient(180deg, #f7f4ed 0%, #ebe5d8 100%);
+  border: 1px solid rgba(168, 146, 112, 0.35);
+  box-shadow: 0 1px 3px rgba(60, 50, 30, 0.08);
 }
 
 .trend-bar::-webkit-scrollbar {

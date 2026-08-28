@@ -1,10 +1,5 @@
 <template>
-  <n-card
-    class="recent-stats-card record-panel-card"
-    :bordered="false"
-    size="small"
-    :content-style="cardContentStyle"
-  >
+  <div class="recent-stats-container">
     <n-flex justify="space-between" align="center" class="recent-stats-header">
       <span class="recent-stats-title">最近表现</span>
       <n-dropdown
@@ -75,12 +70,12 @@
         :color="otherColor(recentData.goldRate, isDark)"
       />
     </n-flex>
-  </n-card>
+  </div>
 </template>
 
 <script setup lang="ts">
 import { Accessibility, Activity } from 'lucide-vue-next'
-import { NCard, NFlex, NDropdown, NButton, NIcon } from 'naive-ui'
+import { NFlex, NDropdown, NButton, NIcon } from 'naive-ui'
 import type { RecentData } from '@renderer/types/domain/analysis'
 import {
   kdaColor,
@@ -104,22 +99,11 @@ defineProps<{
 const emit = defineEmits<{
   'mode-change': [value: string | number, option: { label?: string }]
 }>()
-
-// n-card 的 content-style 需要字符串,这里走 token
-const cardContentStyle = 'padding: var(--space-12)'
 </script>
 
 <style scoped>
-.recent-stats-card {
-  background: rgba(255, 255, 255, 0.02) !important;
-  border: 1px solid color-mix(in srgb, var(--border-subtle) 90%, transparent) !important;
-  border-radius: var(--radius-md) !important;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08) !important;
-  backdrop-filter: blur(8px);
-}
-
-.theme-light .recent-stats-card {
-  background: var(--bg-elevated) !important;
+.recent-stats-container {
+  padding: var(--space-4) 0;
 }
 
 .recent-stats-header {

@@ -1,14 +1,9 @@
 <template>
-  <n-card
-    class="rank-card record-panel-card panel-glass"
-    :bordered="false"
-    size="small"
-    :content-style="cardContentStyle"
-  >
+  <div class="rank-card">
     <div class="rank-card-content">
       <div class="rank-card-icon-wrapper">
         <span class="rank-card-type-label">{{ label }}</span>
-        <img :src="tierImage(queueInfo.tier)" class="rank-card-img" />
+        <img :src="tierImage(queueInfo.tier)" class="rank-card-img" alt="tier" />
         <div class="rank-card-tier-text">
           {{ formatTierText(queueInfo) }}
         </div>
@@ -17,18 +12,17 @@
         <div class="rank-card-win-badge" :class="badgeClass">
           {{ hasGames ? `胜率 ${recent.winRate}%` : '暂无对局' }}
         </div>
-        <n-flex justify="space-between" size="small" class="rank-card-stats-row">
-          <span class="rank-card-stat-text">胜场: {{ recent.wins }}</span>
-          <span class="rank-card-stat-text">负场: {{ recent.losses }}</span>
-        </n-flex>
+        <div class="rank-card-stats-row">
+          <span class="rank-card-stat-text font-number">胜场: {{ recent.wins }}</span>
+          <span class="rank-card-stat-text font-number">负场: {{ recent.losses }}</span>
+        </div>
       </div>
     </div>
-  </n-card>
+  </div>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { NCard, NFlex } from 'naive-ui'
 import type { QueueInfo } from '@renderer/types/domain/player'
 import type { RecentWinRate } from '@renderer/types/domain/player'
 import { formatTierText } from '@renderer/utils/rank'
@@ -49,22 +43,21 @@ const badgeClass = computed(() => {
   if (props.recent.winRate <= 49) return 'bad'
   return 'normal'
 })
-
-// n-card 的 content-style 需要字符串/对象,这里用 token 占位以避免 inline 字面量
-const cardContentStyle = 'padding: var(--space-10)'
 </script>
 
 <style scoped>
-.panel-glass {
-  background: rgba(255, 255, 255, 0.02) !important;
-  border: 1px solid color-mix(in srgb, var(--border-subtle) 90%, transparent) !important;
-  border-radius: var(--radius-md) !important;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08) !important;
-  backdrop-filter: blur(8px);
+.rank-card {
+  padding: var(--space-10) var(--space-12);
+  background: linear-gradient(180deg, rgba(20, 26, 36, 0.7), rgba(12, 16, 22, 0.8));
+  border: 1px solid var(--border-subtle);
+  clip-path: var(--clip-corner-sm);
+  transition: all var(--dur-fast) var(--ease-expo);
 }
 
-.theme-light .panel-glass {
-  background: var(--bg-elevated) !important;
+.theme-light .rank-card {
+  background: linear-gradient(180deg, #f7f4ed, #ebe5d8);
+  border: 1px solid rgba(168, 146, 112, 0.35);
+  box-shadow: 0 1px 3px rgba(60, 50, 30, 0.08);
 }
 
 .rank-card-content {
@@ -114,6 +107,8 @@ const cardContentStyle = 'padding: var(--space-10)'
 .rank-card-stats-row {
   width: 100%;
   margin-top: var(--space-4);
+  display: flex;
+  justify-content: space-between;
 }
 
 .rank-card-stat-text {
@@ -122,27 +117,40 @@ const cardContentStyle = 'padding: var(--space-10)'
 }
 
 .rank-card-win-badge {
-  padding: var(--space-2) var(--space-8);
-  border-radius: var(--radius-sm);
-  font-size: var(--font-size-sm);
-  font-weight: bold;
+  padding: 2px 8px;
+  clip-path: var(--clip-notch);
+  font-size: var(--font-size-xs);
+  font-weight: 800;
+  font-family: 'Space Mono', 'Bahnschrift', monospace;
   background: var(--glass-bg-low);
-  border: 1px solid var(--glass-border);
+  border: 1px solid var(--border-subtle);
 }
 
 .rank-card-win-badge.good {
-  color: var(--semantic-win);
-  background: color-mix(in srgb, var(--semantic-win) 14%, transparent);
-  border-color: color-mix(in srgb, var(--semantic-win) 22%, transparent);
+  color: var(--win-bright);
+  background: linear-gradient(135deg, rgba(63, 191, 143, 0.22), rgba(20, 80, 55, 0.4));
+  border-color: rgba(63, 191, 143, 0.55);
 }
 
 .rank-card-win-badge.bad {
-  color: var(--semantic-loss);
-  background: color-mix(in srgb, var(--semantic-loss) 10%, transparent);
-  border-color: color-mix(in srgb, var(--semantic-loss) 18%, transparent);
+  color: var(--loss-bright);
+  background: linear-gradient(135deg, rgba(224, 92, 92, 0.2), rgba(100, 30, 30, 0.4));
+  border-color: rgba(224, 92, 92, 0.5);
 }
 
 .rank-card-win-badge.normal {
   color: var(--text-secondary);
+}
+
+.theme-light .rank-card-win-badge.good {
+  color: #1f6e52;
+  background: rgba(46, 143, 108, 0.16);
+  border-color: rgba(46, 143, 108, 0.45);
+}
+
+.theme-light .rank-card-win-badge.bad {
+  color: #9c2e2e;
+  background: rgba(192, 68, 68, 0.14);
+  border-color: rgba(192, 68, 68, 0.4);
 }
 </style>

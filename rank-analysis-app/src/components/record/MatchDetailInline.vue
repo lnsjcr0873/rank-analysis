@@ -613,27 +613,26 @@ watch(
   z-index: 1;
 }
 
-/* 结果徽章：色字 + 淡底 + 内描边微光，比通用 tag 更有份量 */
+/* 结果徽章：奥术金工切角印章 */
 .match-detail-result-pill {
   --result-color: var(--semantic-win);
-  padding: var(--space-2) var(--space-10);
-  border-radius: var(--radius-pill);
+  padding: 2px 10px;
+  clip-path: var(--clip-notch);
   font-size: var(--font-size-sm);
-  font-weight: 700;
+  font-weight: 800;
+  font-family: 'Space Mono', 'Bahnschrift', monospace;
   letter-spacing: 0.08em;
   color: var(--result-color);
-  background: color-mix(in srgb, var(--result-color) 13%, transparent);
-  box-shadow:
-    inset 0 0 0 1px color-mix(in srgb, var(--result-color) 38%, transparent),
-    0 0 12px color-mix(in srgb, var(--result-color) 16%, transparent);
+  background: color-mix(in srgb, var(--result-color) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--result-color) 45%, transparent);
 }
 
 .match-detail-result-pill--win {
-  --result-color: var(--semantic-win);
+  --result-color: var(--win-bright);
 }
 
 .match-detail-result-pill--loss {
-  --result-color: var(--semantic-loss);
+  --result-color: var(--loss-bright);
 }
 
 .match-detail-title-row {

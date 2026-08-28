@@ -115,16 +115,22 @@ function openGame(gameId: number) {
   align-items: center;
   background-color: rgba(255, 255, 255, 0.03);
   padding: var(--space-4) var(--space-8);
-  border-radius: var(--radius-md);
+  clip-path: var(--clip-corner-sm);
   border: 1px solid var(--border-subtle);
   cursor: pointer;
   transition: all var(--dur-fast) var(--ease-expo);
 }
 
+.theme-light .relationship-item {
+  background: linear-gradient(180deg, #f7f4ed, #ebe5d8);
+  border: 1px solid rgba(168, 146, 112, 0.35);
+  box-shadow: 0 1px 2px rgba(60, 50, 30, 0.06);
+}
+
 .relationship-item:hover {
   background-color: var(--glass-bg-high);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateX(2px);
+  border-color: var(--brand-border);
 }
 
 .relationship-name {

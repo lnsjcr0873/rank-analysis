@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="corner-card" :class="{ 'corner-card--emph': emphasis }">
     <div class="corner-card__in">
       <div
@@ -77,8 +77,11 @@ defineEmits<{ 'update:collapsed': [value: boolean] }>()
   pointer-events: none;
   clip-path: inherit;
 }
-.theme-light .corner-card__in::after {
-  opacity: 0.015;
+.theme-light .corner-card__in {
+  background: linear-gradient(180deg, #f7f4ed 0%, #ebe5d8 100%);
+  border: 1px solid rgba(168, 146, 112, 0.35);
+  box-shadow: 0 1px 3px rgba(60, 50, 30, 0.08);
+  opacity: 1;
 }
 .corner-card--emph .corner-card__in {
   border-color: var(--brand-border);

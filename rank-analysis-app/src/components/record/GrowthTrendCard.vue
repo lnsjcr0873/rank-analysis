@@ -1,5 +1,5 @@
 <template>
-  <n-card class="record-panel-card panel-glass" :bordered="false" size="small">
+  <div class="growth-trend-container">
     <n-flex vertical :size="10">
       <n-flex justify="space-between" align="center">
         <span class="trend-title">近 20 场趋势</span>
@@ -140,12 +140,12 @@
         </template>
       </div>
     </n-flex>
-  </n-card>
+  </div>
 </template>
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { NCard, NButton, NFlex, NText, NSpin } from 'naive-ui'
+import { NButton, NFlex, NText, NSpin } from 'naive-ui'
 import type { RecentData } from '@renderer/types/domain/analysis'
 import type { Game } from '@renderer/types/domain/match'
 import { kdaColor, winRateColor, groupRateColor } from '@renderer/utils/colors'
