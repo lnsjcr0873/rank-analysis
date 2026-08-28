@@ -417,9 +417,11 @@ onMounted(() => {
 /* 横向滚动容器：表头 + 首列 sticky 的定位上下文 */
 .match-detail-stats-scroll {
   overflow-x: auto;
-  border: 1px solid color-mix(in srgb, var(--border-subtle) 80%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 90%, transparent);
   border-radius: var(--radius-lg);
-  background: rgba(255, 255, 255, 0.015);
+  background: rgba(18, 22, 28, 0.45);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
 }
 
 .theme-light .match-detail-stats-scroll {
@@ -438,12 +440,13 @@ onMounted(() => {
 .match-detail-stats-group-title {
   position: sticky;
   left: 0;
-  padding: var(--space-6) var(--space-12);
+  padding: var(--space-4) var(--space-12);
   font-size: var(--font-size-2xs);
   font-weight: 700;
   letter-spacing: 0.08em;
-  color: var(--text-tertiary);
-  background: var(--glass-bg-low);
+  color: var(--accent-gold);
+  background: rgba(245, 158, 11, 0.08);
+  border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 60%, transparent);
 }
 
 .match-detail-stats-row {
@@ -470,8 +473,13 @@ onMounted(() => {
   flex-shrink: 0;
   width: 140px;
   padding: var(--space-6) var(--space-12);
-  background: var(--glass-bg-low);
+  background: rgba(22, 27, 34, 0.95);
+  backdrop-filter: blur(8px);
   border-right: 1px solid var(--border-subtle);
+}
+
+.theme-light .match-detail-stats-label-cell {
+  background: var(--bg-elevated);
 }
 
 .match-detail-stats-label {

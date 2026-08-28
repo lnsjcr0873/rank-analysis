@@ -331,9 +331,10 @@ const gridLines = computed(() => {
 }
 
 .match-detail-timeline-metric--active {
-  color: var(--semantic-win-bright);
-  border-color: color-mix(in srgb, var(--semantic-win) 55%, transparent);
-  background: color-mix(in srgb, var(--semantic-win) 10%, transparent);
+  color: var(--accent-gold);
+  border-color: color-mix(in srgb, var(--accent-gold) 60%, transparent);
+  background: color-mix(in srgb, var(--accent-gold) 14%, transparent);
+  font-weight: 700;
 }
 
 .match-detail-timeline-players {
@@ -395,9 +396,11 @@ const gridLines = computed(() => {
   width: 100%;
   height: 260px;
   display: block;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 90%, transparent);
   border-radius: var(--radius-lg);
-  background: color-mix(in srgb, var(--bg-elevated) 45%, transparent);
+  background: rgba(18, 22, 28, 0.45);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
 }
 
 .match-detail-timeline-grid {

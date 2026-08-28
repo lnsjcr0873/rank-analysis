@@ -210,9 +210,11 @@ function deltaClass(v: number): string {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.03);
+  padding: 10px 14px;
+  border-radius: var(--radius-lg);
+  background: rgba(18, 22, 28, 0.45);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 90%, transparent);
+  backdrop-filter: blur(8px);
 }
 .match-detail-backtest-hero {
   display: flex;
@@ -246,15 +248,17 @@ function deltaClass(v: number): string {
 .match-detail-backtest-badge {
   font-size: 11px;
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-pill);
 }
 .match-detail-backtest-badge.is-adopted {
   background: rgba(99, 226, 183, 0.16);
   color: #57d9a3;
+  border: 1px solid rgba(87, 217, 163, 0.35);
 }
 .match-detail-backtest-badge.is-skipped {
   background: rgba(224, 122, 122, 0.14);
   color: #e07a7a;
+  border: 1px solid rgba(224, 122, 122, 0.35);
 }
 .match-detail-backtest-win {
   font-size: 12px;
@@ -270,9 +274,11 @@ function deltaClass(v: number): string {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.03);
+  padding: 10px 14px;
+  border-radius: var(--radius-lg);
+  background: rgba(18, 22, 28, 0.45);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 90%, transparent);
+  backdrop-filter: blur(8px);
 }
 .match-detail-backtest-insufficient {
   font-size: 11px;

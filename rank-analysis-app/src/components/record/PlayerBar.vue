@@ -127,10 +127,15 @@ const copyName = () => {
   gap: var(--space-16);
   height: 60px;
   padding: 0 var(--space-16);
-  background: var(--glass-bg-mid);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-sm), var(--glass-highlight);
+  background: rgba(18, 22, 28, 0.45);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 90%, transparent);
+  border-radius: var(--radius-lg);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+.theme-light .player-bar {
+  background: var(--bg-elevated);
 }
 
 .player-bar-identity {

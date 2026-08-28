@@ -678,9 +678,10 @@ const visibleEvents = computed(() => {
 }
 
 .match-detail-events-filter--active {
-  color: var(--semantic-win-bright);
-  border-color: color-mix(in srgb, var(--semantic-win) 55%, transparent);
-  background: color-mix(in srgb, var(--semantic-win) 10%, transparent);
+  color: var(--accent-gold);
+  border-color: color-mix(in srgb, var(--accent-gold) 60%, transparent);
+  background: color-mix(in srgb, var(--accent-gold) 14%, transparent);
+  font-weight: 700;
 }
 
 .match-detail-events-filter-count {
@@ -771,14 +772,16 @@ const visibleEvents = computed(() => {
 }
 
 .match-detail-events-card {
-  border: 1px solid var(--border-subtle);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 90%, transparent);
   border-radius: var(--radius-md);
   padding: var(--space-6) var(--space-10);
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
   min-width: 0;
-  background: color-mix(in srgb, var(--bg-elevated) 55%, transparent);
+  background: rgba(18, 22, 28, 0.45);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
 }
 
 .match-detail-events-card-head {

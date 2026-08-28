@@ -268,18 +268,22 @@ const builds = computed<BuildCollection>(() => collectBuildEvents(ctx.sgpDetail.
 }
 
 .match-detail-builds-card {
-  border: 1px solid color-mix(in srgb, var(--border-subtle) 80%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 90%, transparent);
   border-radius: var(--radius-lg);
-  background: rgba(255, 255, 255, 0.015);
+  background: rgba(18, 22, 28, 0.45);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
   padding: var(--space-10);
   display: flex;
   flex-direction: column;
   gap: var(--space-8);
-  transition: background var(--dur-fast) var(--ease-expo);
+  transition: all var(--dur-fast) var(--ease-expo);
 }
 
 .match-detail-builds-card:hover {
   background: var(--glass-bg-mid);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
 }
 
 .theme-light .match-detail-builds-card {
@@ -287,7 +291,8 @@ const builds = computed<BuildCollection>(() => collectBuildEvents(ctx.sgpDetail.
 }
 
 .match-detail-builds-card--me {
-  box-shadow: inset 3px 0 0 0 var(--semantic-win);
+  border-color: color-mix(in srgb, var(--semantic-win) 50%, transparent);
+  box-shadow: inset 3px 0 0 0 var(--semantic-win), 0 4px 16px rgba(16, 185, 129, 0.1);
 }
 
 .match-detail-builds-card-head {

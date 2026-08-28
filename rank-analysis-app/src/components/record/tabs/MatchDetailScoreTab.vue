@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="match-detail-score">
     <div v-if="scoresByTeam.length === 0" class="match-detail-score-empty">
       {{ scoreError || '评分暂不可用（对局数据缺失）' }}
@@ -280,15 +280,18 @@ function scoreLevel(total: number) {
   gap: 12px;
 }
 .match-detail-score-team {
-  border-radius: 8px;
-  padding: 8px 10px;
-  background: rgba(255, 255, 255, 0.03);
+  border-radius: var(--radius-lg);
+  padding: 10px 14px;
+  background: rgba(18, 22, 28, 0.45);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 90%, transparent);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
 }
 .match-detail-score-team--win {
-  box-shadow: inset 2px 0 0 rgba(80, 180, 120, 0.55);
+  box-shadow: inset 3px 0 0 var(--semantic-win), 0 4px 16px rgba(16, 185, 129, 0.1);
 }
 .match-detail-score-team--lose {
-  box-shadow: inset 2px 0 0 rgba(220, 90, 90, 0.55);
+  box-shadow: inset 3px 0 0 var(--semantic-loss), 0 4px 16px rgba(239, 68, 68, 0.1);
 }
 .match-detail-score-team-header {
   display: flex;
@@ -300,15 +303,17 @@ function scoreLevel(total: number) {
   font-size: 11px;
   font-family: 'Space Mono', 'Bahnschrift', monospace;
   padding: 1px 8px;
-  clip-path: var(--clip-notch, polygon(4px 0, 100% 0, 100% 100%, 0 100%, 0 4px));
+  border-radius: var(--radius-pill);
 }
 .match-detail-score-team-result.is-win {
-  color: var(--win);
-  background: var(--win-soft);
+  color: var(--semantic-win-bright);
+  background: color-mix(in srgb, var(--semantic-win) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--semantic-win) 40%, transparent);
 }
 .match-detail-score-team-result.is-lose {
-  color: var(--loss);
-  background: var(--loss-soft);
+  color: var(--semantic-loss-bright);
+  background: color-mix(in srgb, var(--semantic-loss) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--semantic-loss) 40%, transparent);
 }
 .match-detail-score-row {
   display: flex;
@@ -336,7 +341,7 @@ function scoreLevel(total: number) {
   text-align: center;
 }
 .match-detail-score-row--open .match-detail-score-drill-hint {
-  color: var(--n-primary-color, #63e2b7);
+  color: var(--accent-gold);
 }
 .match-detail-score-drill-hint svg {
   width: 10px;
@@ -345,7 +350,7 @@ function scoreLevel(total: number) {
 .match-detail-score-drilldown {
   margin: 2px 0 8px 24px;
   padding: 6px 10px;
-  border-left: 2px solid rgba(99, 226, 183, 0.4);
+  border-left: 2px solid rgba(245, 158, 11, 0.5);
   background: rgba(255, 255, 255, 0.02);
   border-radius: 0 6px 6px 0;
 }
@@ -372,7 +377,7 @@ function scoreLevel(total: number) {
 }
 .match-detail-score-drilldown-dim {
   flex: 0 0 34px;
-  color: var(--n-primary-color, #63e2b7);
+  color: var(--accent-gold);
 }
 .match-detail-score-drilldown-desc {
   flex: 1;
@@ -397,15 +402,18 @@ function scoreLevel(total: number) {
   font-size: 10px;
   padding: 1px 6px;
   border-radius: 4px;
-  background: linear-gradient(135deg, var(--hx-gold-300), var(--hx-gold-500));
-  color: var(--text-on-brand);
-  font-weight: 700;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.3), rgba(180, 83, 9, 0.5));
+  border: 1px solid rgba(245, 158, 11, 0.6);
+  color: #fbbf24;
+  font-weight: 800;
+  font-style: italic;
   letter-spacing: 0.04em;
-  box-shadow: var(--glow-brand);
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.35);
 }
 .match-detail-score-mvp.is-svp {
-  background: var(--bg-active);
-  color: var(--text-secondary);
+  background: linear-gradient(135deg, rgba(148, 163, 184, 0.25), rgba(71, 85, 105, 0.4));
+  border: 1px solid rgba(148, 163, 184, 0.5);
+  color: #cbd5e1;
   box-shadow: none;
 }
 .match-detail-score-player {

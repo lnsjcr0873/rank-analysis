@@ -303,18 +303,22 @@ function perkImgAttrs(perkId: number) {
 }
 
 .match-detail-runes-card {
-  border: 1px solid color-mix(in srgb, var(--border-subtle) 80%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 90%, transparent);
   border-radius: var(--radius-lg);
-  background: rgba(255, 255, 255, 0.015);
+  background: rgba(18, 22, 28, 0.45);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
   padding: var(--space-10);
   display: flex;
   flex-direction: column;
   gap: var(--space-8);
-  transition: background var(--dur-fast) var(--ease-expo);
+  transition: all var(--dur-fast) var(--ease-expo);
 }
 
 .match-detail-runes-card:hover {
   background: var(--glass-bg-mid);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
 }
 
 .theme-light .match-detail-runes-card {
@@ -322,7 +326,8 @@ function perkImgAttrs(perkId: number) {
 }
 
 .match-detail-runes-card--me {
-  box-shadow: inset 3px 0 0 0 var(--semantic-win);
+  border-color: color-mix(in srgb, var(--semantic-win) 50%, transparent);
+  box-shadow: inset 3px 0 0 0 var(--semantic-win), 0 4px 16px rgba(16, 185, 129, 0.1);
 }
 
 .match-detail-runes-card-head {
@@ -384,10 +389,11 @@ function perkImgAttrs(perkId: number) {
 }
 
 .match-detail-runes-keystone {
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   border-radius: var(--radius-control);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid rgba(245, 158, 11, 0.6);
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.35);
   background: var(--bg-elevated);
   object-fit: cover;
   flex-shrink: 0;
