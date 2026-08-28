@@ -104,7 +104,7 @@ fn config_is_newer(cur: Option<&LeagueServersConfig>, incoming: &LeagueServersCo
 /// （要等下次 2h revalidate 才自愈）。
 fn apply_config(config: LeagueServersConfig) {
     let applied = {
-        let mut st = STORE.lock().unwrap();
+        let mut st = STORE.lock().unwrap_or_else(|e| e.into_inner());
         if config_is_newer(st.config.as_ref(), &config) {
             st.config = Some(config.clone());
             true
@@ -141,7 +141,10 @@ async fn fetch_remote() -> Result<LeagueServersConfig, String> {
 /// 拉取 + 择优应用。成功与失败都刷新 last_fetch（节流依据），失败保留现有映射。
 async fn refresh_from_remote() {
     let result = fetch_remote().await;
-    STORE.lock().unwrap().last_fetch = Some(Instant::now());
+    STORE
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .last_fetch = Some(Instant::now());
     match result {
         Ok(config) => apply_config(config),
         Err(e) => log::warn!("SGP league-servers 远程拉取失败（保留现有映射）: {e}"),
@@ -158,7 +161,7 @@ pub async fn force_refresh() {
 fn maybe_spawn_revalidate() {
     let stale = STORE
         .lock()
-        .unwrap()
+        .unwrap_or_else(|e| e.into_inner())
         .last_fetch
         .map(|t| t.elapsed() >= REVALIDATE_INTERVAL)
         .unwrap_or(true);
@@ -170,7 +173,7 @@ fn maybe_spawn_revalidate() {
 }
 
 fn dynamic_host(platform_id: &str, common: bool) -> Option<String> {
-    let st = STORE.lock().unwrap();
+    let st = STORE.lock().unwrap_or_else(|e| e.into_inner());
     let endpoint = st
         .config
         .as_ref()
@@ -200,7 +203,12 @@ fn static_host(platform_id: &str, common: bool) -> Option<String> {
 /// 顺序：动态表（内存，首次 miss 时并入磁盘缓存）→ 同步拉一次远程并回查 →
 /// 静态表兜底。返回值 `None` 仅在「远程不可达且静态表也无此大区」时出现。
 pub async fn resolve_sgp_host(platform_id: &str, common: bool) -> Option<String> {
-    if STORE.lock().unwrap().config.is_none() {
+    if STORE
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .config
+        .is_none()
+    {
         if let Some(cached) = load_disk_cache_at(&data_file(CACHE_FILE_NAME)) {
             apply_config(cached);
         }
@@ -213,7 +221,7 @@ pub async fn resolve_sgp_host(platform_id: &str, common: bool) -> Option<String>
     // 动态表 miss：距上次拉取 ≥2h（或从未拉过）才同步拉一次，之后回查
     let stale = STORE
         .lock()
-        .unwrap()
+        .unwrap_or_else(|e| e.into_inner())
         .last_fetch
         .map(|t| t.elapsed() >= REVALIDATE_INTERVAL)
         .unwrap_or(true);

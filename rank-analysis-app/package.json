@@ -12,6 +12,7 @@
     "format": "prettier --write .",
     "lint": "eslint . --ext .js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts,.vue --fix",
     "typecheck": "vue-tsc --noEmit --composite false",
+    "check:fe": "npm run format && npm run lint && npm run typecheck",
     "check": "npm run format && npm run lint && npm run typecheck && npm run check:rust",
     "check:rust": "cd src-tauri && cargo fmt --all -- --check && cargo clippy --all-targets --all-features -- -Dwarnings",
     "test": "vitest run",

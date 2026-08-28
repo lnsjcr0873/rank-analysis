@@ -185,7 +185,7 @@ where
 {
     ON_CHANGE_CALLBACK_ARR
         .lock()
-        .unwrap()
+        .unwrap_or_else(|e| e.into_inner())
         .push(Arc::new(callback));
 }
 
@@ -194,7 +194,10 @@ where
 /// 先把列表克隆成 `Vec<ConfigCallback>`（Arc 计数拷贝，廉价）再释放锁逐个调用：
 /// 回调体内可能再次读写配置或注册新回调，若持锁调用会在同一把 Mutex 上自锁。
 fn fire_change_callbacks(key: &str, value: &Value) {
-    let callbacks = ON_CHANGE_CALLBACK_ARR.lock().unwrap().clone();
+    let callbacks = ON_CHANGE_CALLBACK_ARR
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
     for callback in callbacks {
         callback(key, value);
     }

@@ -40,10 +40,7 @@ export const ACTIVE_SLOTS_REQUIRED = 2
 export const MAYHEM_AUGMENT_TARGET_LEVELS = [3, 7, 11, 15] as const
 
 export type AssistSchedulerMode =
-  | 'idle_sleep'
-  | 'burst_detecting'
-  | 'pushed_waiting_choice'
-  | 'all_completed'
+  'idle_sleep' | 'burst_detecting' | 'pushed_waiting_choice' | 'all_completed'
 
 export interface AssistDeps {
   getPhase(): Promise<string>
@@ -306,7 +303,8 @@ export function createAssistScheduler(deps: AssistDeps, idleIntervalMs = 1_000):
   function scheduleNext() {
     if (!isRunning) return
     // 动态调整间隔：突发态 350ms，休眠态 1000ms
-    const delay = mode === 'burst_detecting' || mode === 'pushed_waiting_choice' ? 350 : idleIntervalMs
+    const delay =
+      mode === 'burst_detecting' || mode === 'pushed_waiting_choice' ? 350 : idleIntervalMs
     timer = setTimeout(async () => {
       if (!isRunning) return
       await tick()
@@ -356,9 +354,8 @@ export function getSharedAssistScheduler(): AssistScheduler {
       },
       onDetected: async () => {
         const { invoke } = await import('@tauri-apps/api/core')
-        const { setOverlayLayout, pushOverlayPanel } = await import(
-          '@renderer/features/overlay/panels'
-        )
+        const { setOverlayLayout, pushOverlayPanel } =
+          await import('@renderer/features/overlay/panels')
         const outcome = (await invoke('mayhem_assist_tick', { championId: null })) as {
           pushed?: boolean
           payload?: unknown

@@ -38,6 +38,7 @@ describe('MatchHistory', () => {
           NEmpty: true,
           NButton: true,
           NSelect: true,
+          NPopconfirm: true,
           NFlex: false,
           NIcon: true,
           NTooltip: true

@@ -177,10 +177,10 @@ impl std::fmt::Display for AuthError {
 /// 解析 `remoting-auth-token` 与 `app-port`，仍失败再回退读取进程同目录 lockfile。
 /// 无法获取时返回 [`AuthError`]，区分 "游戏没开 / 权限不足 / 其他失败"。
 pub fn get_auth_detailed() -> Result<(String, String), AuthError> {
-    log::info!("开始查找英雄联盟客户端进程...");
+    log::debug!("开始查找英雄联盟客户端进程...");
     let pids = platform::find_pids_by_name("LeagueClientUx").map_err(AuthError::Other)?;
 
-    log::info!("找到 {} 个进程", pids.len());
+    log::debug!("找到 {} 个进程", pids.len());
     if pids.is_empty() {
         return Err(AuthError::NotRunning);
     }
@@ -199,7 +199,7 @@ pub fn get_auth_detailed() -> Result<(String, String), AuthError> {
 
     // 先尝试非缓存的进程（缓存进程留作最后兜底，沿用历史行为）。
     for &pid in pids.iter().filter(|&&p| p != cached_pid) {
-        log::info!("正在检查PID: {}", pid);
+        log::debug!("正在检查PID: {}", pid);
         match try_auth_from_pid(pid) {
             Ok(auth) => {
                 CUR_PID.store(pid, Ordering::Relaxed);
@@ -208,7 +208,7 @@ pub fn get_auth_detailed() -> Result<(String, String), AuthError> {
             }
             Err(AuthError::AccessDenied) => saw_access_denied = true,
             Err(AuthError::Other(e)) => {
-                log::info!("获取进程 {} 的认证失败: {}", pid, e);
+                log::debug!("获取进程 {} 的认证失败: {}", pid, e);
                 last_other = Some(e);
             }
             Err(AuthError::NotRunning) => {}

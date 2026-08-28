@@ -80,7 +80,7 @@ fn cdn_base() -> String {
 
 /// 确保磁盘缓存目录存在并返回路径（带版本段隔离）。
 fn disk_cache_dir() -> PathBuf {
-    let mut lock = DISK_CACHE_DIR.lock().unwrap();
+    let mut lock = DISK_CACHE_DIR.lock().unwrap_or_else(|e| e.into_inner());
     if let Some(ref dir) = *lock {
         return dir.clone();
     }

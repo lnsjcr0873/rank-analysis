@@ -327,7 +327,9 @@ function perkImgAttrs(perkId: number) {
 
 .match-detail-runes-card--me {
   border-color: color-mix(in srgb, var(--semantic-win) 50%, transparent);
-  box-shadow: inset 3px 0 0 0 var(--semantic-win), 0 4px 16px rgba(16, 185, 129, 0.1);
+  box-shadow:
+    inset 3px 0 0 0 var(--semantic-win),
+    0 4px 16px rgba(16, 185, 129, 0.1);
 }
 
 .match-detail-runes-card-head {

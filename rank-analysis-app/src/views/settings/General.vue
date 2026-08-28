@@ -45,7 +45,8 @@
             @update:value="handleMayhemViewModeUpdate"
           />
           <n-text :depth="3" style="font-size: var(--font-size-sm)">
-            选择海克斯大乱斗页面呈现形式：Meta 矩阵看板（AramMeta 紧凑 T 级 + 4 大 Tab 联动）或 经典列表卡片。
+            选择海克斯大乱斗页面呈现形式：Meta 矩阵看板（AramMeta 紧凑 T 级 + 4 大 Tab 联动）或
+            经典列表卡片。
           </n-text>
         </n-space>
       </n-form-item>

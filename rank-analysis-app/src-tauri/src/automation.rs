@@ -91,7 +91,7 @@ impl AutomationManager {
             }
         });
 
-        let mut tasks = self.tasks.lock().unwrap();
+        let mut tasks = self.tasks.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(existing_task) = tasks.get_mut(name) {
             // 停止现有任务
             log::info!("Stopping existing task: {}", name);
@@ -116,7 +116,7 @@ impl AutomationManager {
 
     fn stop_task(&self, name: &str) {
         log::info!("Stopping automation task: {}", name);
-        let mut tasks = self.tasks.lock().unwrap();
+        let mut tasks = self.tasks.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(task) = tasks.get_mut(name) {
             if let Some(tx) = task.shutdown_tx.take() {
                 let _ = tx.send(true);
@@ -343,7 +343,7 @@ async fn start_match_automation() {
 
         // 检查当前游戏阶段
         if cur_state != LOBBY {
-            log::warn!(
+            log::debug!(
                 "Not in lobby, skipping. cur_state: {:?} (len={}), LOBBY constant: {:?} (len={}), equal: {}",
                 cur_state, cur_state.len(),
                 LOBBY, LOBBY.len(),

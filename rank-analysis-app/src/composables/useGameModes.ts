@@ -10,7 +10,9 @@ export const modeOptions = ref([{ label: '全部', value: 0, key: 0 }])
 export async function initModeOptions() {
   try {
     const modes = await getGameModesByIpc()
-    modeOptions.value = modes.map(m => ({ ...m, key: m.value }))
+    if (Array.isArray(modes)) {
+      modeOptions.value = modes.map(m => ({ ...m, key: m.value }))
+    }
   } catch (e) {
     console.error('Failed to fetch game modes', e)
   }

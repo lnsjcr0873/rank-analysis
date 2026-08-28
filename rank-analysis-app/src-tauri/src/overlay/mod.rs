@@ -59,14 +59,17 @@ fn create(app: &tauri::AppHandle) -> Result<(), String> {
 
     log::info!("[overlay] 窗口创建完成（置顶/无边框/透明/鼠标穿透）");
 
-    APP_HANDLE.lock().unwrap().replace(app.clone());
+    APP_HANDLE
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .replace(app.clone());
     OVERLAY_CREATED.store(true, Ordering::Relaxed);
     Ok(())
 }
 
 /// 通过标签查找已创建的 overlay 窗口句柄。
 fn get_window() -> Option<tauri::WebviewWindow> {
-    let guard = APP_HANDLE.lock().unwrap();
+    let guard = APP_HANDLE.lock().unwrap_or_else(|e| e.into_inner());
     guard.as_ref()?.get_webview_window("overlay")
 }
 
@@ -91,7 +94,10 @@ pub fn show(app: &tauri::AppHandle) {
         // 鼠标穿透：对局内悬浮建议不应拦截玩家对游戏窗口的操作
         let _ = w.set_ignore_cursor_events(true);
     }
-    let anchor = CURRENT_ANCHOR.lock().unwrap().clone();
+    let anchor = CURRENT_ANCHOR
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
     position_by_anchor(app, OVERLAY_WIDTH, &anchor);
 }
 
@@ -110,7 +116,7 @@ pub fn hide() {
 /// # 参数
 /// - `anchor`: `"top-left"` | `"top-center"` | `"top-right"`（未知值回退右上）
 pub fn layout(app: &tauri::AppHandle, width: f64, height: f64, anchor: &str) {
-    *CURRENT_ANCHOR.lock().unwrap() = anchor.to_string();
+    *CURRENT_ANCHOR.lock().unwrap_or_else(|e| e.into_inner()) = anchor.to_string();
     let width = width.clamp(200.0, 900.0);
     let height = height.clamp(80.0, 500.0);
     if let Some(w) = get_window() {
@@ -185,5 +191,8 @@ pub fn destroy() {
         log::info!("[overlay] 窗口已销毁");
     }
     OVERLAY_CREATED.store(false, Ordering::Relaxed);
-    APP_HANDLE.lock().unwrap().take();
+    APP_HANDLE
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .take();
 }

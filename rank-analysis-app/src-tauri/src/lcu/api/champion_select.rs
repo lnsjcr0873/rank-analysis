@@ -36,6 +36,34 @@ fn de_vec<'de, D: Deserializer<'de>, T: Deserialize<'de>>(d: D) -> Result<Vec<T>
     Ok(Option::<Vec<T>>::deserialize(d)?.unwrap_or_default())
 }
 
+#[derive(Deserialize, Serialize, Debug, Clone)]
+#[serde(untagged)]
+pub enum BenchChampionItem {
+    Id(i32),
+    Obj {
+        #[serde(rename = "championId", alias = "champion_id", default)]
+        champion_id: i32,
+    },
+}
+
+impl BenchChampionItem {
+    pub fn champion_id(&self) -> i32 {
+        match self {
+            BenchChampionItem::Id(id) => *id,
+            BenchChampionItem::Obj { champion_id } => *champion_id,
+        }
+    }
+}
+
+fn de_bench_champions<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<i32>, D::Error> {
+    let items = Option::<Vec<BenchChampionItem>>::deserialize(d)?.unwrap_or_default();
+    Ok(items
+        .into_iter()
+        .map(|item| item.champion_id())
+        .filter(|&id| id > 0)
+        .collect())
+}
+
 fn de_timer<'de, D: Deserializer<'de>>(d: D) -> Result<Timer, D::Error> {
     Ok(Option::<Timer>::deserialize(d)?.unwrap_or_default())
 }
@@ -55,8 +83,8 @@ pub struct SelectSession {
     #[serde(default, deserialize_with = "de_i32")]
     pub local_player_cell_id: i32,
     /// 选人期可换入的英雄池（bench）：LCU 在换人窗口推送，`swap_bench_champion`
-    /// 配合使用；非换人阶段/旧接口为空。
-    #[serde(default, deserialize_with = "de_vec")]
+    /// 配合使用；非换人阶段/旧接口为空。兼容 [123, 456] 与 [{"championId": 123}, ...] 两种形态。
+    #[serde(default, deserialize_with = "de_bench_champions")]
     pub bench_champions: Vec<i32>,
     /// 我方正在进行的交易请求（换英雄），驱动 trade 自动确认。
     #[serde(default, deserialize_with = "de_vec")]
@@ -322,7 +350,7 @@ pub fn derive_champ_select_view(
 
 pub async fn get_champion_select_session() -> Result<SelectSession, String> {
     {
-        let cache = SELECT_CACHE.lock().unwrap();
+        let cache = SELECT_CACHE.lock().unwrap_or_else(|e| e.into_inner());
 
         // 检查缓存是否在1秒内
         if let Some(last_fetch_time) = cache.last_fetch_time {
@@ -339,7 +367,7 @@ pub async fn get_champion_select_session() -> Result<SelectSession, String> {
 
     // 更新缓存
     {
-        let mut cache = SELECT_CACHE.lock().unwrap();
+        let mut cache = SELECT_CACHE.lock().unwrap_or_else(|e| e.into_inner());
         cache.last_session = Some(select_session.clone());
         cache.last_fetch_time = Some(Instant::now());
     }
@@ -578,6 +606,26 @@ mod tests {
         assert!(s.bench_champions.is_empty());
         assert_eq!(s.actions[0][0].champion_id, 0);
         assert_eq!(s.timer.phase, "BAN_PICK");
+    }
+
+    #[test]
+    fn should_deserialize_bench_champions_polymorphic() {
+        // 1. ARAM/狂暴大乱斗 LCU 真实对象数组: [{"championId": 103, "isCustomer": false}, {"championId": 81}]
+        let raw_objects = r#"{
+            "benchChampions": [
+                {"championId": 103, "isCustomer": false},
+                {"championId": 81, "isCustomer": true}
+            ]
+        }"#;
+        let s1: SelectSession = serde_json::from_str(raw_objects).expect("对象数组形式解析成功");
+        assert_eq!(s1.bench_champions, vec![103, 81]);
+
+        // 2. 数字 ID 数组: [103, 81]
+        let raw_numbers = r#"{
+            "benchChampions": [103, 81]
+        }"#;
+        let s2: SelectSession = serde_json::from_str(raw_numbers).expect("数字数组形式解析成功");
+        assert_eq!(s2.bench_champions, vec![103, 81]);
     }
 
     fn mk_player(champion_id: i32, champion_pick_intent: i32) -> OnePlayer {

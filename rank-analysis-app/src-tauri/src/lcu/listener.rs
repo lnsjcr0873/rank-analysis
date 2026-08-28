@@ -64,10 +64,15 @@ impl LcuListener {
 
             // 每轮（重）连前现取认证：客户端重启后端口/token 会变，
             // 固化旧值是「WS 永久失聪而 HTTP 正常」的直接成因。
-            let (token, port_str) = match crate::lcu::util::token::get_auth() {
+            let (token, port_str) = match crate::lcu::util::token::get_auth_detailed() {
                 Ok(pair) => pair,
+                Err(crate::lcu::util::token::AuthError::NotRunning) => {
+                    log::debug!("LCU 客户端未运行，等待启动...");
+                    tokio::time::sleep(Duration::from_secs(2)).await;
+                    continue;
+                }
                 Err(e) => {
-                    log::error!("获取 LCU 认证信息失败: {}，2秒后重试...", e);
+                    log::warn!("获取 LCU 认证信息失败: {}，2秒后重试...", e);
                     tokio::time::sleep(Duration::from_secs(2)).await;
                     continue;
                 }

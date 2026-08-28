@@ -17,10 +17,7 @@ import {
   type ChampionDetailEntry
 } from '../services/mayhemData'
 import { getConfigByIpc, putConfigByIpc } from '@renderer/services/ipc'
-import {
-  getSharedAssistScheduler,
-  type AssistTick
-} from '../trigger'
+import { getSharedAssistScheduler, type AssistTick } from '../trigger'
 import { setOverlayClickThrough } from '@renderer/features/overlay/panels'
 
 export type MayhemViewMode = 'matrix' | 'classic'

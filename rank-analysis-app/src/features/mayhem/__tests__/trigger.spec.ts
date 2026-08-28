@@ -14,7 +14,9 @@ describe('AssistScheduler - Smart Level-Driven Augment State Machine', () => {
   it('stays in idle_sleep without capturing screen when level is below target', async () => {
     const getBandStats = vi.fn().mockResolvedValue([])
     const getPhase = vi.fn().mockResolvedValue('InProgress')
-    const getLivePlayer = vi.fn().mockResolvedValue({ inGame: true, level: 2 } as LivePlayerStateDto)
+    const getLivePlayer = vi
+      .fn()
+      .mockResolvedValue({ inGame: true, level: 2 } as LivePlayerStateDto)
 
     const scheduler = createAssistScheduler({
       getPhase,
@@ -39,7 +41,9 @@ describe('AssistScheduler - Smart Level-Driven Augment State Machine', () => {
     ]
     const getBandStats = vi.fn().mockResolvedValue(bandStats)
     const getPhase = vi.fn().mockResolvedValue('InProgress')
-    const getLivePlayer = vi.fn().mockResolvedValue({ inGame: true, level: 3 } as LivePlayerStateDto)
+    const getLivePlayer = vi
+      .fn()
+      .mockResolvedValue({ inGame: true, level: 3 } as LivePlayerStateDto)
     const onDetected = vi.fn().mockResolvedValue(undefined)
 
     const scheduler = createAssistScheduler({
@@ -74,9 +78,11 @@ describe('AssistScheduler - Smart Level-Driven Augment State Machine', () => {
     const getBandStats = vi.fn().mockImplementation(() => Promise.resolve(currentStats))
     const getPhase = vi.fn().mockResolvedValue('InProgress')
     let currentLevel = 3
-    const getLivePlayer = vi.fn().mockImplementation(() =>
-      Promise.resolve({ inGame: true, level: currentLevel } as LivePlayerStateDto)
-    )
+    const getLivePlayer = vi
+      .fn()
+      .mockImplementation(() =>
+        Promise.resolve({ inGame: true, level: currentLevel } as LivePlayerStateDto)
+      )
 
     const scheduler = createAssistScheduler({
       getPhase,
@@ -108,7 +114,9 @@ describe('AssistScheduler - Smart Level-Driven Augment State Machine', () => {
   it('resets state machine to round 1 when leaving InProgress', async () => {
     let phase = 'InProgress'
     const getPhase = vi.fn().mockImplementation(() => Promise.resolve(phase))
-    const getLivePlayer = vi.fn().mockResolvedValue({ inGame: true, level: 12 } as LivePlayerStateDto)
+    const getLivePlayer = vi
+      .fn()
+      .mockResolvedValue({ inGame: true, level: 12 } as LivePlayerStateDto)
     const getBandStats = vi.fn().mockResolvedValue([])
 
     const scheduler = createAssistScheduler({

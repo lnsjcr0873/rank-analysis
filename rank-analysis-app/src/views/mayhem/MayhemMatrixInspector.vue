@@ -20,7 +20,11 @@ import {
 
 import { assetPrefix } from '@renderer/services/http'
 import { useRecordAssets } from '@renderer/composables/useRecordAssets'
-import { buildBalanceTags, type BalanceTag, type AramBalanceData } from '@renderer/composables/useAramBalance'
+import {
+  buildBalanceTags,
+  type BalanceTag,
+  type AramBalanceData
+} from '@renderer/composables/useAramBalance'
 import {
   getMayhemChampionDetail,
   type ChampionDetailEntry,
@@ -303,7 +307,9 @@ async function onApplyConfig() {
     <div v-if="loading" class="insp-loading">正在读取奥术大数据…</div>
     <div v-else-if="error || !detail" class="insp-alert-box">
       <p class="insp-alert-msg">{{ error || '暂无该英雄的大乱斗详情数据' }}</p>
-      <button class="insp-btn-retry" @click="loadDetail(props.championId, true)">🔄 点击重新加载</button>
+      <button class="insp-btn-retry" @click="loadDetail(props.championId, true)">
+        🔄 点击重新加载
+      </button>
     </div>
 
     <template v-else>
@@ -457,7 +463,9 @@ async function onApplyConfig() {
               </div>
               <div class="insp-core-meta">
                 <div class="insp-core-win">{{ pct(cs.winRate) }} 胜率</div>
-                <div class="insp-core-pick">选用 {{ pct(cs.pickRate) }} · {{ fmtGames(cs.games) }}</div>
+                <div class="insp-core-pick">
+                  选用 {{ pct(cs.pickRate) }} · {{ fmtGames(cs.games) }}
+                </div>
               </div>
             </div>
           </div>
@@ -472,7 +480,11 @@ async function onApplyConfig() {
                 class="insp-ext-card"
                 :title="`${itemName(ext.itemIds[0])}（${fmtGames(ext.games)}）`"
               >
-                <img :src="itemSrc(ext.itemIds[0])" :alt="itemName(ext.itemIds[0])" loading="lazy" />
+                <img
+                  :src="itemSrc(ext.itemIds[0])"
+                  :alt="itemName(ext.itemIds[0])"
+                  loading="lazy"
+                />
                 <div class="insp-ext-info">
                   <div class="insp-ext-name">{{ itemName(ext.itemIds[0]) }}</div>
                   <div class="insp-ext-wr">{{ pct(ext.winRate) }} 胜率</div>
@@ -551,17 +563,13 @@ async function onApplyConfig() {
                   <span class="insp-skill-key" :class="`k-${k.toLowerCase()}`">{{ k }}</span>
                   <span v-if="ki < so.skillKeys.length - 1" class="insp-skill-arrow">▶</span>
                 </template>
-                <span class="insp-skill-summary"
-                  >{{ skillSummary(so.skillKeys) }} (有大点大)</span
-                >
+                <span class="insp-skill-summary">{{ skillSummary(so.skillKeys) }} (有大点大)</span>
               </div>
               <div class="insp-skill-win">{{ pct(so.winRate) }} 胜率</div>
             </div>
           </div>
         </template>
-        <div v-else class="insp-empty-section">
-          暂无该英雄的推荐出装流派数据
-        </div>
+        <div v-else class="insp-empty-section">暂无该英雄的推荐出装流派数据</div>
       </div>
 
       <!-- Tab 2: 海克斯符文 (按颜色品质规范分类) -->
@@ -620,12 +628,7 @@ async function onApplyConfig() {
             :class="`rarity-${a.rarityName}`"
             :title="augTooltip(a.id)"
           >
-            <img
-              class="insp-aug-icon"
-              :src="perkSrc(a.id)"
-              :alt="augNameOf(a.id)"
-              loading="lazy"
-            />
+            <img class="insp-aug-icon" :src="perkSrc(a.id)" :alt="augNameOf(a.id)" loading="lazy" />
             <div class="insp-aug-main">
               <div class="insp-aug-header">
                 <span class="insp-aug-name">{{ augNameOf(a.id) }}</span>
@@ -664,9 +667,7 @@ async function onApplyConfig() {
               <div class="insp-trap-diff">{{ pct(t.winRate) }} 相对拖累</div>
             </div>
           </div>
-          <div v-else class="insp-traps-none">
-            ✅ 该英雄当前流派暂无严重拖累胜率的陷阱装备
-          </div>
+          <div v-else class="insp-traps-none">✅ 该英雄当前流派暂无严重拖累胜率的陷阱装备</div>
         </div>
 
         <!-- 优势情境装备天梯 -->
@@ -731,9 +732,7 @@ async function onApplyConfig() {
           </template>
           <div v-else class="insp-blog-item">
             <span class="insp-blog-icon">💡</span>
-            <span class="insp-blog-title">
-              海克斯大乱斗核心卡组协同指南与流派克制深度拆解
-            </span>
+            <span class="insp-blog-title"> 海克斯大乱斗核心卡组协同指南与流派克制深度拆解 </span>
           </div>
         </div>
       </div>

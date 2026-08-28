@@ -191,6 +191,10 @@ const stubs = {
   NPopconfirm: {
     name: 'NPopconfirm',
     template: '<div class="n-popconfirm-stub"><slot name="trigger" /><slot /></div>'
+  },
+  Popconfirm: {
+    name: 'NPopconfirm',
+    template: '<div class="n-popconfirm-stub"><slot name="trigger" /><slot /></div>'
   }
 }
 
@@ -314,7 +318,10 @@ describe('MatchHistory 清空跨区收集', () => {
 
     // 确认 popconfirm → 清空落库 → 重新加载（load 已置空）
     savedCollected.mockReturnValue([])
-    wrapper.findComponent({ name: 'NPopconfirm' }).vm.$emit('positive-click')
+    const popconfirm = wrapper.findComponent({ name: 'NPopconfirm' }).exists()
+      ? wrapper.findComponent({ name: 'NPopconfirm' })
+      : wrapper.findComponent({ name: 'Popconfirm' })
+    popconfirm.vm.$emit('positive-click')
     await new Promise(r => setTimeout(r, 20))
     await flushPromises()
 

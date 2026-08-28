@@ -55,8 +55,15 @@ interface DraftContext {
   bench: number[]
 }
 
+export interface SessionPlayerFallback {
+  championId: number
+  summoner?: { puuid?: string }
+}
+
 const props = defineProps<{
   queueId?: number
+  myPuuid?: string
+  myTeam?: SessionPlayerFallback[]
 }>()
 
 const MAYHEM_QUEUE_IDS = [2400, 2410, 2450]
@@ -90,14 +97,28 @@ const isMayhem = computed(
 )
 
 const myHandChampionId = computed<number>(() => {
-  if (!ctx.value) return 0
-  const me = ctx.value.myTeam.find(p => p.cellId === ctx.value?.localCellId)
-  return me?.championId ?? 0
+  if (ctx.value?.myTeam?.length) {
+    const me = ctx.value.myTeam.find(p => p.cellId === ctx.value?.localCellId)
+    if (me?.championId) return me.championId
+  }
+  // 回退至 Gaming 视图传入的 sessionData
+  if (props.myTeam?.length && props.myPuuid) {
+    const me = props.myTeam.find(p => p.summoner?.puuid === props.myPuuid)
+    if (me?.championId) return me.championId
+  }
+  return 0
 })
 
-const lockedTeamIds = computed(() =>
-  (ctx.value?.myTeam ?? []).filter(p => p.championId > 0).map(p => p.championId)
-)
+const lockedTeamIds = computed(() => {
+  if (ctx.value?.myTeam?.length) {
+    const ids = ctx.value.myTeam.filter(p => p.championId > 0).map(p => p.championId)
+    if (ids.length) return ids
+  }
+  if (props.myTeam?.length) {
+    return props.myTeam.filter(p => (p.championId ?? 0) > 0).map(p => p.championId)
+  }
+  return []
+})
 
 /** 阵容缺口（按已选/已锁定英雄计算） */
 const gaps = computed(() =>
@@ -221,7 +242,8 @@ async function loadDetail(championId: number) {
         for (const cs of b.coreItems ?? []) for (const id of cs.itemIds) itemIds.add(id)
         for (const st of b.startingItems ?? []) for (const id of st.itemIds) itemIds.add(id)
         for (const ex of b.itemExtensions ?? []) for (const id of ex.itemIds) itemIds.add(id)
-        for (const sp of b.summonerSpells ?? []) for (const id of sp.summonerSpellIds) spellIds.add(id)
+        for (const sp of b.summonerSpells ?? [])
+          for (const id of sp.summonerSpellIds) spellIds.add(id)
       }
       for (const t of d.augmentTrios ?? []) for (const id of t.augmentIds) perkIds.add(id)
       assets.preload([
@@ -240,7 +262,9 @@ async function loadDetail(championId: number) {
 async function loadBalanceTag(id: number) {
   if (!id || balanceTagsMap.value[id]) return
   try {
-    const rawBalance = await invoke<AramBalanceData | null>('get_aram_balance', { id }).catch(() => null)
+    const rawBalance = await invoke<AramBalanceData | null>('get_aram_balance', { id }).catch(
+      () => null
+    )
     balanceTagsMap.value[id] = buildBalanceTags(rawBalance)
   } catch {
     balanceTagsMap.value[id] = []
@@ -348,7 +372,10 @@ onUnmounted(() => {
         <span class="mdp-tag">MAYHEM 2400</span>
         <span class="mdp-title">狂暴大乱斗 · 实战与出装矩阵</span>
       </div>
-      <div class="mdp-gaps-badge" :class="{ 'mdp-gaps-badge--warn': gaps && gaps.sentence !== '阵容均衡' }">
+      <div
+        class="mdp-gaps-badge"
+        :class="{ 'mdp-gaps-badge--warn': gaps && gaps.sentence !== '阵容均衡' }"
+      >
         <Shield v-if="gaps?.sentence === '阵容均衡'" :size="13" />
         <Activity v-else :size="13" />
         <span>{{ gaps?.sentence ?? '阵容分析中…' }}</span>
@@ -370,7 +397,11 @@ onUnmounted(() => {
           @click="selectHero(myHandChampionId)"
         >
           <div class="mdp-card-avatar-wrap">
-            <img :src="champIcon(myHandChampionId)" :alt="champName(myHandChampionId)" class="mdp-avatar" />
+            <img
+              :src="champIcon(myHandChampionId)"
+              :alt="champName(myHandChampionId)"
+              class="mdp-avatar"
+            />
             <span
               v-if="champData(myHandChampionId)?.stats.tier"
               class="mdp-tier-badge"
@@ -389,7 +420,10 @@ onUnmounted(() => {
                 胜率 {{ pct(champData(myHandChampionId)?.stats.winRate) }}
               </span>
               <span v-if="myRecords[myHandChampionId]?.games" class="mdp-card-myrecord">
-                我的 {{ pct(myRecords[myHandChampionId].wins / myRecords[myHandChampionId].games) }} ({{ myRecords[myHandChampionId].games }}场)
+                我的
+                {{ pct(myRecords[myHandChampionId].wins / myRecords[myHandChampionId].games) }} ({{
+                  myRecords[myHandChampionId].games
+                }}场)
               </span>
             </div>
           </div>
@@ -421,7 +455,11 @@ onUnmounted(() => {
             @click="selectHero(e.championId)"
           >
             <div class="mdp-card-avatar-wrap">
-              <img :src="champIcon(e.championId)" :alt="champName(e.championId)" class="mdp-avatar" />
+              <img
+                :src="champIcon(e.championId)"
+                :alt="champName(e.championId)"
+                class="mdp-avatar"
+              />
               <span
                 v-if="champData(e.championId)?.stats.tier"
                 class="mdp-tier-badge"
@@ -464,10 +502,16 @@ onUnmounted(() => {
     <div v-if="selectedChampionId && championDetail" class="mdp-detail-section">
       <div class="mdp-detail-header">
         <div class="mdp-detail-hero-brief">
-          <img :src="champIcon(selectedChampionId)" :alt="champName(selectedChampionId)" class="mdp-detail-hero-avatar" />
+          <img
+            :src="champIcon(selectedChampionId)"
+            :alt="champName(selectedChampionId)"
+            class="mdp-detail-hero-avatar"
+          />
           <div class="mdp-detail-hero-texts">
             <div class="mdp-detail-hero-title">
-              <strong>{{ championDetail.champion.name }} · {{ championDetail.champion.title }}</strong>
+              <strong
+                >{{ championDetail.champion.name }} · {{ championDetail.champion.title }}</strong
+              >
               <span
                 v-if="championDetail.champion.stats.tier"
                 class="mdp-tier-badge"
@@ -475,11 +519,21 @@ onUnmounted(() => {
               >
                 T{{ championDetail.champion.stats.tier }}
               </span>
-              <span class="mdp-detail-hero-wr">全服胜率 {{ pct(championDetail.champion.stats.winRate) }}</span>
-              <span class="mdp-detail-hero-pr">选用 {{ pct(championDetail.champion.stats.pickRate) }}</span>
+              <span class="mdp-detail-hero-wr"
+                >全服胜率 {{ pct(championDetail.champion.stats.winRate) }}</span
+              >
+              <span class="mdp-detail-hero-pr"
+                >选用 {{ pct(championDetail.champion.stats.pickRate) }}</span
+              >
             </div>
             <div class="mdp-detail-hero-sub">
-              <span>流派：{{ championDetail.builds?.[0]?.tags ? Object.values(championDetail.builds[0].tags)[0] : '默认推荐' }}</span>
+              <span
+                >流派：{{
+                  championDetail.builds?.[0]?.tags
+                    ? Object.values(championDetail.builds[0].tags)[0]
+                    : '默认推荐'
+                }}</span
+              >
               <span>场次：{{ fmtGames(championDetail.builds?.[0]?.stats.games ?? 0) }}</span>
             </div>
           </div>
@@ -501,15 +555,19 @@ onUnmounted(() => {
       <div v-if="championDetail.builds?.[0]" class="mdp-builds-grid">
         <!-- 核心出装链 -->
         <div class="mdp-build-col">
-          <div class="mdp-col-label">
-            <Swords :size="13" /> 核心出装链
-          </div>
+          <div class="mdp-col-label"><Swords :size="13" /> 核心出装链</div>
           <div class="mdp-core-items-row">
-            <template v-for="(id, idx) in championDetail.builds[0].coreItems?.[0]?.itemIds ?? []" :key="`${id}-${idx}`">
+            <template
+              v-for="(id, idx) in championDetail.builds[0].coreItems?.[0]?.itemIds ?? []"
+              :key="`${id}-${idx}`"
+            >
               <div class="mdp-item-slot" :title="itemName(id)">
                 <img :src="itemSrc(id)" :alt="itemName(id)" loading="lazy" />
               </div>
-              <ChevronRight v-if="idx < (championDetail.builds[0].coreItems[0].itemIds.length - 1)" class="mdp-arrow" />
+              <ChevronRight
+                v-if="idx < championDetail.builds[0].coreItems[0].itemIds.length - 1"
+                class="mdp-arrow"
+              />
             </template>
             <span class="mdp-core-wr">
               {{ pct(championDetail.builds[0].coreItems?.[0]?.winRate) }} 胜率
@@ -526,7 +584,11 @@ onUnmounted(() => {
                 class="mdp-item-slot mdp-item-slot--sm"
                 :title="`${itemName(ext.itemIds[0])} · ${pct(ext.winRate)} 胜率 (${fmtGames(ext.games)}场)`"
               >
-                <img :src="itemSrc(ext.itemIds[0])" :alt="itemName(ext.itemIds[0])" loading="lazy" />
+                <img
+                  :src="itemSrc(ext.itemIds[0])"
+                  :alt="itemName(ext.itemIds[0])"
+                  loading="lazy"
+                />
               </div>
             </div>
           </div>
@@ -534,9 +596,7 @@ onUnmounted(() => {
 
         <!-- 出门装与技能加点 -->
         <div class="mdp-build-col">
-          <div class="mdp-col-label">
-            <Shield :size="13" /> 出门装 & 技能路线
-          </div>
+          <div class="mdp-col-label"><Shield :size="13" /> 出门装 & 技能路线</div>
           <div class="mdp-starter-row">
             <div class="mdp-starter-icons">
               <img
@@ -551,7 +611,8 @@ onUnmounted(() => {
             </div>
             <div class="mdp-spells-icons">
               <img
-                v-for="(sid, sidx) in championDetail.builds[0].summonerSpells?.[0]?.summonerSpellIds ?? []"
+                v-for="(sid, sidx) in championDetail.builds[0].summonerSpells?.[0]
+                  ?.summonerSpellIds ?? []"
                 :key="`${sid}-${sidx}`"
                 :src="spellSrc(sid)"
                 :alt="spellName(sid)"
@@ -562,16 +623,20 @@ onUnmounted(() => {
             </div>
           </div>
           <div v-if="championDetail.builds[0].skillOrders?.[0]" class="mdp-skill-summary">
-            <span>加点：<strong>{{ skillSummary(championDetail.builds[0].skillOrders[0].skillKeys) }}</strong></span>
-            <span class="mdp-skill-wr">{{ pct(championDetail.builds[0].skillOrders[0].winRate) }} 胜率</span>
+            <span
+              >加点：<strong>{{
+                skillSummary(championDetail.builds[0].skillOrders[0].skillKeys)
+              }}</strong></span
+            >
+            <span class="mdp-skill-wr"
+              >{{ pct(championDetail.builds[0].skillOrders[0].winRate) }} 胜率</span
+            >
           </div>
         </div>
 
         <!-- 天胡三海克斯联动组合 -->
         <div v-if="championDetail.augmentTrios?.length" class="mdp-build-col mdp-build-col--trio">
-          <div class="mdp-col-label">
-            <Flame :size="13" /> 天胡海克斯 TOP 羁绊
-          </div>
+          <div class="mdp-col-label"><Flame :size="13" /> 天胡海克斯 TOP 羁绊</div>
           <div class="mdp-trios-list">
             <div
               v-for="(trio, ti) in championDetail.augmentTrios.slice(0, 2)"

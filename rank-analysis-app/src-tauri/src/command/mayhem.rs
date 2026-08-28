@@ -291,7 +291,10 @@ pub async fn mayhem_draft_context() -> Result<Option<Value>, String> {
     let session = match crate::lcu::api::champion_select::get_champion_select_session().await {
         Ok(s) => s,
         // 非选人阶段是该命令的正常失败路径，静默转 None
-        Err(_) => return Ok(None),
+        Err(e) => {
+            log::debug!("[mayhem] 获取选人会话失败 (可能非选人期): {}", e);
+            return Ok(None);
+        }
     };
     // Session 结构体不含 queue 字段：直接读原始 gameflow JSON 取队列 ID
     let gf: Value = crate::lcu::util::http::lcu_get("lol-gameflow/v1/session")
@@ -303,12 +306,25 @@ pub async fn mayhem_draft_context() -> Result<Option<Value>, String> {
         .or_else(|| gf["gameData"]["queueId"].as_i64())
         .map(|x| x as i32);
 
-    let v = serde_json::to_value(&session).map_err(|e| e.to_string())?;
+    let my_team: Vec<Value> = session
+        .my_team
+        .iter()
+        .map(|p| {
+            serde_json::json!({
+                "championId": crate::lcu::api::champion_select::display_champion_id(p),
+                "championPickIntent": p.champion_pick_intent,
+                "cellId": p.cell_id,
+                "puuid": p.puuid,
+                "assignedPosition": p.assigned_position,
+            })
+        })
+        .collect();
+
     Ok(Some(serde_json::json!({
         "queueId": queue_id,
-        "localCellId": v["localPlayerCellId"],
-        "myTeam": v["myTeam"],
-        "bench": v["benchChampions"],
+        "localCellId": session.local_player_cell_id,
+        "myTeam": my_team,
+        "bench": session.bench_champions,
     })))
 }
 

@@ -119,7 +119,12 @@
       </n-drawer>
 
       <!-- ================= 2400 狂暴大乱斗专属选人面板（替换峡谷 BP 情报舱） ================= -->
-      <MayhemDraftPanel v-if="isMayhemQueue" :queue-id="sessionData.queueId" />
+      <MayhemDraftPanel
+        v-if="isMayhemQueue"
+        :queue-id="sessionData.queueId"
+        :my-puuid="mySummonerPuuid"
+        :my-team="sessionData.subteams[0]?.players"
+      />
 
       <!-- ================= 情报舱：结论区 → 阶段区 → 信号区（非狂暴大乱斗时展示） ================= -->
       <div v-else class="intel-bay">
@@ -644,34 +649,31 @@ function stopMayhemAssist() {
   }
 }
 
-watch(
-  [() => sessionData.phase, () => sessionData.queueId],
-  ([phase, queueId]) => {
-    if (phase === 'InProgress') {
-      // 先建/显示窗口再首推：overlay 懒创建，若先 poll 后 show，
-      // 首条 overlay:update 会落在窗口 mount+listen 就绪之前而丢失。
-      void invoke('show_overlay_window').catch(() => {})
-      lastNextActionAt = 0
-      void pollNextActions()
-      if (!nextActionTimer) {
-        nextActionTimer = setInterval(() => void pollNextActions(), NEXT_ACTION_POLL_MS)
-      }
-      if (queueId === 2400) {
-        startMayhemAssistIfNeeded()
-      } else {
-        stopMayhemAssist()
-      }
-    } else {
-      if (nextActionTimer) {
-        clearInterval(nextActionTimer)
-        nextActionTimer = null
-      }
-      nextActions.value = []
-      stopMayhemAssist()
-      void invoke('hide_overlay_window').catch(() => {})
+watch([() => sessionData.phase, () => sessionData.queueId], ([phase, queueId]) => {
+  if (phase === 'InProgress') {
+    // 先建/显示窗口再首推：overlay 懒创建，若先 poll 后 show，
+    // 首条 overlay:update 会落在窗口 mount+listen 就绪之前而丢失。
+    void invoke('show_overlay_window').catch(() => {})
+    lastNextActionAt = 0
+    void pollNextActions()
+    if (!nextActionTimer) {
+      nextActionTimer = setInterval(() => void pollNextActions(), NEXT_ACTION_POLL_MS)
     }
+    if (queueId === 2400) {
+      startMayhemAssistIfNeeded()
+    } else {
+      stopMayhemAssist()
+    }
+  } else {
+    if (nextActionTimer) {
+      clearInterval(nextActionTimer)
+      nextActionTimer = null
+    }
+    nextActions.value = []
+    stopMayhemAssist()
+    void invoke('hide_overlay_window').catch(() => {})
   }
-)
+})
 
 onUnmounted(() => {
   if (nextActionTimer) {

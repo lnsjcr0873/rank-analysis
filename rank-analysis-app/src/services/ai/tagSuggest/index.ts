@@ -77,8 +77,8 @@ function writeCache(puuid: string, data: CachedResult): void {
 export function markAdopted(puuid: string, suggestionId: string): void {
   const cached = readCache(puuid)
   if (!cached) return
-  for (const s of [...cached.good, ...cached.bad]) {
-    if (s.id === suggestionId) {
+  for (const s of [...(cached.good ?? []), ...(cached.bad ?? [])]) {
+    if (s && s.id === suggestionId) {
       s.adopted = true
     }
   }

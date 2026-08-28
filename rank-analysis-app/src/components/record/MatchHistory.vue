@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="ratio-container">
     <div class="content-wrapper match-history-wrap">
       <!-- 工具栏三分区：筛选 / 视图 / 数据管理（设计系统 v3 §7.5） -->
@@ -231,7 +231,7 @@ import RecordCardSkeleton from './RecordCardSkeleton.vue'
 import TrendBar from './TrendBar.vue'
 import { ArrowLeft, ArrowRight, Repeat, Download, ChevronDown } from 'lucide-vue-next'
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
-import { NButton, NIcon, NDropdown, useLoadingBar, useMessage } from 'naive-ui'
+import { NButton, NIcon, NDropdown, NPopconfirm, useLoadingBar, useMessage } from 'naive-ui'
 import EmptyState from '@renderer/components/ui/EmptyState.vue'
 import { Search, TriangleAlert, Inbox } from 'lucide-vue-next'
 import {
@@ -649,11 +649,11 @@ const getHistoryMatch = async (name: string) => {
       // 更全，直接合并展示；续收游标对齐到恢复后的总数，从上次收尾处继续拉取
       const saved = await loadCollectedGames(region.value, name)
       hasCollected.value = !!saved
-      if (saved) {
+      if (saved && result) {
         const merged = mergeGamesByGameId(result.games?.games ?? [], saved)
         result = { ...result, games: { ...result.games, games: merged } }
       }
-      sgpStartIndex.value = result.games?.games?.length ?? 50
+      sgpStartIndex.value = result?.games?.games?.length ?? 50
     } else {
       result = await invoke<MatchHistory>('get_match_history_by_name', {
         name,
@@ -663,11 +663,11 @@ const getHistoryMatch = async (name: string) => {
       // 本区（LCU 50 场窗口）也恢复「收集全部」的持久化成果，续收游标对齐
       const saved = await loadCollectedGames(sgpRegion.value, name)
       hasCollected.value = !!saved
-      if (saved) {
+      if (saved && result) {
         const merged = mergeGamesByGameId(result.games?.games ?? [], saved)
         result = { ...result, games: { ...result.games, games: merged } }
       }
-      sgpStartIndex.value = result.games?.games?.length ?? 50
+      sgpStartIndex.value = result?.games?.games?.length ?? 50
     }
     matchHistory.value = result
     allGames.value = matchHistory.value?.games?.games ?? []

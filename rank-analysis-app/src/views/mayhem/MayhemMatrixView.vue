@@ -47,19 +47,11 @@
               v-for="c in grp.list"
               :key="c.id"
               class="matrix-hero-tile"
-              :class="[
-                `${grp.key}-border`,
-                { active: selectedChampion?.id === c.id }
-              ]"
+              :class="[`${grp.key}-border`, { active: selectedChampion?.id === c.id }]"
               :title="`${c.name} · ${c.title}`"
               @click="onSelectChampion(c.id)"
             >
-              <img
-                class="matrix-hero-avatar"
-                :src="c.iconUrl"
-                :alt="c.title"
-                loading="lazy"
-              />
+              <img class="matrix-hero-avatar" :src="c.iconUrl" :alt="c.title" loading="lazy" />
               <div class="matrix-hero-wr" :class="{ hi: (c.stats.winRate ?? 0) >= 0.52 }">
                 {{ formatPct(c.stats.winRate) }}
               </div>
@@ -76,7 +68,11 @@
 
           <!-- 窄屏模式下：选中的英雄看板直接就地展开在当前梯队正下方 -->
           <div
-            v-if="!isWide && selectedChampion && grp.list.some((c: MayhemChampion) => c.id === selectedChampion?.id)"
+            v-if="
+              !isWide &&
+              selectedChampion &&
+              grp.list.some((c: MayhemChampion) => c.id === selectedChampion?.id)
+            "
             class="inline-inspector-container"
           >
             <div class="inline-fold-bar">
@@ -242,4 +238,3 @@ function formatPct(val: number | null | undefined): string {
 </script>
 
 <style scoped src="./MayhemMatrixView.styles.css"></style>
-

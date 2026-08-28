@@ -57,12 +57,20 @@ static MANAGER: LazyLock<ShardManager> = LazyLock::new(|| ShardManager {
 
 /// 注册一个 shard（启动期调用，需在 [`init_all`] 之前）。
 pub fn register(shard: Arc<dyn AppShard>) {
-    MANAGER.shards.lock().unwrap().push(shard);
+    MANAGER
+        .shards
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .push(shard);
 }
 
 /// 按注册序逐个 `on_init`（先快照再遍历，await 期间不持锁）。
 pub async fn init_all(app: &tauri::AppHandle) {
-    let snapshot: Vec<Arc<dyn AppShard>> = MANAGER.shards.lock().unwrap().clone();
+    let snapshot: Vec<Arc<dyn AppShard>> = MANAGER
+        .shards
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
     for shard in &snapshot {
         log::info!("[shard] init: {}", shard.name());
         shard.on_init(app).await;
@@ -71,7 +79,11 @@ pub async fn init_all(app: &tauri::AppHandle) {
 
 /// 逆序逐个 `on_dispose`（依赖方后清理：先停后起的，符合 fork 顺序直觉）。
 pub fn dispose_all() {
-    let snapshot: Vec<Arc<dyn AppShard>> = MANAGER.shards.lock().unwrap().clone();
+    let snapshot: Vec<Arc<dyn AppShard>> = MANAGER
+        .shards
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
     for shard in snapshot.iter().rev() {
         log::info!("[shard] dispose: {}", shard.name());
         shard.on_dispose();

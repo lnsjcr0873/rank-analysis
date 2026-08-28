@@ -170,7 +170,9 @@ export async function requestAIContent(
           fullContent += chunk
         },
         onDone: () => {
-          sessionStorage.setItem(cacheKey, fullContent)
+          if (fullContent) {
+            sessionStorage.setItem(cacheKey, fullContent)
+          }
           resolve({ success: true, content: fullContent })
         },
         onError: error => resolve({ success: false, error }),

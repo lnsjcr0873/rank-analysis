@@ -15,9 +15,7 @@
         <div class="match-detail-team-title-wrap">
           <span class="match-detail-team-accent" />
           <span class="match-detail-team-title">{{ team.title }}</span>
-          <span class="match-detail-team-pill font-number">
-            ⚔️ {{ team.kills }} 击杀
-          </span>
+          <span class="match-detail-team-pill font-number"> ⚔️ {{ team.kills }} 击杀 </span>
           <span class="match-detail-team-pill font-number">
             💰 {{ formatCompactNumber(team.gold) }}
           </span>
@@ -1067,20 +1065,12 @@ function playerTier(player: DetailPlayer) {
 
 /* 三色与旧图标底色同系：输出琥珀 / 承伤蓝 / 治疗绿 */
 .match-detail-bar-fill--damage {
-  background: linear-gradient(
-    90deg,
-    #f59e0b,
-    #ef4444
-  );
+  background: linear-gradient(90deg, #f59e0b, #ef4444);
   box-shadow: 0 0 6px rgba(239, 68, 68, 0.35);
 }
 
 .match-detail-bar-fill--taken {
-  background: linear-gradient(
-    90deg,
-    #3b82f6,
-    #6366f1
-  );
+  background: linear-gradient(90deg, #3b82f6, #6366f1);
   box-shadow: 0 0 6px rgba(99, 102, 241, 0.35);
 }
 

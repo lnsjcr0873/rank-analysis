@@ -288,10 +288,14 @@ function scoreLevel(total: number) {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
 }
 .match-detail-score-team--win {
-  box-shadow: inset 3px 0 0 var(--semantic-win), 0 4px 16px rgba(16, 185, 129, 0.1);
+  box-shadow:
+    inset 3px 0 0 var(--semantic-win),
+    0 4px 16px rgba(16, 185, 129, 0.1);
 }
 .match-detail-score-team--lose {
-  box-shadow: inset 3px 0 0 var(--semantic-loss), 0 4px 16px rgba(239, 68, 68, 0.1);
+  box-shadow:
+    inset 3px 0 0 var(--semantic-loss),
+    0 4px 16px rgba(239, 68, 68, 0.1);
 }
 .match-detail-score-team-header {
   display: flex;
