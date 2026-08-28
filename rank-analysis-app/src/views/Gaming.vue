@@ -119,7 +119,7 @@
       </n-drawer>
 
       <!-- ================= 2400 狂暴大乱斗专属选人面板（替换峡谷 BP 情报舱） ================= -->
-      <MayhemDraftPanel v-if="sessionData.queueId === 2400" :queue-id="sessionData.queueId" />
+      <MayhemDraftPanel v-if="isMayhemQueue" :queue-id="sessionData.queueId" />
 
       <!-- ================= 情报舱：结论区 → 阶段区 → 信号区（非狂暴大乱斗时展示） ================= -->
       <div v-else class="intel-bay">
@@ -284,7 +284,7 @@
       <div class="gaming-grid" :class="{ 'gaming-grid-multi': sessionData.isMultiTeam }">
         <div v-for="st of orderedSubteams" :key="`subteam-col-${st.subteamId}`" class="subteam-col">
           <BestPicksPanel
-            v-if="showBestPicks && sessionData.queueId !== 2400 && panelForColumn(st)"
+            v-if="showBestPicks && !isMayhemQueue && panelForColumn(st)"
             :enemy-ids="enemyLockedIds"
             :candidate-ids="bestPickCandidates"
             :teammate-ids="teammatePickedIds"
@@ -373,6 +373,7 @@ const STAGE_STEPS: Array<{ key: string; label: string }> = [
 ]
 
 const { sessionData, requestSessionData } = useSessionSync()
+const isMayhemQueue = computed(() => [2400, 2410, 2450].includes(sessionData.queueId))
 const tiersBySubteam = useSessionTiers(sessionData)
 const { getChampionUrl } = useAssetUrl()
 const { isConnected, summoner: mySummoner, currentPhase } = useGameState()

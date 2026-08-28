@@ -59,7 +59,7 @@ const props = defineProps<{
   queueId?: number
 }>()
 
-const MAYHEM_QUEUE_ID = 2400
+const MAYHEM_QUEUE_IDS = [2400, 2410, 2450]
 
 const router = useRouter()
 const message = useMessage()
@@ -83,7 +83,11 @@ const metaMap = computed<ChampMetaMap>(() => {
   return map
 })
 
-const isMayhem = computed(() => ctx.value?.queueId === MAYHEM_QUEUE_ID || props.queueId === MAYHEM_QUEUE_ID)
+const isMayhem = computed(
+  () =>
+    MAYHEM_QUEUE_IDS.includes(ctx.value?.queueId ?? 0) ||
+    MAYHEM_QUEUE_IDS.includes(props.queueId ?? 0)
+)
 
 const myHandChampionId = computed<number>(() => {
   if (!ctx.value) return 0
