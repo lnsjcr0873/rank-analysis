@@ -114,7 +114,7 @@ const sanitizedDescription = computed(() => {
 
 .asset-tooltip[class*='asset-tooltip-'] .asset-tooltip-icon {
   border: 1px solid var(--rarity-color);
-  box-shadow: 0 0 0 1px var(--border-subtle);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--rarity-color) 40%, transparent);
 }
 
 .asset-tooltip-title-wrap {

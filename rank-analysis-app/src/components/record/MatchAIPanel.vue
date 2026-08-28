@@ -306,11 +306,12 @@ function nameOf(participantId: number): string {
 .match-detail-ai-improvement {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-4);
   padding: var(--space-8) var(--space-12);
-  background: var(--glass-bg-low);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 80%, transparent);
+  border-radius: var(--radius-md);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .match-detail-ai-improvement-evidence {
