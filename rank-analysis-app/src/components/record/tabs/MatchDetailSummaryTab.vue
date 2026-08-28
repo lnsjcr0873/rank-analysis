@@ -778,7 +778,6 @@ function playerTier(player: DetailPlayer) {
 
 /* MVP/SVP 章：金/银双档，WeGame 式综合评分的胜败双方最高分 */
 .match-detail-mvp-chip {
-  --chip-color: var(--accent-gold);
   padding: 1px var(--space-6);
   border-radius: var(--radius-pill);
   font-size: var(--font-size-2xs);
@@ -786,18 +785,21 @@ function playerTier(player: DetailPlayer) {
   font-style: italic;
   letter-spacing: 0.04em;
   line-height: 1.3;
-  color: var(--chip-color);
-  background: color-mix(in srgb, var(--chip-color) 14%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--chip-color) 45%, transparent);
   flex-shrink: 0;
 }
 
 .match-detail-mvp-chip--mvp {
-  --chip-color: var(--accent-gold);
+  color: #fbbf24;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.25), rgba(180, 83, 9, 0.38));
+  border: 1px solid rgba(245, 158, 11, 0.6);
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.3);
 }
 
 .match-detail-mvp-chip--svp {
-  --chip-color: #aab8c8;
+  color: #cbd5e1;
+  background: linear-gradient(135deg, rgba(148, 163, 184, 0.2), rgba(71, 85, 105, 0.3));
+  border: 1px solid rgba(148, 163, 184, 0.5);
+  box-shadow: 0 0 6px rgba(148, 163, 184, 0.2);
 }
 
 .match-detail-player-text-row :deep(.n-tag) {

@@ -505,13 +505,17 @@ function openDetail() {
 }
 
 .record-card-mvp-gold {
-  color: #201500;
-  background: linear-gradient(180deg, #f6d365, #d4a017);
+  color: #fbbf24;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.35), rgba(180, 83, 9, 0.6));
+  border: 1px solid rgba(245, 158, 11, 0.7);
+  box-shadow: 0 0 6px rgba(245, 158, 11, 0.4);
 }
 
 .record-card-mvp-silver {
-  color: #1c232b;
-  background: linear-gradient(180deg, #eef3f9, #aab8c8);
+  color: #cbd5e1;
+  background: linear-gradient(135deg, rgba(148, 163, 184, 0.3), rgba(71, 85, 105, 0.5));
+  border: 1px solid rgba(148, 163, 184, 0.6);
+  box-shadow: 0 0 4px rgba(148, 163, 184, 0.25);
 }
 
 /* 英雄名 */
