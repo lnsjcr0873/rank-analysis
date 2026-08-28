@@ -142,8 +142,11 @@ function onResize() {
   windowWidth.value = window.innerWidth
 }
 
-onMounted(() => {
+onMounted(async () => {
   window.addEventListener('resize', onResize)
+  if (!mayhemStore.champions.length) {
+    await mayhemStore.loadChampions()
+  }
 })
 
 onUnmounted(() => {

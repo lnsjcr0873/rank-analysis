@@ -133,15 +133,18 @@ export const useMayhemStore = defineStore('mayhem', () => {
     await initViewMode()
     // 无论 status 状态为何，优先读取本地现存缓存，保证页面秒开不白屏
     await loadChampions()
+    void loadMine()
 
     try {
       status.value = await getMayhemStatus()
-      // 仅当本地既无就绪状态、列表也为空且当前未在同步时，才触发首次静默拉取
-      if (!status.value.ready && !champions.value.length && !syncing.value) {
-        void sync(false)
+      if ((!status.value?.ready || !champions.value.length) && !syncing.value) {
+        await sync(true)
       }
     } catch (e) {
       console.warn('[mayhemStore] getMayhemStatus failed:', e)
+      if (!champions.value.length && !syncing.value) {
+        await sync(true)
+      }
     }
   }
 

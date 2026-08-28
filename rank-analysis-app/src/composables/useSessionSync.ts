@@ -387,6 +387,11 @@ export function useSessionSync() {
           sessionData.phase !== 'ChampSelect'
         ) {
           resetForNewGame()
+        } else if (
+          ['ChampSelect', 'GameStart', 'InProgress', 'Reconnect', 'PreEndOfGame', 'EndOfGame'].includes(phase) &&
+          (!sessionData.phase || lastMonitorPhase !== phase)
+        ) {
+          requestSessionData()
         }
         lastMonitorPhase = phase
       })

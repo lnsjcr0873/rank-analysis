@@ -1,12 +1,12 @@
 <template>
-  <header class="tbar" data-tauri-drag-region>
+  <header class="tbar">
     <div class="tbar__left" data-tauri-drag-region>
       <span class="tbar__title">{{ title }}</span>
     </div>
 
     <div class="tbar__spacer" data-tauri-drag-region></div>
 
-    <div class="tbar__right">
+    <div class="tbar__right" data-tauri-drag-region="false">
       <button class="tb-search nodrag" @click="$emit('openPalette')">
         <Search class="tb-glyph" />
         <span>搜索</span>

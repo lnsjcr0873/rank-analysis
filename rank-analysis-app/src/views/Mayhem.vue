@@ -342,16 +342,13 @@ import {
   extractMayhemChampions,
   getMayhemAugments,
   getMayhemChampions,
-  getMayhemStatus,
   getMayhemVersionChanges,
   getMyAugmentStats,
   getMyChampionStats,
   importMayhemRecent,
   stripRichText,
-  syncMayhemData,
   type MayhemAugment,
   type MayhemChampion,
-  type MayhemStatus,
   type MayhemVersionChange,
   type MyAugmentStat,
   type MyChampionStat
@@ -607,10 +604,8 @@ async function loadAugments() {
 }
 
 async function onSync(force: boolean) {
-  await syncMayhemData(force)
   await mayhemStore.sync(force)
-  const st = (await getMayhemStatus()) as MayhemStatus
-  status.value = st
+  status.value = mayhemStore.status
 }
 
 async function loadMine() {

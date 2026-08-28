@@ -334,7 +334,14 @@ async fn process_session_data(app_handle: AppHandle, seq: u64) -> Result<(), Str
     let my_summoner = Summoner::get_my_summoner().await?;
 
     let phase = get_phase().await?;
-    let valid_phases = ["ChampSelect", "InProgress", "PreEndOfGame", "EndOfGame"];
+    let valid_phases = [
+        "ChampSelect",
+        "GameStart",
+        "InProgress",
+        "Reconnect",
+        "PreEndOfGame",
+        "EndOfGame",
+    ];
     if !valid_phases.contains(&phase.as_str()) {
         log::info!("Not in a valid game phase: {}", phase);
         if !is_latest_task(&SESSION_TASK_SEQ, seq) {

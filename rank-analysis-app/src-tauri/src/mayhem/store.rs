@@ -404,7 +404,14 @@ pub async fn sync(force: bool) -> Result<Option<SyncReport>, String> {
     if !force {
         if let Some(ptr) = read_pointer() {
             if ptr.data_version == config.data_version {
-                return Ok(None);
+                let vdir = root_dir().join("versions").join(&ptr.data_version);
+                let ready = vdir.join("champions.json").is_file()
+                    && vdir.join("augments.json").is_file()
+                    && (vdir.join("champion-shards").join("index.json").is_file()
+                        || vdir.join("champions").is_dir());
+                if ready {
+                    return Ok(None);
+                }
             }
         }
     }
