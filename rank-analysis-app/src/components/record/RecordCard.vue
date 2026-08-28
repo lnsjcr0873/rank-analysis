@@ -318,15 +318,21 @@ function openDetail() {
 /* === 紧凑行卡：高 44px 级，信息密度对标 op.gg 行卡 === */
 .record-card {
   cursor: pointer;
-  height: 44px;
+  height: 46px;
   border-radius: var(--radius-md);
-  background: var(--glass-bg-mid);
-  border: 1px solid var(--glass-border);
-  box-shadow: var(--shadow-sm), var(--glass-highlight);
+  background: rgba(18, 22, 28, 0.45);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 90%, transparent);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
   transition:
     transform var(--dur-fast) var(--ease-expo),
     box-shadow var(--dur-fast) var(--ease-expo),
-    border-color var(--dur-fast) var(--ease-expo);
+    border-color var(--dur-fast) var(--ease-expo),
+    background var(--dur-fast) var(--ease-expo);
+}
+
+.theme-light .record-card {
+  background: var(--bg-elevated);
 }
 
 /* 键盘可达性（R22-3）：焦点环仅键盘触发时出现，不干扰鼠标点击 */
@@ -337,7 +343,7 @@ function openDetail() {
 
 .record-card:hover {
   transform: translateY(-1px);
-  box-shadow: var(--shadow-md), var(--glass-highlight);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
   border-color: var(--glass-bg-high);
 }
 
@@ -349,27 +355,23 @@ function openDetail() {
 /* 胜负左缘色条：列表扫读时先看颜色再看字（op.gg 同式） */
 .record-card-win {
   box-shadow:
-    inset 3px 0 0 color-mix(in srgb, var(--win) 60%, transparent),
-    var(--shadow-sm),
-    var(--glass-highlight);
+    inset 3px 0 0 var(--semantic-win),
+    0 2px 10px rgba(16, 185, 129, 0.08);
 }
 .record-card-loss {
   box-shadow:
-    inset 3px 0 0 color-mix(in srgb, var(--loss) 55%, transparent),
-    var(--shadow-sm),
-    var(--glass-highlight);
+    inset 3px 0 0 var(--semantic-loss),
+    0 2px 10px rgba(239, 68, 68, 0.08);
 }
 .record-card-win:hover {
   box-shadow:
-    inset 3px 0 0 var(--win),
-    var(--shadow-md),
-    var(--glass-highlight);
+    inset 3px 0 0 var(--semantic-win),
+    0 4px 16px rgba(16, 185, 129, 0.18);
 }
 .record-card-loss:hover {
   box-shadow:
-    inset 3px 0 0 var(--loss),
-    var(--shadow-md),
-    var(--glass-highlight);
+    inset 3px 0 0 var(--semantic-loss),
+    0 4px 16px rgba(239, 68, 68, 0.18);
 }
 
 .record-card-grid {

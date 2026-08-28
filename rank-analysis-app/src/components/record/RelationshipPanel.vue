@@ -113,16 +113,18 @@ function openGame(gameId: number) {
 .relationship-item {
   display: flex;
   align-items: center;
-  background-color: var(--bg-elevated);
-  padding: var(--space-4);
-  border-radius: var(--radius-lg);
+  background-color: rgba(255, 255, 255, 0.03);
+  padding: var(--space-4) var(--space-8);
+  border-radius: var(--radius-md);
   border: 1px solid var(--border-subtle);
   cursor: pointer;
-  transition: background-color var(--dur-fast) var(--ease-expo);
+  transition: all var(--dur-fast) var(--ease-expo);
 }
 
 .relationship-item:hover {
   background-color: var(--glass-bg-high);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .relationship-name {

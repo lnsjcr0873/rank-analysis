@@ -110,6 +110,18 @@ const cardContentStyle = 'padding: var(--space-12)'
 </script>
 
 <style scoped>
+.recent-stats-card {
+  background: rgba(255, 255, 255, 0.02) !important;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 90%, transparent) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08) !important;
+  backdrop-filter: blur(8px);
+}
+
+.theme-light .recent-stats-card {
+  background: var(--bg-elevated) !important;
+}
+
 .recent-stats-header {
   margin-bottom: var(--space-12);
 }

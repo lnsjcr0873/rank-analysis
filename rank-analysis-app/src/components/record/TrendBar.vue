@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div v-if="games.length > 0" class="trend-bar">
     <span class="trend-bar-title">近{{ games.length }}场趋势</span>
     <div class="trend-bar-cells" role="list" aria-label="近期对局趋势">
@@ -101,12 +101,17 @@ const tooltipKda = (game: Game) => {
   gap: var(--space-10);
   min-height: 32px;
   padding: var(--space-4) var(--space-12);
-  background: var(--glass-bg-mid);
-  border: 1px solid var(--glass-border);
+  background: rgba(18, 22, 28, 0.45);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 90%, transparent);
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-sm), var(--glass-highlight);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
   overflow-x: auto;
   scrollbar-width: none;
+}
+
+.theme-light .trend-bar {
+  background: var(--bg-elevated);
 }
 
 .trend-bar::-webkit-scrollbar {
