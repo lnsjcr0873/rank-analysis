@@ -365,10 +365,14 @@ mod platform {
             }
         }
 
-        /// 按进程名枚举 PID（不区分大小写的包含匹配）。
+        /// 按进程名枚举 PID。
+        /// 优先做精确匹配（如 "leagueclientux.exe" / "leagueclient.exe"），
+        /// 排除 "leagueclientuxrender.exe" 等渲染子进程干扰；
+        /// 若查找 "leagueclientux" 且未找到进程，自动尝试兜底查找 "leagueclient.exe"（应对游戏中关闭客户端的情况）。
         pub fn find_pids_by_name(name: &str) -> Result<Vec<u32>, String> {
             let name_lower = name.to_lowercase();
-            let mut pids = Vec::new();
+            let mut exact_pids = Vec::new();
+            let mut fallback_pids = Vec::new();
 
             unsafe {
                 let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
@@ -400,8 +404,17 @@ mod platform {
                     )
                     .to_lowercase();
 
-                    if exe_name.contains(&name_lower) {
-                        pids.push(entry.th32ProcessID);
+                    // 避免 LeagueClientUxRender.exe 误匹配
+                    if exe_name == "leagueclientux.exe" || exe_name == "leagueclientux" {
+                        if name_lower.contains("leagueclientux") {
+                            exact_pids.push(entry.th32ProcessID);
+                        }
+                    } else if exe_name == "leagueclient.exe" || exe_name == "leagueclient" {
+                        if name_lower.contains("leagueclient") {
+                            fallback_pids.push(entry.th32ProcessID);
+                        }
+                    } else if !name_lower.contains("leagueclient") && exe_name.contains(&name_lower) {
+                        exact_pids.push(entry.th32ProcessID);
                     }
 
                     if Process32NextW(snapshot, &mut entry) == FALSE {
@@ -410,7 +423,11 @@ mod platform {
                 }
             }
 
-            Ok(pids)
+            if !exact_pids.is_empty() {
+                Ok(exact_pids)
+            } else {
+                Ok(fallback_pids)
+            }
         }
 
         /// 按进程名强制结束所有匹配进程。

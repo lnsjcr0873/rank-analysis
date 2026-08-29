@@ -5,50 +5,62 @@
 use serde::{Deserialize, Serialize};
 
 /// 当前游戏流程会话：阶段与对局数据（队伍、队列等）。
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone)]
 #[serde(rename_all = "camelCase")] // Apply camelCase deserialization to top-level fields
 pub struct Session {
+    #[serde(default)]
     pub game_data: GameData,
+    #[serde(default)]
     pub phase: String,
 }
 
 /// 选人阶段中单名玩家的英雄与 PUUID。
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerChampionSelection {
+    #[serde(default)]
     pub champion_id: i32,
+    #[serde(default)]
     pub puuid: String,
 }
 
 /// 对局数据：对局 ID、是否自定义、队列、选人列表、双方队伍。
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone)]
 #[serde(rename_all = "camelCase")] // Apply camelCase deserialization to GameData fields
 pub struct GameData {
+    #[serde(default)]
     pub game_id: i64, // Using i64 for gameId as it can be a large number
+    #[serde(default)]
     pub is_custom_game: bool,
+    #[serde(default)]
     pub queue: Queue,
     #[serde(default)]
     pub player_champion_selections: Vec<PlayerChampionSelection>,
+    #[serde(default)]
     pub team_one: Vec<OnePlayer>, // Renamed from TeamOne to team_one
+    #[serde(default)]
     pub team_two: Vec<OnePlayer>, // Renamed from TeamTwo to team_two
 }
 
 /// 队列类型与 ID（如排位/匹配）。
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Queue {
-    #[serde(rename = "type")]
+    #[serde(rename = "type", default)]
     pub queue_type: String,
+    #[serde(default)]
     pub id: i32,
     #[serde(default)]
     pub game_mode: String,
 }
 
 /// 会话中单名玩家：英雄 ID 与 PUUID。
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct OnePlayer {
+    #[serde(default)]
     pub champion_id: i32,
+    #[serde(default)]
     pub puuid: String,
     #[serde(default)]
     pub selected_position: String,

@@ -31,7 +31,11 @@ export function useRecordAssets() {
     if (!filtered.length) return
     try {
       const details = await getAssetDetailsByIpc(kind, filtered)
-      bucketFor(kind).value = Object.fromEntries(details.map(d => [d.id, d]))
+      const newEntries = Object.fromEntries(details.map(d => [d.id, d]))
+      bucketFor(kind).value = {
+        ...bucketFor(kind).value,
+        ...newEntries
+      }
     } catch (error) {
       console.error(`failed to load ${kind} details`, error)
     }

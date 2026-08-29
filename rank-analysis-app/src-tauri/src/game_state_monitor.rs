@@ -117,7 +117,7 @@ pub struct GameStateMonitor {
 ///
 /// 权限不足（ACCESS_DENIED）不受此阈值保护——那是持久状态，需要立即
 /// 上报以引导用户提权重启。
-const DISCONNECT_FAIL_STREAK: u32 = 2;
+const DISCONNECT_FAIL_STREAK: u32 = 5;
 
 impl GameStateMonitor {
     /// 创建新的游戏状态监听器实例。
@@ -171,7 +171,10 @@ impl GameStateMonitor {
             Ok(result) => result,
             Err(_) => Err("阶段检测超时".to_string()),
         };
-        let connected_raw = summoner_result.is_ok();
+        // 只要召唤师接口或游戏阶段接口任一成功，即表明 LCU 存活且正常通信；
+        // 在游戏加载阶段（ChampSelect -> GameStart/InProgress），LCU 客户端忙于拉起游戏进程，
+        // 召唤师接口可能出现短暂延迟或锁定期，以 phase 结果兜底可避免误报断连。
+        let connected_raw = summoner_result.is_ok() || phase_result.is_ok();
         if connected_raw {
             self.consecutive_failures = 0;
         } else {

@@ -107,10 +107,12 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { useMayhemStore } from '../../features/mayhem/stores/mayhemStore'
 import { type MayhemChampion } from '../../features/mayhem/services/mayhemData'
 import MayhemMatrixInspector from './MayhemMatrixInspector.vue'
 
+const route = useRoute()
 const mayhemStore = useMayhemStore()
 
 const champions = computed(() => mayhemStore.champions)
@@ -127,7 +129,11 @@ const ROLE_LABELS: Record<string, string> = {
 
 const activeRole = ref<string>('all')
 const search = ref('')
-const selectedId = ref<number | null>(mayhemStore.selectedChampionId || null)
+const selectedId = ref<number | null>(
+  (route.query.championId ? Number(route.query.championId) : null) ||
+    mayhemStore.selectedChampionId ||
+    null
+)
 const clickStamp = ref(Date.now())
 
 // 响应式分栏宽度（>= 768px 走宽屏左右分栏，< 768px 走就地内联展开）
@@ -221,11 +227,37 @@ function onSelectChampion(id: number) {
 }
 
 watch(
+  () => route.query.championId,
+  cid => {
+    if (cid) {
+      const num = Number(cid)
+      if (Number.isFinite(num) && num > 0) {
+        selectedId.value = num
+        mayhemStore.selectedChampionId = num
+        clickStamp.value = Date.now()
+      }
+    }
+  },
+  { immediate: true }
+)
+
+watch(
   () => champions.value.length,
   len => {
-    if (len && !selectedId.value) {
-      selectedId.value = champions.value[0].id
-      clickStamp.value = Date.now()
+    if (len) {
+      if (route.query.championId) {
+        const num = Number(route.query.championId)
+        if (Number.isFinite(num) && num > 0) {
+          selectedId.value = num
+          mayhemStore.selectedChampionId = num
+          clickStamp.value = Date.now()
+          return
+        }
+      }
+      if (!selectedId.value) {
+        selectedId.value = champions.value[0].id
+        clickStamp.value = Date.now()
+      }
     }
   },
   { immediate: true }

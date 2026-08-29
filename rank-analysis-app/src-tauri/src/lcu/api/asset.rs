@@ -501,6 +501,7 @@ async fn init_lcu_assets() {
             map.insert(augment.id, augment);
         }
     }
+    ensure_offline_assets_loaded();
     log::info!(
         "[asset] LCU 资源就绪（图标可用）{} ms — item {} / champion {} / spell {} / perkStyle {} / perk {} / augment {}",
         t0.elapsed().as_millis(),
@@ -759,11 +760,111 @@ async fn get_profile_binary(id: i64) -> Result<(Vec<u8>, String), String> {
     fetch_binary(&profile_url).await
 }
 
-fn build_asset_key(type_string: &str, id: i64) -> String {
-    format!("{}:{}", type_string, id)
+/// 从本地 mayhem 数据源加载离线装备/技能/符文/英雄元数据兜底。
+/// 当 LCU 未运行、断连或静态数据尚未拉取时，保证前端能正确解析出装备/技能名称及描述而非显示「#数字」。
+pub fn ensure_offline_assets_loaded() {
+    let item_empty = ITEM_CACHE.read().map(|g| g.is_empty()).unwrap_or(true);
+    let spell_empty = SPELL_CACHE.read().map(|g| g.is_empty()).unwrap_or(true);
+    let perk_empty = PERK_CACHE.read().map(|g| g.is_empty()).unwrap_or(true);
+    let champ_empty = CHAMPION_CACHE.read().map(|g| g.is_empty()).unwrap_or(true);
+
+    if !item_empty && !spell_empty && !perk_empty && !champ_empty {
+        return;
+    }
+
+    if item_empty {
+        if let Ok(v) = crate::mayhem::store::read_local_json("items.json") {
+            let list = v.as_array().or_else(|| v.get("data").and_then(|d| d.as_array()));
+            if let Some(arr) = list {
+                let mut cache = ITEM_CACHE.write().unwrap();
+                for it in arr {
+                    if let (Some(id), Some(name)) = (it["id"].as_i64(), it["name"].as_str()) {
+                        let desc = it["description"].as_str().unwrap_or_default().to_string();
+                        let icon_path = it["iconUrl"].as_str().unwrap_or_default().to_string();
+                        cache.entry(id).or_insert(Item {
+                            id,
+                            name: name.to_string(),
+                            description: desc,
+                            icon_path,
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    if spell_empty {
+        if let Ok(v) = crate::mayhem::store::read_local_json("summoner-spells.json") {
+            let list = v.as_array().or_else(|| v.get("data").and_then(|d| d.as_array()));
+            if let Some(arr) = list {
+                let mut cache = SPELL_CACHE.write().unwrap();
+                for sp in arr {
+                    if let (Some(id), Some(name)) = (sp["id"].as_i64(), sp["name"].as_str()) {
+                        let desc = sp["description"].as_str().unwrap_or_default().to_string();
+                        let icon_path = sp["iconUrl"].as_str().unwrap_or_default().to_string();
+                        cache.entry(id).or_insert(Spell {
+                            id,
+                            name: name.to_string(),
+                            description: desc,
+                            icon_path,
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    if perk_empty {
+        if let Ok(v) = crate::mayhem::store::read_local_json("augments.json") {
+            let list = v.as_array().or_else(|| v.get("data").and_then(|d| d.as_array()));
+            if let Some(arr) = list {
+                let mut cache = PERK_CACHE.write().unwrap();
+                for aug in arr {
+                    if let (Some(id), Some(name)) = (aug["id"].as_i64(), aug["name"].as_str()) {
+                        let desc = aug["description"].as_str().or_else(|| aug["tooltip"].as_str()).unwrap_or_default().to_string();
+                        let icon_path = aug["iconUrl"].as_str().unwrap_or_default().to_string();
+                        let rarity = aug["rarityDisplayName"].as_str().or_else(|| aug["rarityName"].as_str()).map(|s| s.to_string());
+                        cache.entry(id).or_insert(Perk {
+                            id,
+                            name: name.to_string(),
+                            tooltip: desc.clone(),
+                            short_desc: String::new(),
+                            long_desc: desc,
+                            rarity,
+                            icon_path,
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    if champ_empty {
+        if let Ok(v) = crate::mayhem::store::read_local_json("champions.json") {
+            let list = v.as_array().or_else(|| v.get("data").and_then(|d| d.as_array()));
+            if let Some(arr) = list {
+                let mut cache = CHAMPION_CACHE.write().unwrap();
+                for c in arr {
+                    if let (Some(id), Some(title)) = (c["id"].as_i64(), c["title"].as_str().or_else(|| c["name"].as_str())) {
+                        let alias = c["alias"].as_str().unwrap_or_default().to_string();
+                        let icon_path = c["iconUrl"].as_str().unwrap_or_default().to_string();
+                        cache.entry(id).or_insert(Champion {
+                            id,
+                            name: title.to_string(),
+                            description: String::new(),
+                            alias,
+                            content_id: String::new(),
+                            square_portrait_path: icon_path,
+                        });
+                    }
+                }
+            }
+        }
+    }
 }
 
 pub fn get_asset_details(type_string: String, ids: Vec<i64>) -> Result<Vec<AssetDetails>, String> {
+    ensure_offline_assets_loaded();
     match type_string.as_str() {
         "item" => Ok(get_item_details(ids)),
         "perk" => Ok(get_perk_details(ids)),
