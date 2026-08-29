@@ -65,7 +65,7 @@ pub fn mayhem_status() -> Result<MayhemStatus, String> {
     let root = crate::mayhem::store::root_dir();
     let ptr = crate::mayhem::store::read_pointer_in(&root);
     let mut active_version = ptr.as_ref().map(|p| p.data_version.clone());
-    let mut synced_at = ptr.as_ref().map(|p| p.synced_at);
+    let synced_at = ptr.as_ref().map(|p| p.synced_at);
 
     let is_dir_ready = |v: &str| {
         let vdir = root.join("versions").join(v);

@@ -760,6 +760,10 @@ async fn get_profile_binary(id: i64) -> Result<(Vec<u8>, String), String> {
     fetch_binary(&profile_url).await
 }
 
+fn build_asset_key(type_string: &str, id: i64) -> String {
+    format!("{}:{}", type_string, id)
+}
+
 /// 从本地 mayhem 数据源加载离线装备/技能/符文/英雄元数据兜底。
 /// 当 LCU 未运行、断连或静态数据尚未拉取时，保证前端能正确解析出装备/技能名称及描述而非显示「#数字」。
 pub fn ensure_offline_assets_loaded() {
