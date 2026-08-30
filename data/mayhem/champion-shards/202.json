@@ -1,0 +1,126 @@
+{
+  "champion": {
+    "id": 202,
+    "name": "Jhin",
+    "title": "戏命师",
+    "alias": "烬",
+    "roles": [
+      "marksman",
+      "mage"
+    ],
+    "iconUrl": "https://ddragon.leagueoflegends.com/cdn/14.16.1/img/champion/Jhin.png",
+    "stats": {
+      "tier": 1,
+      "rank": 2,
+      "total": 5,
+      "winRate": 1,
+      "pickRate": 0.125,
+      "banRate": 0.05,
+      "games": 1,
+      "wins": 1,
+      "wilsonScore": 0.2065
+    }
+  },
+  "augments": [
+    {
+      "id": 2095,
+      "name": "掷骰狂人",
+      "key": "high-roller",
+      "rarity": 2,
+      "rarityName": "prismatic",
+      "rarityDisplayName": "棱彩",
+      "iconUrl": "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/perk-icons/2095.png",
+      "stats": {
+        "rank": 1,
+        "winRate": 1,
+        "pickRate": 1,
+        "games": 1,
+        "wins": 1,
+        "hexScore": 41.8,
+        "netDelta": 0,
+        "wilsonLower": 0.2065
+      }
+    }
+  ],
+  "trios": [],
+  "builds": [
+    {
+      "title": "核心推荐流派",
+      "stats": {
+        "games": 1,
+        "wins": 1,
+        "winRate": 1
+      },
+      "coreItems": [
+        3031,
+        3085,
+        3036
+      ],
+      "startingItems": [
+        {
+          "itemIds": [
+            1055,
+            2003
+          ],
+          "games": 0
+        }
+      ],
+      "summonerSpells": [
+        {
+          "summonerSpellIds": [
+            4,
+            7
+          ],
+          "games": 1,
+          "wins": 1,
+          "winRate": 1,
+          "pickRate": 1
+        }
+      ],
+      "skillOrders": [
+        {
+          "order": [
+            "Q",
+            "W",
+            "E",
+            "Q",
+            "Q",
+            "R",
+            "Q",
+            "W",
+            "Q",
+            "W",
+            "R",
+            "W",
+            "W",
+            "E",
+            "E"
+          ],
+          "mastery": "主Q副W",
+          "winRate": 1,
+          "games": 0
+        }
+      ],
+      "situationalItems": [
+        {
+          "id": 3036,
+          "distinctiveScore": 82.5,
+          "netDelta": 0.035,
+          "games": 15200
+        },
+        {
+          "id": 3072,
+          "distinctiveScore": 78,
+          "netDelta": 0.021,
+          "games": 12400
+        },
+        {
+          "id": 3814,
+          "distinctiveScore": 74.2,
+          "netDelta": 0.015,
+          "games": 8900
+        }
+      ]
+    }
+  ]
+}

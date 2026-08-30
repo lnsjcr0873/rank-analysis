@@ -1,8 +1,8 @@
 {
   "version": "mayhem-2026-08-30-v1",
   "date": "2026-08-30",
-  "patch": "16.16",
-  "count": 3,
+  "patch": "16.17",
+  "count": 5,
   "champions": [
     {
       "id": 67,
@@ -17,12 +17,35 @@
       "stats": {
         "tier": 1,
         "rank": 1,
-        "total": 172,
-        "winRate": 0.578,
+        "total": 5,
+        "winRate": 1,
+        "pickRate": 0.25,
+        "banRate": 0.05,
+        "games": 2,
+        "wins": 2,
+        "wilsonScore": 0.3424
+      }
+    },
+    {
+      "id": 202,
+      "name": "Jhin",
+      "title": "戏命师",
+      "alias": "烬",
+      "roles": [
+        "marksman",
+        "mage"
+      ],
+      "iconUrl": "https://ddragon.leagueoflegends.com/cdn/14.16.1/img/champion/Jhin.png",
+      "stats": {
+        "tier": 1,
+        "rank": 2,
+        "total": 5,
+        "winRate": 1,
         "pickRate": 0.125,
-        "banRate": 0.082,
-        "games": 1720638,
-        "wins": 994528
+        "banRate": 0.05,
+        "games": 1,
+        "wins": 1,
+        "wilsonScore": 0.2065
       }
     },
     {
@@ -35,14 +58,15 @@
       ],
       "iconUrl": "https://ddragon.leagueoflegends.com/cdn/14.16.1/img/champion/Graves.png",
       "stats": {
-        "tier": 1,
-        "rank": 2,
-        "total": 172,
-        "winRate": 0.574,
-        "pickRate": 0.118,
-        "banRate": 0.065,
-        "games": 1618013,
-        "wins": 928739
+        "tier": 2,
+        "rank": 3,
+        "total": 5,
+        "winRate": 0.5,
+        "pickRate": 0.25,
+        "banRate": 0.05,
+        "games": 2,
+        "wins": 1,
+        "wilsonScore": 0.0945
       }
     },
     {
@@ -56,14 +80,37 @@
       ],
       "iconUrl": "https://ddragon.leagueoflegends.com/cdn/14.16.1/img/champion/Gwen.png",
       "stats": {
-        "tier": 1,
+        "tier": 2,
+        "rank": 4,
+        "total": 5,
+        "winRate": 0.5,
+        "pickRate": 0.25,
+        "banRate": 0.05,
+        "games": 2,
+        "wins": 1,
+        "wilsonScore": 0.0945
+      }
+    },
+    {
+      "id": 157,
+      "name": "Yasuo",
+      "title": "疾风剑豪",
+      "alias": "亚索",
+      "roles": [
+        "fighter",
+        "assassin"
+      ],
+      "iconUrl": "https://ddragon.leagueoflegends.com/cdn/14.16.1/img/champion/Yasuo.png",
+      "stats": {
+        "tier": 4,
         "rank": 5,
-        "total": 172,
-        "winRate": 0.56,
-        "pickRate": 0.085,
-        "banRate": 0.042,
-        "games": 479030,
-        "wins": 268256
+        "total": 5,
+        "winRate": 0,
+        "pickRate": 0.125,
+        "banRate": 0.05,
+        "games": 1,
+        "wins": 0,
+        "wilsonScore": 0
       }
     }
   ]

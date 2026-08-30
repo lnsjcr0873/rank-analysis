@@ -1,12 +1,12 @@
 {
   "version": "mayhem-2026-08-30-v1",
   "date": "2026-08-30",
-  "patch": "16.16",
-  "count": 2,
+  "patch": "16.17",
+  "count": 4,
   "augments": [
     {
       "id": 2095,
-      "name": "High Roller",
+      "name": "掷骰狂人",
       "key": "high-roller",
       "rarity": 2,
       "rarityName": "prismatic",
@@ -17,19 +17,108 @@
       "statsAvailable": true,
       "stats": {
         "tier": 1,
-        "wins": 85200,
-        "games": 153800,
-        "winRate": 0.554,
-        "pickRate": 0.22,
+        "wins": 4,
+        "games": 4,
+        "winRate": 1,
+        "pickRate": 0.05,
         "rank": 1,
-        "total": 208
+        "total": 4,
+        "wilsonLower": 0.5101
       },
-      "stages": [],
-      "topChampions": []
+      "topChampions": [
+        {
+          "championId": 67,
+          "games": 1,
+          "winRate": 1
+        },
+        {
+          "championId": 104,
+          "games": 1,
+          "winRate": 1
+        },
+        {
+          "championId": 202,
+          "games": 1,
+          "winRate": 1
+        },
+        {
+          "championId": 887,
+          "games": 1,
+          "winRate": 1
+        }
+      ]
+    },
+    {
+      "id": 1220,
+      "name": "连拨击锤",
+      "key": "fan-the-hammer",
+      "rarity": 2,
+      "rarityName": "prismatic",
+      "rarityDisplayName": "棱彩",
+      "iconUrl": "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/perk-icons/1220.png",
+      "enabled": true,
+      "description": "暴击时提供超高攻击速度加成，持续 3 秒。",
+      "statsAvailable": true,
+      "stats": {
+        "tier": 1,
+        "wins": 2,
+        "games": 2,
+        "winRate": 1,
+        "pickRate": 0.025,
+        "rank": 2,
+        "total": 4,
+        "wilsonLower": 0.3424
+      },
+      "topChampions": [
+        {
+          "championId": 104,
+          "games": 1,
+          "winRate": 1
+        },
+        {
+          "championId": 67,
+          "games": 1,
+          "winRate": 1
+        }
+      ]
+    },
+    {
+      "id": 1225,
+      "name": "双刀流",
+      "key": "dual-wield",
+      "rarity": 2,
+      "rarityName": "prismatic",
+      "rarityDisplayName": "棱彩",
+      "iconUrl": "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/perk-icons/1225.png",
+      "enabled": true,
+      "description": "每次攻击附带额外一次打击，大幅提升攻击特效频率。",
+      "statsAvailable": true,
+      "stats": {
+        "tier": 1,
+        "wins": 2,
+        "games": 3,
+        "winRate": 0.6667,
+        "pickRate": 0.0375,
+        "rank": 3,
+        "total": 4,
+        "wilsonLower": 0.2077
+      },
+      "topChampions": [
+        {
+          "championId": 67,
+          "games": 2,
+          "winRate": 1
+        },
+        {
+          "championId": 157,
+          "games": 1,
+          "winRate": 0
+        }
+      ]
     },
     {
       "id": 1134,
-      "name": "Draw Your Sword",
+      "name": "拔枪出鞘",
       "key": "draw-your-sword",
       "rarity": 2,
       "rarityName": "prismatic",
@@ -39,16 +128,27 @@
       "description": "远程英雄获得高额攻击力与攻速加成，但攻击距离缩短为近战。",
       "statsAvailable": true,
       "stats": {
-        "tier": 1,
-        "wins": 42100,
-        "games": 70500,
-        "winRate": 0.597,
-        "pickRate": 0.15,
-        "rank": 2,
-        "total": 208
+        "tier": 5,
+        "wins": 0,
+        "games": 2,
+        "winRate": 0,
+        "pickRate": 0.025,
+        "rank": 4,
+        "total": 4,
+        "wilsonLower": 0
       },
-      "stages": [],
-      "topChampions": []
+      "topChampions": [
+        {
+          "championId": 887,
+          "games": 1,
+          "winRate": 0
+        },
+        {
+          "championId": 104,
+          "games": 1,
+          "winRate": 0
+        }
+      ]
     }
   ]
 }
