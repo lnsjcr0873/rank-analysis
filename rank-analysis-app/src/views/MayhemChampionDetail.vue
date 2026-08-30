@@ -247,6 +247,7 @@ import {
   type SituationalItem
 } from '../features/mayhem/services/mayhemData'
 import { useMayhemStore } from '../features/mayhem/stores/mayhemStore'
+import { getAramChampionBuilds } from '@renderer/services/opgg'
 
 const ROLE_LABELS: Record<string, string> = {
   tank: '坦克',
@@ -473,6 +474,41 @@ async function load() {
         id: championId.value
       }).catch(() => null)
       balanceTags.value = buildBalanceTags(balance)
+
+      // 🌟 深度数据融合：若狂暴大乱斗数据中缺少加点时序或召唤师技能，自动通过 OP.GG ARAM 官方深度库融合
+      const opggAram = await getAramChampionBuilds(championId.value).catch(() => null)
+      if (opggAram && detail.value.builds?.length) {
+        for (const b of detail.value.builds) {
+          if (!b.skillOrders?.length && opggAram.skillMasteries?.length) {
+            b.skillOrders = opggAram.skillMasteries.map(sm => ({
+              skillOrder: sm.ids.map(k => (k === 'Q' ? 1 : k === 'W' ? 2 : k === 'E' ? 3 : 4)),
+              skillKeys: sm.ids,
+              games: Number(sm.play),
+              wins: Number(sm.win),
+              winRate: sm.win / Math.max(sm.play, 1),
+              pickRate: sm.pickRate
+            }))
+          }
+          if (!b.summonerSpells?.length && opggAram.summonerSpells?.length) {
+            b.summonerSpells = opggAram.summonerSpells.map(ss => ({
+              summonerSpellIds: ss.ids,
+              games: Number(ss.play),
+              wins: Number(ss.win),
+              winRate: ss.win / Math.max(ss.play, 1),
+              pickRate: ss.pickRate
+            }))
+          }
+          if (!b.startingItems?.length && opggAram.starterItems?.length) {
+            b.startingItems = opggAram.starterItems.map(st => ({
+              itemIds: st.ids,
+              games: Number(st.play),
+              wins: Number(st.win),
+              winRate: st.win / Math.max(st.play, 1),
+              pickRate: st.pickRate
+            }))
+          }
+        }
+      }
     } else {
       error.value = '暂未查询到该英雄的大乱斗数据（可能尚未同步或上游未覆盖）'
     }

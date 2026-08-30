@@ -280,3 +280,74 @@ export function findCounterHints(
 
   return result
 }
+
+export interface AramItemEntry {
+  ids: number[]
+  play: number
+  win: number
+  pickRate: number
+}
+
+export interface AramRuneEntry {
+  id: number
+  primaryPageId: number
+  primaryRuneIds: number[]
+  secondaryPageId: number
+  secondaryRuneIds: number[]
+  statModIds: number[]
+  play: number
+  win: number
+  pickRate: number
+}
+
+export interface AramSkillOrder {
+  order: string[]
+  play: number
+  win: number
+  pickRate: number
+}
+
+export interface AramSkillMastery {
+  ids: string[]
+  play: number
+  win: number
+  pickRate: number
+  builds: AramSkillOrder[]
+}
+
+export interface AramGameLength {
+  gameLength: number
+  rate: number
+  average: number
+  rank: number
+}
+
+export interface AramChampionBuilds {
+  championId: number
+  version: string
+  summonerSpells: AramItemEntry[]
+  starterItems: AramItemEntry[]
+  coreItems: AramItemEntry[]
+  lastItems: AramItemEntry[]
+  boots: AramItemEntry[]
+  runes: AramRuneEntry[]
+  skillMasteries: AramSkillMastery[]
+  skills: AramSkillOrder[]
+  gameLengths: AramGameLength[]
+}
+
+/**
+ * 查指定英雄在 ARAM 模式下的详细出装、技能升级时序与符文配置
+ */
+export async function getAramChampionBuilds(
+  championId: number
+): Promise<AramChampionBuilds | null> {
+  try {
+    return (await invoke('get_aram_champion_builds', {
+      championId
+    })) as AramChampionBuilds
+  } catch (e) {
+    console.warn(`[opgg] getAramChampionBuilds failed for champ ${championId}:`, e)
+    return null
+  }
+}

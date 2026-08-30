@@ -8,15 +8,49 @@
 //! 过期缓存（标 `stale=true`）→ 全无则 Err。数据缺失不应阻塞任何上层功能，
 //! 前端拿到 Err/None 时隐藏相关 UI、AI prompt 跳过版本情报块即可。
 
-use crate::opgg::data::{ChampionMeta, LaneCounter, OpggSnapshot};
+use crate::opgg::data::{AramChampionBuilds, ChampionMeta, LaneCounter, OpggSnapshot};
 use crate::opgg::intel::ChampionIntel;
 use crate::opgg::{api, cache, intel};
 use crate::state::AppState;
 use serde::Serialize;
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::State;
+
+/// 缓存单英雄 ARAM 出装与加点数据
+static ARAM_BUILDS_CACHE: LazyLock<tokio::sync::RwLock<HashMap<i64, (i64, AramChampionBuilds)>>> =
+    LazyLock::new(|| tokio::sync::RwLock::new(HashMap::new()));
+
+/// 查指定英雄在 ARAM 模式下的详细出装与加点数据（带 1 小时内存缓存）
+#[tauri::command]
+pub async fn get_aram_champion_builds(champion_id: i64) -> Result<AramChampionBuilds, String> {
+    let now = now_secs();
+    {
+        let cache = ARAM_BUILDS_CACHE.read().await;
+        if let Some((fetched_at, builds)) = cache.get(&champion_id) {
+            if now - fetched_at < 3600 {
+                return Ok(builds.clone());
+            }
+        }
+    }
+
+    match api::fetch_aram_champion_builds(champion_id).await {
+        Ok(builds) => {
+            let mut cache = ARAM_BUILDS_CACHE.write().await;
+            cache.insert(champion_id, (now, builds.clone()));
+            Ok(builds)
+        }
+        Err(e) => {
+            // 降级：如果拉取失败，尝试使用可能过期的旧缓存
+            let cache = ARAM_BUILDS_CACHE.read().await;
+            if let Some((_, builds)) = cache.get(&champion_id) {
+                return Ok(builds.clone());
+            }
+            Err(e)
+        }
+    }
+}
 
 /// 允许的模式白名单。
 const VALID_MODES: [&str; 2] = ["ranked", "aram"];

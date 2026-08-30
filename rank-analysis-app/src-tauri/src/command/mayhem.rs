@@ -186,6 +186,14 @@ pub fn mayhem_personal_augment_stats(champion_id: Option<i32>) -> Result<Vec<Aug
     Ok(db::personal_augment_stats(champion_id))
 }
 
+/// 全量 10 人众包自采海克斯强化胜率统计（带 Wilson 95% 置信下界修正）。
+#[tauri::command]
+pub fn mayhem_crowdsourced_augment_stats(
+    champion_id: Option<i32>,
+) -> Result<Vec<db::GlobalAugmentStat>, String> {
+    Ok(db::crowdsourced_augment_stats(champion_id))
+}
+
 /// 版本变动日志（新 → 旧）；首次同步前为空表。
 #[tauri::command]
 pub fn mayhem_version_changes() -> Result<Vec<crate::mayhem::store::VersionChange>, String> {

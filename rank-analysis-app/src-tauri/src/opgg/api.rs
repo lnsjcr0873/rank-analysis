@@ -1,6 +1,9 @@
 //! OP.GG 内部 API 客户端：响应解析（HTTP 拉取见 `fetch_mode`，Task 3 添加）。
 
-use crate::opgg::data::{normalize_position, ChampionMeta, LaneCounter, OpggSnapshot};
+use crate::opgg::data::{
+    normalize_position, AramChampionBuilds, AramGameLength, AramItemEntry, AramRuneEntry,
+    AramSkillMastery, AramSkillOrder, ChampionMeta, LaneCounter, OpggSnapshot,
+};
 use reqwest::Client;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -58,6 +61,68 @@ struct RawResponse {
 #[derive(Deserialize)]
 struct RawMeta {
     version: String,
+}
+
+#[derive(Deserialize)]
+struct RawAramBuildsResponse {
+    data: RawAramBuildsData,
+    meta: RawMeta,
+}
+
+#[derive(Deserialize)]
+struct RawAramBuildsData {
+    #[serde(default)]
+    summoner_spells: Vec<AramItemEntry>,
+    #[serde(default)]
+    starter_items: Vec<AramItemEntry>,
+    #[serde(default)]
+    core_items: Vec<AramItemEntry>,
+    #[serde(default)]
+    last_items: Vec<AramItemEntry>,
+    #[serde(default)]
+    boots: Vec<AramItemEntry>,
+    #[serde(default)]
+    runes: Vec<AramRuneEntry>,
+    #[serde(default)]
+    skill_masteries: Vec<AramSkillMastery>,
+    #[serde(default)]
+    skills: Vec<AramSkillOrder>,
+    #[serde(default)]
+    game_lengths: Vec<AramGameLength>,
+}
+
+/// 拉取指定英雄在 ARAM 模式下的详细出装与加点数据
+pub async fn fetch_aram_champion_builds(champion_id: i64) -> Result<AramChampionBuilds, String> {
+    let url = format!("{}/aram/{}/builds?position=none", BASE_URL, champion_id);
+    log::info!("Fetching OP.GG ARAM champion builds: {}", url);
+
+    let client = Client::builder()
+        .user_agent(USER_AGENT)
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let resp = client.get(&url).send().await.map_err(|e| e.to_string())?;
+    if !resp.status().is_success() {
+        return Err(format!("OP.GG ARAM builds returned status {}", resp.status()));
+    }
+    let body = resp.text().await.map_err(|e| e.to_string())?;
+    let raw: RawAramBuildsResponse = serde_json::from_str(&body)
+        .map_err(|e| format!("OP.GG ARAM builds parse error: {}", e))?;
+
+    Ok(AramChampionBuilds {
+        champion_id: champion_id as i32,
+        version: raw.meta.version,
+        summoner_spells: raw.data.summoner_spells,
+        starter_items: raw.data.starter_items,
+        core_items: raw.data.core_items,
+        last_items: raw.data.last_items,
+        boots: raw.data.boots,
+        runes: raw.data.runes,
+        skill_masteries: raw.data.skill_masteries,
+        skills: raw.data.skills,
+        game_lengths: raw.data.game_lengths,
+    })
 }
 
 #[derive(Deserialize)]

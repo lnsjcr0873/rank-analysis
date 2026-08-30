@@ -81,3 +81,77 @@ pub fn normalize_position(opgg_name: &str) -> String {
         other => other.to_string(),
     }
 }
+
+/// 某英雄在 ARAM 模式下的单项物品/技能组条目（召唤师技能/出门装/核心装/鞋子/针对装）
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AramItemEntry {
+    pub ids: Vec<i32>,
+    pub play: i64,
+    pub win: i64,
+    pub pick_rate: f64,
+}
+
+/// 某英雄在 ARAM 模式下的完整符文配置（主系+副系+属性碎片）
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AramRuneEntry {
+    pub id: i32,
+    pub primary_page_id: i32,
+    pub primary_rune_ids: Vec<i32>,
+    pub secondary_page_id: i32,
+    pub secondary_rune_ids: Vec<i32>,
+    pub stat_mod_ids: Vec<i32>,
+    pub play: i64,
+    pub win: i64,
+    pub pick_rate: f64,
+}
+
+/// 1~15 级具体技能升级路线
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AramSkillOrder {
+    pub order: Vec<String>,
+    pub play: i64,
+    pub win: i64,
+    pub pick_rate: f64,
+}
+
+/// 技能主加顺序（如 W-Q-E）及附属升级路线
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AramSkillMastery {
+    pub ids: Vec<String>,
+    pub play: i64,
+    pub win: i64,
+    pub pick_rate: f64,
+    #[serde(default)]
+    pub builds: Vec<AramSkillOrder>,
+}
+
+/// 游戏时长区间胜率（如 25m / 30m / 35m）
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AramGameLength {
+    pub game_length: i32,
+    pub rate: f64,
+    pub average: f64,
+    pub rank: i32,
+}
+
+/// ARAM 单英雄深度出装与加点全量数据
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AramChampionBuilds {
+    pub champion_id: i32,
+    pub version: String,
+    pub summoner_spells: Vec<AramItemEntry>,
+    pub starter_items: Vec<AramItemEntry>,
+    pub core_items: Vec<AramItemEntry>,
+    pub last_items: Vec<AramItemEntry>,
+    pub boots: Vec<AramItemEntry>,
+    pub runes: Vec<AramRuneEntry>,
+    pub skill_masteries: Vec<AramSkillMastery>,
+    pub skills: Vec<AramSkillOrder>,
+    pub game_lengths: Vec<AramGameLength>,
+}

@@ -315,6 +315,83 @@ fn augment_stats_in(
     Ok(out)
 }
 
+/// 计算 Wilson 95% 置信下界（Wilson Score Lower Bound, z = 1.96）
+pub fn wilson_score_lower(wins: i64, total: i64) -> f64 {
+    if total <= 0 {
+        return 0.0;
+    }
+    let n = total as f64;
+    let p = (wins as f64) / n;
+    let z = 1.95996; // 95% 置信度
+    let z2 = z * z;
+
+    let numerator = p + (z2 / (2.0 * n)) - z * ((p * (1.0 - p) / n + z2 / (4.0 * n * n)).max(0.0).sqrt());
+    let denominator = 1.0 + (z2 / n);
+    (numerator / denominator).max(0.0).min(1.0)
+}
+
+/// 全量 10 人众包海克斯强化胜率统计（带 Wilson 95% 置信度）
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GlobalAugmentStat {
+    pub augment_id: i64,
+    pub games: i64,
+    pub wins: i64,
+    pub win_rate: f64,
+    pub wilson_lower: f64,
+}
+
+fn global_augment_stats_in(
+    conn: &Connection,
+    champion_id: Option<i32>,
+) -> rusqlite::Result<Vec<GlobalAugmentStat>> {
+    let mut stmt = conn.prepare(if champion_id.is_some() {
+        "SELECT augments_json, win FROM players WHERE champion_id = ?1"
+    } else {
+        "SELECT augments_json, win FROM players"
+    })?;
+    let bind = champion_id.unwrap_or_default();
+    let mut rows = if champion_id.is_some() {
+        stmt.query(params![bind])?
+    } else {
+        stmt.query([])?
+    };
+
+    let mut acc: std::collections::HashMap<i64, (i64, i64)> = std::collections::HashMap::new();
+    while let Some(row) = rows.next()? {
+        let json: String = row.get(0)?;
+        let win: i64 = row.get(1)?;
+        let Ok(list) = serde_json::from_str::<Vec<i64>>(&json) else {
+            continue;
+        };
+        for id in list {
+            if id <= 0 {
+                continue;
+            }
+            let e = acc.entry(id).or_insert((0, 0));
+            e.0 += 1;
+            e.1 += win;
+        }
+    }
+
+    let mut out: Vec<GlobalAugmentStat> = acc
+        .into_iter()
+        .map(|(augment_id, (games, wins))| {
+            let win_rate = if games > 0 { (wins as f64) / (games as f64) } else { 0.0 };
+            let wilson_lower = wilson_score_lower(wins, games);
+            GlobalAugmentStat {
+                augment_id,
+                games,
+                wins,
+                win_rate,
+                wilson_lower,
+            }
+        })
+        .collect();
+    out.sort_by(|a, b| b.wilson_lower.partial_cmp(&a.wilson_lower).unwrap_or(std::cmp::Ordering::Equal));
+    Ok(out)
+}
+
 // ---------------------------------------------------------------------------
 // 全局入口（command 层调用）
 // ---------------------------------------------------------------------------
@@ -327,6 +404,11 @@ pub fn personal_champion_stats() -> Vec<ChampionAgg> {
 /// 本人强化聚合；`champion_id` 过滤单一英雄。
 pub fn personal_augment_stats(champion_id: Option<i32>) -> Vec<AugmentAgg> {
     with_db(|conn| augment_stats_in(conn, champion_id)).unwrap_or_default()
+}
+
+/// 全量 10 人众包自采强化聚合（带 Wilson 95% 置信度）；`champion_id` 过滤单一英雄。
+pub fn crowdsourced_augment_stats(champion_id: Option<i32>) -> Vec<GlobalAugmentStat> {
+    with_db(|conn| global_augment_stats_in(conn, champion_id)).unwrap_or_default()
 }
 
 #[cfg(test)]
