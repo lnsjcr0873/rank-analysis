@@ -91,6 +91,16 @@ pub fn mayhem_status() -> Result<MayhemStatus, String> {
                             {
                                 active_version = Some(name.to_string());
                                 ready = true;
+                                let _ = crate::mayhem::store::write_pointer_atomic_in(
+                                    &root,
+                                    &crate::mayhem::store::ActivePointer {
+                                        data_version: name.to_string(),
+                                        synced_at: std::time::SystemTime::now()
+                                            .duration_since(std::time::UNIX_EPOCH)
+                                            .map(|d| d.as_secs() as i64)
+                                            .unwrap_or(0),
+                                    },
+                                );
                                 break;
                             }
                         }
@@ -290,9 +300,34 @@ pub async fn mayhem_capture_band_stats() -> Result<Vec<crate::mayhem::capture::B
 pub async fn mayhem_draft_context() -> Result<Option<Value>, String> {
     let session = match crate::lcu::api::champion_select::get_champion_select_session().await {
         Ok(s) => s,
-        // 非选人阶段是该命令的正常失败路径，静默转 None
+        // 非选人阶段（如已进入 GameStart / InProgress）：尝试从 gameflow 会话中回退构建手牌英雄信息
         Err(e) => {
             log::debug!("[mayhem] 获取选人会话失败 (可能非选人期): {}", e);
+            if let Ok(gf_session) = crate::lcu::api::session::Session::get_session().await {
+                let queue_id = gf_session.game_data.queue.id;
+                if [2400, 2410, 2450].contains(&queue_id) {
+                    let my_team: Vec<Value> = gf_session
+                        .game_data
+                        .team_one
+                        .iter()
+                        .map(|p| {
+                            serde_json::json!({
+                                "championId": p.champion_id,
+                                "championPickIntent": 0,
+                                "cellId": 0,
+                                "puuid": p.puuid,
+                                "assignedPosition": p.assigned_position,
+                            })
+                        })
+                        .collect();
+                    return Ok(Some(serde_json::json!({
+                        "queueId": queue_id,
+                        "localCellId": 0,
+                        "myTeam": my_team,
+                        "bench": Vec::<i32>::new(),
+                    })));
+                }
+            }
             return Ok(None);
         }
     };

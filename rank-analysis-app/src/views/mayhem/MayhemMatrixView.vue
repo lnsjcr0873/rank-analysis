@@ -232,9 +232,11 @@ watch(
     if (cid) {
       const num = Number(cid)
       if (Number.isFinite(num) && num > 0) {
-        selectedId.value = num
-        mayhemStore.selectedChampionId = num
-        clickStamp.value = Date.now()
+        if (selectedId.value !== num) {
+          selectedId.value = num
+          mayhemStore.selectedChampionId = num
+          clickStamp.value = Date.now()
+        }
       }
     }
   },
@@ -248,13 +250,15 @@ watch(
       if (route.query.championId) {
         const num = Number(route.query.championId)
         if (Number.isFinite(num) && num > 0) {
-          selectedId.value = num
-          mayhemStore.selectedChampionId = num
-          clickStamp.value = Date.now()
+          if (selectedId.value !== num) {
+            selectedId.value = num
+            mayhemStore.selectedChampionId = num
+            clickStamp.value = Date.now()
+          }
           return
         }
       }
-      if (!selectedId.value) {
+      if (!selectedId.value && champions.value.length > 0) {
         selectedId.value = champions.value[0].id
         clickStamp.value = Date.now()
       }

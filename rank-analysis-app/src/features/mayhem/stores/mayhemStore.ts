@@ -135,12 +135,12 @@ export const useMayhemStore = defineStore('mayhem', () => {
     try {
       status.value = await getMayhemStatus()
       if ((!status.value?.ready || !champions.value.length) && !syncing.value) {
-        await sync(true)
+        await sync(false)
       }
     } catch (e) {
       console.warn('[mayhemStore] getMayhemStatus failed:', e)
       if (!champions.value.length && !syncing.value) {
-        await sync(true)
+        await sync(false)
       }
     }
   }
@@ -187,8 +187,10 @@ export const useMayhemStore = defineStore('mayhem', () => {
     syncing.value = true
     error.value = ''
     try {
-      await syncMayhemData(force)
-      detailCache.clear()
+      const report = await syncMayhemData(force)
+      if (report || force) {
+        detailCache.clear()
+      }
       await Promise.all([loadChampions(true), loadAugments(true)])
       status.value = await getMayhemStatus()
     } catch (e) {

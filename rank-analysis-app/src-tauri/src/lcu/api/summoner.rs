@@ -22,6 +22,9 @@ pub struct Summoner {
 static SUMMONER_CACHE: LazyLock<Cache<String, Summoner>> =
     LazyLock::new(|| Cache::builder().max_capacity(500).build());
 
+static MY_SUMMONER_CACHE: LazyLock<tokio::sync::RwLock<Option<Summoner>>> =
+    LazyLock::new(|| tokio::sync::RwLock::new(None));
+
 impl Summoner {
     /// 按 PUUID 获取召唤师信息（带缓存）。
     pub async fn get_summoner_by_puuid(puuid: &str) -> Result<Self, String> {
@@ -54,7 +57,24 @@ impl Summoner {
 
     /// 获取当前登录客户端的召唤师信息。
     pub async fn get_my_summoner() -> Result<Self, String> {
-        let summoner = lcu_get::<Self>("lol-summoner/v1/current-summoner").await?;
-        Ok(summoner)
+        match lcu_get::<Self>("lol-summoner/v1/current-summoner").await {
+            Ok(summoner) => {
+                let mut lock = MY_SUMMONER_CACHE.write().await;
+                *lock = Some(summoner.clone());
+                Ok(summoner)
+            }
+            Err(e) => {
+                let lock = MY_SUMMONER_CACHE.read().await;
+                if let Some(ref cached) = *lock {
+                    log::debug!(
+                        "[summoner] current-summoner request failed, using cached summoner: {}",
+                        e
+                    );
+                    Ok(cached.clone())
+                } else {
+                    Err(e)
+                }
+            }
+        }
     }
 }

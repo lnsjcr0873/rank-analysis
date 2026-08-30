@@ -78,11 +78,31 @@ pub struct OnePlayer {
     pub assigned_position: String,
 }
 
+static SESSION_CACHE: std::sync::LazyLock<tokio::sync::RwLock<Option<Session>>> =
+    std::sync::LazyLock::new(|| tokio::sync::RwLock::new(None));
+
 impl Session {
     /// 请求 LCU 当前对局会话（`lol-gameflow/v1/session`）。
     pub async fn get_session() -> Result<Self, String> {
         let uri = "lol-gameflow/v1/session";
-        let session: Self = crate::lcu::util::http::lcu_get(uri).await?;
-        Ok(session)
+        match crate::lcu::util::http::lcu_get::<Self>(uri).await {
+            Ok(session) => {
+                let mut lock = SESSION_CACHE.write().await;
+                *lock = Some(session.clone());
+                Ok(session)
+            }
+            Err(e) => {
+                let lock = SESSION_CACHE.read().await;
+                if let Some(ref cached) = *lock {
+                    log::debug!(
+                        "[session] get_session request failed, using cached session: {}",
+                        e
+                    );
+                    Ok(cached.clone())
+                } else {
+                    Err(e)
+                }
+            }
+        }
     }
 }

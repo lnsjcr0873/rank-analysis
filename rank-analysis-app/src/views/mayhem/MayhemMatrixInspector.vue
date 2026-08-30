@@ -213,8 +213,15 @@ function preloadNames(entry: ChampionDetailEntry) {
   ])
 }
 
+let currentRequestId = 0
+
 async function loadDetail(id: number, force = false) {
-  if (!id) return
+  if (!id) {
+    detail.value = null
+    loading.value = false
+    return
+  }
+  const reqId = ++currentRequestId
   loading.value = true
   error.value = ''
   try {
@@ -222,6 +229,7 @@ async function loadDetail(id: number, force = false) {
     if (!data) {
       data = await getMayhemChampionDetail(id)
     }
+    if (reqId !== currentRequestId) return
     detail.value = data
     if (data) {
       preloadNames(data)
@@ -229,17 +237,27 @@ async function loadDetail(id: number, force = false) {
         const rawBalance = await invoke<AramBalanceData | null>('get_aram_balance', {
           id
         }).catch(() => null)
-        balanceTags.value = buildBalanceTags(rawBalance)
+        if (reqId === currentRequestId) {
+          balanceTags.value = buildBalanceTags(rawBalance)
+        }
       } catch {
-        balanceTags.value = []
+        if (reqId === currentRequestId) {
+          balanceTags.value = []
+        }
       }
     } else {
-      error.value = '暂未查询到该英雄的大乱斗详情数据'
+      if (reqId === currentRequestId) {
+        error.value = '暂未查询到该英雄的大乱斗详情数据'
+      }
     }
   } catch (e) {
-    error.value = `加载详情失败：${String(e)}`
+    if (reqId === currentRequestId) {
+      error.value = `加载详情失败：${String(e)}`
+    }
   } finally {
-    loading.value = false
+    if (reqId === currentRequestId) {
+      loading.value = false
+    }
   }
 }
 
