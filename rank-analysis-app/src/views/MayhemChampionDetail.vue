@@ -82,7 +82,10 @@
               />
               <span class="daug__name">{{ augNameOf(a.id) }}</span>
               <span class="ararity" :class="`rr-${a.rarityName}`">{{ a.rarityDisplayName }}</span>
-              <span class="daug__score" :class="augHexScore(a) >= 80 ? 'gold' : augHexScore(a) >= 65 ? 'blue' : 'gray'">
+              <span
+                class="daug__score"
+                :class="augHexScore(a) >= 80 ? 'gold' : augHexScore(a) >= 65 ? 'blue' : 'gray'"
+              >
                 Score {{ augHexScore(a) }}
               </span>
               <span class="daug__wr">{{ pct(a.stats.winRate) }}</span>
@@ -379,7 +382,7 @@ function augDelta(a: DetailAugment): number {
 
 function augHexScore(a: DetailAugment): number {
   const delta = augDelta(a)
-  const games = a.stats.games ?? (a.stats.winRateMinimumGames ?? 255)
+  const games = a.stats.games ?? a.stats.winRateMinimumGames ?? 255
   const sampleBonus = Math.min(Math.log10(games + 1) * 6, 25)
   const score = Math.min(99.9, Math.max(25.0, 50.0 + delta * 450 + (sampleBonus - 10)))
   return Number(score.toFixed(1))

@@ -1075,7 +1075,8 @@ function onCopySummary() {
           />
         </div>
         <div class="mtb-stats">
-          已聚合 <strong>{{ filteredItemRankings.length }}</strong> 件装备 · 包含 <strong>HexScore 综合评分</strong>、独立胜率与净贡献
+          已聚合 <strong>{{ filteredItemRankings.length }}</strong> 件装备 · 包含
+          <strong>HexScore 综合评分</strong>、独立胜率与净贡献
         </div>
       </div>
 
@@ -1184,12 +1185,18 @@ function onCopySummary() {
                 </span>
               </td>
               <td class="td-num">
-                <span class="val-wr" :class="{ high: item.winRate >= 0.54, low: item.winRate < 0.48 }">
+                <span
+                  class="val-wr"
+                  :class="{ high: item.winRate >= 0.54, low: item.winRate < 0.48 }"
+                >
                   {{ pct(item.winRate) }}
                 </span>
               </td>
               <td class="td-num">
-                <span class="val-delta" :class="{ pos: item.netDelta >= 0, neg: item.netDelta < 0 }">
+                <span
+                  class="val-delta"
+                  :class="{ pos: item.netDelta >= 0, neg: item.netDelta < 0 }"
+                >
                   {{ fmtDelta(item.netDelta) }}
                 </span>
               </td>
