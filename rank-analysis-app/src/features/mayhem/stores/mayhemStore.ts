@@ -134,13 +134,16 @@ export const useMayhemStore = defineStore('mayhem', () => {
 
     try {
       status.value = await getMayhemStatus()
-      if ((!status.value?.ready || !champions.value.length) && !syncing.value) {
+      if (!champions.value.length && !syncing.value) {
         await sync(false)
+      } else if (!status.value?.ready && !syncing.value) {
+        // 本地已有数据时后台静默同步，绝不阻塞首屏与详情渲染
+        void sync(false).catch(err => console.warn('[mayhemStore] background sync error:', err))
       }
     } catch (e) {
       console.warn('[mayhemStore] getMayhemStatus failed:', e)
       if (!champions.value.length && !syncing.value) {
-        await sync(false)
+        void sync(false).catch(() => {})
       }
     }
   }

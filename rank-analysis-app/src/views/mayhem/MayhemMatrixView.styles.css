@@ -30,9 +30,9 @@
 }
 
 .role-pill {
-  background: var(--bg-card, #161c2b);
-  border: 1px solid var(--brand-border, #232c40);
-  color: var(--text-secondary, #8b96ad);
+  background: var(--bg-surface, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1));
+  color: var(--text-secondary, rgba(255, 255, 255, 0.7));
   padding: 4px 12px;
   border-radius: 14px;
   font-size: 11px;
@@ -42,8 +42,9 @@
 }
 
 .role-pill:hover {
-  color: #fff;
-  border-color: var(--text-secondary, #8b96ad);
+  color: var(--text-primary, #fff);
+  border-color: var(--brand-border, rgba(212, 165, 72, 0.4));
+  background: var(--bg-hover, rgba(255, 255, 255, 0.08));
 }
 
 .role-pill.active {
@@ -63,12 +64,12 @@
   position: absolute;
   left: 8px;
   font-size: 11px;
-  color: var(--text-muted, #5a657e);
+  color: var(--text-muted, var(--text-tertiary, #5a657e));
 }
 
 .matrix-search-input {
-  background: var(--bg-sunken, #0a0d14);
-  border: 1px solid var(--brand-border, #232c40);
+  background: var(--bg-sunken, rgba(0, 0, 0, 0.2));
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1));
   border-radius: 6px;
   padding: 4px 10px 4px 26px;
   color: var(--text-primary, #fff);

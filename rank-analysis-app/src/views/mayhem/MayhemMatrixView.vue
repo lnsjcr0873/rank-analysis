@@ -149,6 +149,11 @@ onMounted(async () => {
   if (!mayhemStore.champions.length) {
     await mayhemStore.loadChampions()
   }
+  if (!selectedId.value && mayhemStore.champions.length > 0) {
+    selectedId.value = mayhemStore.champions[0].id
+    mayhemStore.selectedChampionId = mayhemStore.champions[0].id
+    clickStamp.value = Date.now()
+  }
 })
 
 onUnmounted(() => {

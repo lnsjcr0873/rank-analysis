@@ -192,10 +192,19 @@ async function loadDetail(id: number, force = false) {
   loading.value = true
   error.value = ''
   try {
-    let data = await mayhemStore.getChampionDetail(id, force)
-    if (!data) {
-      data = await getMayhemChampionDetail(id)
-    }
+    const fetchPromise = (async () => {
+      let data = await mayhemStore.getChampionDetail(id, force)
+      if (!data) {
+        data = await getMayhemChampionDetail(id)
+      }
+      return data
+    })()
+
+    const timeoutPromise = new Promise<null>((_, reject) =>
+      setTimeout(() => reject(new Error('数据读取超时，请点击重试')), 6000)
+    )
+
+    let data = await Promise.race([fetchPromise, timeoutPromise])
     if (reqId !== currentRequestId) return
     detail.value = data
     if (data) {
