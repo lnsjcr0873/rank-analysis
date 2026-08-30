@@ -8,14 +8,7 @@
  */
 import { computed, ref, watch } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
-import {
-  AlertTriangle,
-  Copy,
-  Sparkles,
-  Swords,
-  TrendingUp,
-  Zap
-} from 'lucide-vue-next'
+import { AlertTriangle, Copy, Sparkles, Swords, TrendingUp, Zap } from 'lucide-vue-next'
 
 import { assetPrefix } from '@renderer/services/http'
 import { useRecordAssets } from '@renderer/composables/useRecordAssets'

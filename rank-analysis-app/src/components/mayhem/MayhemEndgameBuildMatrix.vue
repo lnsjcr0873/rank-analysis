@@ -139,8 +139,7 @@ const allTrioRows = computed<TrioBuildRow[]>(() => {
     seenKey.add(sortedKey)
 
     const delta = cs.winRate - baseHeroWr
-    const tier: 'high' | 'mid' | 'low' =
-      cs.games >= 2000 ? 'high' : cs.games >= 500 ? 'mid' : 'low'
+    const tier: 'high' | 'mid' | 'low' = cs.games >= 2000 ? 'high' : cs.games >= 500 ? 'mid' : 'low'
     const isTrap = delta < -0.015 && (cs.pickRate ?? 0) > 0.05
 
     rows.push({
@@ -390,7 +389,10 @@ async function onImportItemSet(row: TrioBuildRow) {
 
     const blocks = [
       { name: '推荐出门装', itemIds: starterIds },
-      { name: `核心三件套 (${pct(row.winRate)} 胜率 / 收益 ${fmtDelta(row.winRateDelta)})`, itemIds: row.itemIds },
+      {
+        name: `核心三件套 (${pct(row.winRate)} 胜率 / 收益 ${fmtDelta(row.winRateDelta)})`,
+        itemIds: row.itemIds
+      },
       { name: '顺势与情境神装备选', itemIds: sitIds }
     ]
 
@@ -439,9 +441,7 @@ function onCopySummary() {
           <span>终局三件组合矩阵</span>
           <span class="mhb-badge">大数据实时聚合</span>
         </div>
-        <p class="mhb-sub">
-          基于全服实战终局持有成装大数据无序组合拆解，已过滤低信号及负收益出装
-        </p>
+        <p class="mhb-sub">基于全服实战终局持有成装大数据无序组合拆解，已过滤低信号及负收益出装</p>
       </div>
       <div class="mhb-right">
         <button class="mhb-btn" :class="{ ok: copySuccess }" @click="onCopySummary">
@@ -493,7 +493,10 @@ function onCopySummary() {
                 <span>胜率</span>
                 <span class="sort-arrows">
                   <ChevronUp v-if="sortField === 'winRate' && sortOrder === 'asc'" class="arr on" />
-                  <ChevronDown v-else-if="sortField === 'winRate' && sortOrder === 'desc'" class="arr on" />
+                  <ChevronDown
+                    v-else-if="sortField === 'winRate' && sortOrder === 'desc'"
+                    class="arr on"
+                  />
                   <ArrowUpDown v-else class="arr" />
                 </span>
               </div>
@@ -502,8 +505,14 @@ function onCopySummary() {
               <div class="th-content">
                 <span>出现率</span>
                 <span class="sort-arrows">
-                  <ChevronUp v-if="sortField === 'pickRate' && sortOrder === 'asc'" class="arr on" />
-                  <ChevronDown v-else-if="sortField === 'pickRate' && sortOrder === 'desc'" class="arr on" />
+                  <ChevronUp
+                    v-if="sortField === 'pickRate' && sortOrder === 'asc'"
+                    class="arr on"
+                  />
+                  <ChevronDown
+                    v-else-if="sortField === 'pickRate' && sortOrder === 'desc'"
+                    class="arr on"
+                  />
                   <ArrowUpDown v-else class="arr" />
                 </span>
               </div>
@@ -512,8 +521,14 @@ function onCopySummary() {
               <div class="th-content">
                 <span>胜率收益</span>
                 <span class="sort-arrows">
-                  <ChevronUp v-if="sortField === 'winRateDelta' && sortOrder === 'asc'" class="arr on" />
-                  <ChevronDown v-else-if="sortField === 'winRateDelta' && sortOrder === 'desc'" class="arr on" />
+                  <ChevronUp
+                    v-if="sortField === 'winRateDelta' && sortOrder === 'asc'"
+                    class="arr on"
+                  />
+                  <ChevronDown
+                    v-else-if="sortField === 'winRateDelta' && sortOrder === 'desc'"
+                    class="arr on"
+                  />
                   <ArrowUpDown v-else class="arr" />
                 </span>
               </div>
@@ -523,7 +538,10 @@ function onCopySummary() {
                 <span>样本量</span>
                 <span class="sort-arrows">
                   <ChevronUp v-if="sortField === 'games' && sortOrder === 'asc'" class="arr on" />
-                  <ChevronDown v-else-if="sortField === 'games' && sortOrder === 'desc'" class="arr on" />
+                  <ChevronDown
+                    v-else-if="sortField === 'games' && sortOrder === 'desc'"
+                    class="arr on"
+                  />
                   <ArrowUpDown v-else class="arr" />
                 </span>
               </div>
@@ -584,7 +602,13 @@ function onCopySummary() {
             <td class="td-samples">
               <span class="val-games">{{ fmtGames(row.games) }}</span>
               <span class="sample-badge" :class="row.sampleTier">
-                {{ row.sampleTier === 'high' ? '高样本' : row.sampleTier === 'mid' ? '中样本' : '探索' }}
+                {{
+                  row.sampleTier === 'high'
+                    ? '高样本'
+                    : row.sampleTier === 'mid'
+                      ? '中样本'
+                      : '探索'
+                }}
               </span>
             </td>
 
@@ -602,9 +626,7 @@ function onCopySummary() {
             </td>
           </tr>
           <tr v-if="!filteredAndSortedTrios.length">
-            <td colspan="6" class="td-empty">
-              没有匹配到符合条件的三件套组合
-            </td>
+            <td colspan="6" class="td-empty">没有匹配到符合条件的三件套组合</td>
           </tr>
         </tbody>
       </table>
@@ -646,7 +668,11 @@ function onCopySummary() {
 
     <!-- 战局对策与情境装备时序 -->
     <div
-      v-if="categorizedSituationals.early.length || categorizedSituationals.counter.length || categorizedSituationals.late.length"
+      v-if="
+        categorizedSituationals.early.length ||
+        categorizedSituationals.counter.length ||
+        categorizedSituationals.late.length
+      "
       class="matrix-sit-section"
     >
       <div class="msec-header">
