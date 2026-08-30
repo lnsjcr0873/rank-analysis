@@ -139,6 +139,107 @@ pub async fn import_summoner_spells() -> Result<(i32, i32), String> {
     Ok((spell1, spell2))
 }
 
+/// 大乱斗自定义装备集区块。
+#[derive(Debug, serde::Deserialize)]
+pub struct MayhemItemSetBlock {
+    pub name: String,
+    pub item_ids: Vec<i64>,
+}
+
+/// 一键导入大乱斗装备页到客户端自定义装备方案。
+#[tauri::command]
+pub async fn import_mayhem_item_set(
+    champion_id: i32,
+    title: String,
+    blocks: Vec<MayhemItemSetBlock>,
+) -> Result<String, String> {
+    let summoner_res: serde_json::Value =
+        crate::lcu::util::http::lcu_get("lol-summoner/v1/current-summoner").await?;
+    let account_id = summoner_res["accountId"]
+        .as_i64()
+        .or_else(|| summoner_res["summonerId"].as_i64())
+        .ok_or_else(|| {
+            "无法获取当前登录召唤师的 accountId (请确保英雄联盟客户端已启动)".to_string()
+        })?;
+
+    let set_uri = format!("lol-item-sets/v1/item-sets/{}", account_id);
+    let mut current_sets: serde_json::Value = crate::lcu::util::http::lcu_get(&set_uri)
+        .await
+        .unwrap_or_else(|_| {
+            serde_json::json!({
+                "accountId": account_id,
+                "itemSets": [],
+                "timestamp": 0
+            })
+        });
+
+    let item_sets_arr = current_sets["itemSets"]
+        .as_array_mut()
+        .ok_or_else(|| "LCU 装备方案数据解析异常".to_string())?;
+
+    let new_blocks: Vec<serde_json::Value> = blocks
+        .into_iter()
+        .map(|b| {
+            let items: Vec<serde_json::Value> = b
+                .item_ids
+                .into_iter()
+                .filter(|id| *id > 0)
+                .map(|id| {
+                    serde_json::json!({
+                        "id": id.to_string(),
+                        "count": 1
+                    })
+                })
+                .collect();
+            serde_json::json!({
+                "type": b.name,
+                "items": items,
+                "hideIfSummonerSpell": "",
+                "showIfSummonerSpell": ""
+            })
+        })
+        .collect();
+
+    let set_title = format!("【大乱斗】{}", title);
+    let new_set = serde_json::json!({
+        "title": set_title,
+        "type": "custom",
+        "map": "any",
+        "mode": "any",
+        "priority": true,
+        "sortorder": 0,
+        "associatedChampions": [champion_id],
+        "associatedMaps": [11, 12],
+        "blocks": new_blocks
+    });
+
+    // 若已存在该英雄的大乱斗专属装备页则替换，否则新增
+    if let Some(pos) = item_sets_arr.iter().position(|s| {
+        s["title"]
+            .as_str()
+            .is_some_and(|t| t.starts_with("【大乱斗】"))
+            && s["associatedChampions"]
+                .as_array()
+                .is_some_and(|arr| arr.iter().any(|c| c.as_i64() == Some(champion_id as i64)))
+    }) {
+        item_sets_arr[pos] = new_set;
+    } else {
+        item_sets_arr.push(new_set);
+    }
+
+    crate::lcu::util::http::lcu_put::<serde_json::Value, serde_json::Value>(
+        &set_uri,
+        &current_sets,
+    )
+    .await?;
+    log::info!(
+        "[import] 成功导入大乱斗装备方案: {} (champion_id={})",
+        set_title,
+        champion_id
+    );
+    Ok(set_title)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

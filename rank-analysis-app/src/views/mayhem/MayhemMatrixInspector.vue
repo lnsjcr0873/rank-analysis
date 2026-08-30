@@ -10,7 +10,6 @@ import { computed, ref, watch } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import {
   AlertTriangle,
-  ChevronRight,
   Copy,
   Sparkles,
   Swords,
@@ -28,12 +27,12 @@ import {
 import {
   getMayhemChampionDetail,
   type ChampionDetailEntry,
-  type ItemExtension,
   type MayhemBuild,
   type SituationalItem
 } from '@renderer/features/mayhem/services/mayhemData'
 import { useMayhemStore } from '@renderer/features/mayhem/stores/mayhemStore'
 import { importRunePage } from '@renderer/services/importRunes'
+import MayhemEndgameBuildMatrix from '@renderer/components/mayhem/MayhemEndgameBuildMatrix.vue'
 
 const mayhemStore = useMayhemStore()
 
@@ -140,31 +139,6 @@ function spellName(id: number): string {
 function augTooltip(id: number): string {
   const a = assets.detailOf('perk', id)
   return a?.description || a?.name || `强化 #${id}`
-}
-
-function topExtensions(b: MayhemBuild): ItemExtension[] {
-  const map = new Map<number, ItemExtension>()
-  // 核心装备组合中的装备 id 集合（延伸件不重复推荐已包含在主要核心中的装备）
-  const primaryCoreIds = new Set<number>(b.coreItems?.[0]?.itemIds ?? [])
-
-  for (const ext of b.itemExtensions ?? []) {
-    const itemId = ext.itemIds[0]
-    if (!itemId || primaryCoreIds.has(itemId)) continue
-    const existing = map.get(itemId)
-    if (!existing) {
-      map.set(itemId, { ...ext })
-    } else {
-      const totalGames = existing.games + ext.games
-      const totalWins =
-        (existing.wins ?? Math.round(existing.winRate * existing.games)) +
-        (ext.wins ?? Math.round(ext.winRate * ext.games))
-      existing.games = totalGames
-      existing.wins = totalWins
-      existing.winRate = totalGames > 0 ? totalWins / totalGames : existing.winRate
-    }
-  }
-
-  return Array.from(map.values()).sort((x, y) => y.games - x.games)
 }
 
 function buildTitle(b: MayhemBuild, index: number): string {
@@ -462,54 +436,13 @@ async function onApplyConfig() {
           </div>
         </div>
 
-        <template v-if="currentBuild">
-          <!-- 核心两件套/三件套 -->
-          <div v-if="currentBuild.coreItems.length" class="insp-section">
-            <div class="insp-sec-title">🎯 核心出装链 (胜率最高路线)</div>
-            <div
-              v-for="(cs, ci) in currentBuild.coreItems.slice(0, 2)"
-              :key="ci"
-              class="insp-core-card"
-            >
-              <div class="insp-core-chain">
-                <template v-for="(id, idx) in cs.itemIds" :key="`${id}-${idx}`">
-                  <div class="insp-item-box" :title="itemName(id)">
-                    <img :src="itemSrc(id)" :alt="itemName(id)" loading="lazy" />
-                  </div>
-                  <ChevronRight v-if="idx < cs.itemIds.length - 1" class="chain-arrow" />
-                </template>
-              </div>
-              <div class="insp-core-meta">
-                <div class="insp-core-win">{{ pct(cs.winRate) }} 胜率</div>
-                <div class="insp-core-pick">
-                  选用 {{ pct(cs.pickRate) }} · {{ fmtGames(cs.games) }}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- 后续顺势延伸件 -->
-          <div v-if="topExtensions(currentBuild).length" class="insp-section">
-            <div class="insp-sec-title">📦 后续顺势延伸神装</div>
-            <div class="insp-ext-grid">
-              <div
-                v-for="(ext, ei) in topExtensions(currentBuild).slice(0, 6)"
-                :key="ei"
-                class="insp-ext-card"
-                :title="`${itemName(ext.itemIds[0])}（${fmtGames(ext.games)}）`"
-              >
-                <img
-                  :src="itemSrc(ext.itemIds[0])"
-                  :alt="itemName(ext.itemIds[0])"
-                  loading="lazy"
-                />
-                <div class="insp-ext-info">
-                  <div class="insp-ext-name">{{ itemName(ext.itemIds[0]) }}</div>
-                  <div class="insp-ext-wr">{{ pct(ext.winRate) }} 胜率</div>
-                </div>
-              </div>
-            </div>
-          </div>
+        <template v-if="currentBuild && detail">
+          <!-- 终局三件组合矩阵与深度分析看板 -->
+          <MayhemEndgameBuildMatrix
+            :build="currentBuild"
+            :champion="detail.champion"
+            :augments="detail.augments"
+          />
 
           <!-- 推荐出门装与召唤师技能 -->
           <div class="insp-grid-2col">

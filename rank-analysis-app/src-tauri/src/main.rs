@@ -193,6 +193,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             command::backtest::get_adoption_stats,
             command::import::import_rune_page,
             command::import::import_summoner_spells,
+            command::import::import_mayhem_item_set,
             command::insight::get_habit_tags,
             command::insight::list_habit_goals,
             command::insight::add_habit_goal_cmd,

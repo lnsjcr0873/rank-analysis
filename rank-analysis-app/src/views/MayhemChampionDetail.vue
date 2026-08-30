@@ -119,24 +119,13 @@
             >
           </p>
 
-          <div v-if="b.coreItems.length" class="d-rowgroup">
-            <span class="d-label">核心装备</span>
-            <div class="d-corelist">
-              <div v-for="(cs, ci) in b.coreItems.slice(0, 3)" :key="ci" class="d-coreset">
-                <img
-                  v-for="(iid, iidx) in cs.itemIds"
-                  :key="`${iid}-${iidx}`"
-                  :src="itemSrc(iid)"
-                  :alt="itemName(iid)"
-                  :title="`${itemName(iid)}（${fmtGames(cs.games)}）`"
-                  loading="lazy"
-                />
-                <span class="d-coremata"
-                  >{{ pct(cs.winRate) }} · 选取 {{ pct(cs.pickRate ?? null) }}</span
-                >
-              </div>
-            </div>
-          </div>
+          <MayhemEndgameBuildMatrix
+            v-if="detail"
+            :build="b"
+            :champion="detail.champion"
+            :augments="detail.augments"
+            style="margin: 12px 0 16px 0"
+          />
 
           <div v-if="b.startingItems.length" class="d-rowgroup">
             <span class="d-label">出门装</span>
@@ -279,6 +268,7 @@ const route = useRoute()
 const router = useRouter()
 const assets = useRecordAssets()
 const mayhemStore = useMayhemStore()
+import MayhemEndgameBuildMatrix from '@renderer/components/mayhem/MayhemEndgameBuildMatrix.vue'
 
 const detail = ref<ChampionDetailEntry | null>(null)
 const loading = ref(false)

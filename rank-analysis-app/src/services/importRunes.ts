@@ -26,3 +26,24 @@ export async function importRunePage(championId: number): Promise<ImportRuneResu
 export async function importSummonerSpells(): Promise<[number, number]> {
   return await invoke<[number, number]>('import_summoner_spells')
 }
+
+export interface MayhemItemSetBlockParam {
+  name: string
+  itemIds: number[]
+}
+
+/** 一键导入大乱斗推荐装备页到客户端自定义装备集 */
+export async function importMayhemItemSet(
+  championId: number,
+  title: string,
+  blocks: MayhemItemSetBlockParam[]
+): Promise<string> {
+  return await invoke<string>('import_mayhem_item_set', {
+    championId,
+    title,
+    blocks: blocks.map(b => ({
+      name: b.name,
+      item_ids: b.itemIds
+    }))
+  })
+}
