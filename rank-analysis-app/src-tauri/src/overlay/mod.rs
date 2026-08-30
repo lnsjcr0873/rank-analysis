@@ -80,6 +80,7 @@ fn create(app: &tauri::AppHandle) -> Result<(), String> {
         .always_on_top(true)
         .focusable(false)
         .resizable(false)
+        .shadow(false)
         .skip_taskbar(true)
         .visible(false);
     // tauri 的 WebviewWindowBuilder#transparent 在 macOS 上不存在（webview 透明
@@ -87,10 +88,11 @@ fn create(app: &tauri::AppHandle) -> Result<(), String> {
     // 由 CSS 透明背景兜底。
     #[cfg(not(target_os = "macos"))]
     let builder = builder.transparent(true);
-    let _w = builder
+    let w = builder
         .build()
         .map_err(|e| format!("overlay 窗口创建失败: {e}"))?;
 
+    let _ = w.set_ignore_cursor_events(true);
     log::info!("[overlay] 窗口创建完成（置顶/无边框/透明/鼠标穿透）");
 
     APP_HANDLE
@@ -127,6 +129,7 @@ pub fn show(app: &tauri::AppHandle) {
     }
     if let Some(w) = get_window() {
         let _ = w.set_size(tauri::LogicalSize::new(width, height));
+        let _ = w.set_ignore_cursor_events(true);
         let _ = w.show();
         // 鼠标穿透：对局内悬浮建议不应拦截玩家对游戏窗口的操作
         let _ = w.set_ignore_cursor_events(true);

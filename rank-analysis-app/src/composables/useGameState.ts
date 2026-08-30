@@ -76,10 +76,10 @@ function handleSessionAutoNav(phase: string) {
     phase === 'Matchmaking' ||
     phase === 'ReadyCheck' ||
     phase === 'EndOfGame' ||
-    phase === 'PreEndOfGame' ||
-    phase === 'None'
+    phase === 'PreEndOfGame'
   ) {
-    // 对局已结束或回到大厅，重置跳转标记，供下一局使用
+    // 只有明确回到大厅或对局结束，才重置跳转标记供下一局使用；
+    // 绝对不能由 'None' 或空字符串触发，避免加载界面过渡抖动导致反复强制跳回对局页
     autoNavigatedThisMatch = false
   }
 }
