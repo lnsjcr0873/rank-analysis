@@ -37,11 +37,11 @@
         <div class="rail__sec">{{ sec.label }}</div>
         <button
           v-for="it in sec.items"
-          :key="it.name"
+          :key="it.path"
           class="rail-i"
-          :class="{ 'rail-i--on': route.name === it.name }"
+          :class="{ 'rail-i--on': isItemActive(it) }"
           :title="it.label"
-          @click="go(it.name)"
+          @click="go(it)"
         >
           <span><component :is="it.icon" /></span><em>{{ it.label }}</em>
         </button>
@@ -112,30 +112,56 @@ const router = useRouter()
 const isChild = isRecordChildWindow()
 const { isConnected: connected, summoner } = useGameState()
 
-const sections = [
+interface NavItem {
+  name: string
+  path: string
+  label: string
+  icon: ReturnType<typeof markRaw>
+}
+
+const sections: Array<{ label: string; items: NavItem[] }> = [
   {
     label: '分析',
     items: [
-      { name: 'Home', label: '主页', icon: markRaw(House) },
-      { name: 'Record', label: '战绩', icon: markRaw(ScrollText) },
-      { name: 'Gaming', label: '对局', icon: markRaw(Swords) },
-      { name: 'Growth', label: '成长', icon: markRaw(TrendingUp) },
-      { name: 'Mayhem', label: '大乱斗', icon: markRaw(Dices) }
+      { path: '/Home', name: 'Home', label: '主页', icon: markRaw(House) },
+      { path: '/Record', name: 'Record', label: '战绩', icon: markRaw(ScrollText) },
+      { path: '/Gaming', name: 'Gaming', label: '对局', icon: markRaw(Swords) },
+      { path: '/Growth', name: 'Growth', label: '成长', icon: markRaw(TrendingUp) },
+      { path: '/Mayhem', name: 'Mayhem', label: '大乱斗', icon: markRaw(Dices) }
     ]
   },
-  { label: '库', items: [{ name: 'Library', label: '资产库', icon: markRaw(LibraryBig) }] },
-  { label: '系统', items: [{ name: 'Settings', label: '设置', icon: markRaw(Settings) }] }
+  {
+    label: '库',
+    items: [{ path: '/Library', name: 'Library', label: '资产库', icon: markRaw(LibraryBig) }]
+  },
+  {
+    label: '系统',
+    items: [{ path: '/Settings', name: 'Settings', label: '设置', icon: markRaw(Settings) }]
+  }
 ]
 
-function go(name: string) {
+function isItemActive(it: NavItem): boolean {
+  if (route.name === it.name) return true
+  if (it.path === '/Settings' && route.path.startsWith('/Settings')) return true
+  if (it.path === '/Mayhem' && route.path.startsWith('/Mayhem')) return true
+  return route.path === it.path
+}
+
+function go(it: NavItem) {
   const summonerValue = summoner.value
-  router.push({
-    name,
-    query:
-      name === 'Record' && summonerValue?.gameName
-        ? { name: `${summonerValue.gameName}#${summonerValue.tagLine}` }
-        : undefined
-  })
+  if (it.path === '/Record') {
+    router
+      .push({
+        path: '/Record',
+        query: summonerValue?.gameName
+          ? { name: `${summonerValue.gameName}#${summonerValue.tagLine}` }
+          : undefined
+      })
+      .catch(err => console.warn('[NavRail] go Record failed:', err))
+    return
+  }
+
+  router.push(it.path).catch(err => console.warn(`[NavRail] go ${it.path} failed:`, err))
 }
 
 function togglePin() {

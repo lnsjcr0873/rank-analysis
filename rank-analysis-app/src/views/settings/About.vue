@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <n-layout>
     <n-card class="about-card">
       <template #header>
@@ -97,9 +97,22 @@
             <span class="device-id-text font-number">{{ deviceId || '加载中…' }}</span>
             <n-button size="small" :disabled="!deviceId" @click="copyDeviceId">复制</n-button>
           </div>
+
+          <div class="nav-item">
+            <div class="nav-icon">
+              <Terminal />
+            </div>
+            <span>系统诊断与自愈台</span>
+            <div class="spacer"></div>
+            <n-button size="small" type="primary" secondary @click="diagShow = true">
+              打开控制台
+            </n-button>
+          </div>
         </n-space>
       </div>
     </n-card>
+
+    <DiagnosticsModal v-model:show="diagShow" />
   </n-layout>
 </template>
 
@@ -113,14 +126,18 @@ import {
   MessageSquare,
   ShieldCheck,
   Mail,
-  Fingerprint
+  Fingerprint,
+  Terminal
 } from 'lucide-vue-next'
+import DiagnosticsModal from '@renderer/components/common/DiagnosticsModal.vue'
 import { invoke } from '@tauri-apps/api/core'
 import { getVersion } from '@tauri-apps/api/app'
 import { openUrl } from '@tauri-apps/plugin-opener'
 import { CONFIG_KEYS } from '@renderer/services/configKeys'
 import { getConfigByIpc, putConfigByIpc } from '@renderer/services/ipc'
 import { useAppUpdate } from '@renderer/composables/useAppUpdate'
+
+const diagShow = ref(false)
 
 // Component state
 const currentVersion = ref('')

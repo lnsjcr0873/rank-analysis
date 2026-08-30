@@ -9,21 +9,21 @@
           fallback-src="https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726f1epng.png"
           class="player-bar-avatar"
         />
-        <div class="player-bar-level">{{ summoner.summonerLevel }}</div>
+        <div class="player-bar-level">{{ summoner?.summonerLevel ?? 0 }}</div>
       </div>
       <n-flex vertical :size="1" class="player-bar-identity-text">
         <n-flex align="center" :size="4" :wrap="false">
           <n-ellipsis class="player-bar-nickname">
-            {{ summoner.gameName }}
+            {{ summoner?.gameName || '等待客户端连接…' }}
           </n-ellipsis>
-          <span class="player-bar-tagline">#{{ summoner.tagLine }}</span>
-          <n-button text size="tiny" @click="copyName">
+          <span v-if="summoner?.tagLine" class="player-bar-tagline">#{{ summoner.tagLine }}</span>
+          <n-button v-if="summoner?.gameName" text size="tiny" @click="copyName">
             <template #icon>
               <n-icon><Copy /></n-icon>
             </template>
           </n-button>
           <PlayerNoteBadge
-            v-if="summoner.puuid"
+            v-if="summoner?.puuid"
             :puuid="summoner.puuid"
             :game-name="summoner.gameName"
             :tag-line="summoner.tagLine"

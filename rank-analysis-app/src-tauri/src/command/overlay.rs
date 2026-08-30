@@ -24,6 +24,13 @@ pub fn hide_overlay_window() -> Result<(), String> {
     Ok(())
 }
 
+/// 强制彻底关闭与销毁所有残留 overlay 浮窗并释放焦点。
+#[tauri::command]
+pub fn force_close_overlay() -> Result<(), String> {
+    crate::overlay::force_hide();
+    Ok(())
+}
+
 /// 向 overlay 窗口推送 NextAction 建议数据。
 ///
 /// 主窗口（Gaming.vue）轮询 `get_next_actions`（前端 30s 节流），结果通过此命令

@@ -75,26 +75,39 @@ export function usePlayerRecordData() {
       return
     }
 
-    // 需要 summoner 作为其余请求的依据，单独先取；其余调用互相独立，并行
-    summoner.value = await invoke<Summoner>('get_summoner_by_name', { name })
+    try {
+      // 需要 summoner 作为其余请求的依据，单独先取；其余调用互相独立，并行
+      const s = await invoke<Summoner>('get_summoner_by_name', { name }).catch(() => null)
+      if (s) {
+        summoner.value = s
+      }
 
-    const [rankValue, modeValue, platformValue, solo, flexValue] = await Promise.all([
-      invoke<Rank>('get_rank_by_name', { name }),
-      // 历史上 reader 用 `selectMode`、writer 用 `settings.user.selectMode`，
-      // 导致用户切换的模式从来没被持久化读到。统一为 writer 用的 key。
-      getConfigByIpc<number>('settings.user.selectMode').then(v => v ?? 0),
-      invoke<string>('get_platform_name_by_name', { name }),
-      invoke<RecentWinRate>('get_win_rate_by_name_mode', { name, mode: 420 }),
-      invoke<RecentWinRate>('get_win_rate_by_name_mode', { name, mode: 440 })
-    ])
+      const [rankValue, modeValue, platformValue, solo, flexValue] = await Promise.all([
+        invoke<Rank>('get_rank_by_name', { name }).catch(() => defaultRank()),
+        // 历史上 reader 用 `selectMode`、writer 用 `settings.user.selectMode`，
+        // 导致用户切换的模式从来没被持久化读到。统一为 writer 用的 key。
+        getConfigByIpc<number>('settings.user.selectMode')
+          .then(v => v ?? 0)
+          .catch(() => 0),
+        invoke<string>('get_platform_name_by_name', { name }).catch(() => '未知'),
+        invoke<RecentWinRate>('get_win_rate_by_name_mode', { name, mode: 420 }).catch(() =>
+          defaultRecentWinRate()
+        ),
+        invoke<RecentWinRate>('get_win_rate_by_name_mode', { name, mode: 440 }).catch(() =>
+          defaultRecentWinRate()
+        )
+      ])
 
-    rank.value = rankValue
-    mode.value = modeOptions.value.find(option => option.key === modeValue)?.label || '全部'
-    platformIdCn.value = platformValue
-    solo5v5.value = solo
-    flex.value = flexValue
+      rank.value = rankValue ?? defaultRank()
+      mode.value = modeOptions.value.find(option => option.key === modeValue)?.label || '全部'
+      platformIdCn.value = platformValue ?? '未知'
+      solo5v5.value = solo ?? defaultRecentWinRate()
+      flex.value = flexValue ?? defaultRecentWinRate()
 
-    getTags(name, modeValue)
+      void getTags(name, modeValue).catch(() => {})
+    } catch (e) {
+      console.warn('[usePlayerRecordData] loadSummonerData error:', e)
+    }
   }
 
   const updateMode = (value: string | number, option: { label?: string }) => {

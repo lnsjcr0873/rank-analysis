@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="full-container">
     <!-- 启动弹窗队列：同一时刻至多一个可见，顺序见 useStartupDialogs。
          云端配置拉取裁决（CloudConfigPullDialog）不再走这里自动弹出，改成
@@ -33,6 +33,7 @@
       </main>
     </div>
     <CommandPalette v-model:show="paletteShow" />
+    <DiagnosticsModal v-model:show="diagShow" />
   </div>
 </template>
 
@@ -46,6 +47,7 @@ import NavRail from './shell/NavRail.vue'
 import CommandPalette from './shell/CommandPalette.vue'
 import CornerCard from './ui/CornerCard.vue'
 import ErrorReportingConsentDialog from '@renderer/components/common/ErrorReportingConsentDialog.vue'
+import DiagnosticsModal from '@renderer/components/common/DiagnosticsModal.vue'
 import { useGameState } from '@renderer/composables/useGameState'
 import { useWindowShortcuts } from '@renderer/composables/useWindowShortcuts'
 import { useZoom } from '@renderer/composables/useZoom'
@@ -60,6 +62,15 @@ const route = useRoute()
 
 /** 命令面板显隐：顶栏搜索按钮与 Ctrl+K（面板内部监听）都会打开 */
 const paletteShow = ref(false)
+/** 系统诊断自愈控制台显隐：Ctrl+Shift+D 唤起 */
+const diagShow = ref(false)
+
+function onGlobalKey(e: KeyboardEvent) {
+  if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'D' || e.key === 'd')) {
+    e.preventDefault()
+    diagShow.value = !diagShow.value
+  }
+}
 
 /* 路由级错误兜底：捕获子树渲染错误，展示可重试卡片而非无声白屏 */
 const routeError = ref<string | null>(null)
@@ -105,8 +116,14 @@ useWindowShortcuts()
 // 桥内部自带阶段过滤与非对局静默，常驻开销可忽略。
 import { startLiveBridge } from '@renderer/companion/bridge'
 const liveBridge = startLiveBridge()
-onMounted(() => liveBridge.start())
-onUnmounted(() => liveBridge.stop())
+onMounted(() => {
+  liveBridge.start()
+  window.addEventListener('keydown', onGlobalKey)
+})
+onUnmounted(() => {
+  liveBridge.stop()
+  window.removeEventListener('keydown', onGlobalKey)
+})
 
 const message = useMessage()
 

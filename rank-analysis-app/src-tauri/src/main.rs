@@ -255,6 +255,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             command::cloud_sync::save_text_file,
             command::overlay::show_overlay_window,
             command::overlay::hide_overlay_window,
+            command::overlay::force_close_overlay,
             command::overlay::push_overlay_data,
             command::overlay::push_overlay_panel,
             command::overlay::set_overlay_layout,

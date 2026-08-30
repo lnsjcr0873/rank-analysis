@@ -34,7 +34,7 @@ import naive from 'naive-ui'
 import NavRail from '../NavRail.vue'
 import { closeLeagueByIpc } from '@renderer/services/ipc'
 
-const currentRoute = { name: 'Home' }
+const currentRoute = { name: 'Home', path: '/Home' }
 /** 宿主：提供 n-message-provider（useMessage 必需） */
 const Host = defineComponent({
   components: { NavRail },

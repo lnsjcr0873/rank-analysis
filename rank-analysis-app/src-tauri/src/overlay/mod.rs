@@ -104,8 +104,14 @@ pub fn show(app: &tauri::AppHandle) {
 /// 隐藏 overlay 窗口（对局结束调用）。
 pub fn hide() {
     if let Some(w) = get_window() {
+        let _ = w.set_ignore_cursor_events(true);
         let _ = w.hide();
     }
+}
+
+/// 强制销毁/隐藏 overlay 浮窗并确保完全释放鼠标捕获。
+pub fn force_hide() {
+    hide();
 }
 
 /// 调整 overlay 窗口尺寸并定位到指定锚点。
