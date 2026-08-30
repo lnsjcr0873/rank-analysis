@@ -75,7 +75,7 @@ pub fn mayhem_status() -> Result<MayhemStatus, String> {
                 || vdir.join("champions").is_dir())
     };
 
-    let mut ready = active_version.as_deref().map_or(false, is_dir_ready);
+    let mut ready = active_version.as_deref().is_some_and(is_dir_ready);
 
     // 若指针未就绪或对应目录损坏，扫描 versions 下是否存在其它现成完整版本
     if !ready {
