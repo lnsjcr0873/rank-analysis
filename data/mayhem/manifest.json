@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "version": "mayhem-2026-08-30-v1",
+  "patch": "16.16",
+  "date": "2026-08-30",
+  "generatedAt": "2026-08-30T11:18:55.804Z",
+  "files": {
+    "champions.json": {
+      "sizeBytes": 1534,
+      "sha256": "06a43fd0d447c8da056e539a7469f81a3c3f76150f0634dfc55cb2953a1f1993"
+    },
+    "augments.json": {
+      "sizeBytes": 1499,
+      "sha256": "a24d8600f8a27933bd6e946db00347f201e63aa6da3867ddb9038ebc9aa40689"
+    }
+  }
+}

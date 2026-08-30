@@ -1,0 +1,70 @@
+{
+  "version": "mayhem-2026-08-30-v1",
+  "date": "2026-08-30",
+  "patch": "16.16",
+  "count": 3,
+  "champions": [
+    {
+      "id": 67,
+      "name": "Vayne",
+      "title": "暗夜猎手",
+      "alias": "薇恩",
+      "roles": [
+        "marksman",
+        "assassin"
+      ],
+      "iconUrl": "https://ddragon.leagueoflegends.com/cdn/14.16.1/img/champion/Vayne.png",
+      "stats": {
+        "tier": 1,
+        "rank": 1,
+        "total": 172,
+        "winRate": 0.578,
+        "pickRate": 0.125,
+        "banRate": 0.082,
+        "games": 1720638,
+        "wins": 994528
+      }
+    },
+    {
+      "id": 104,
+      "name": "Graves",
+      "title": "法外狂徒",
+      "alias": "格雷福斯",
+      "roles": [
+        "marksman"
+      ],
+      "iconUrl": "https://ddragon.leagueoflegends.com/cdn/14.16.1/img/champion/Graves.png",
+      "stats": {
+        "tier": 1,
+        "rank": 2,
+        "total": 172,
+        "winRate": 0.574,
+        "pickRate": 0.118,
+        "banRate": 0.065,
+        "games": 1618013,
+        "wins": 928739
+      }
+    },
+    {
+      "id": 887,
+      "name": "Gwen",
+      "title": "灵罗娃娃",
+      "alias": "格温",
+      "roles": [
+        "fighter",
+        "assassin"
+      ],
+      "iconUrl": "https://ddragon.leagueoflegends.com/cdn/14.16.1/img/champion/Gwen.png",
+      "stats": {
+        "tier": 1,
+        "rank": 5,
+        "total": 172,
+        "winRate": 0.56,
+        "pickRate": 0.085,
+        "banRate": 0.042,
+        "games": 479030,
+        "wins": 268256
+      }
+    }
+  ]
+}

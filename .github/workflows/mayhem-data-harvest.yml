@@ -1,0 +1,69 @@
+# Mayhem & ARAM 全景大数据自动化采集与清洗分发流水线
+# 产物生成在 data/mayhem/ (manifest.json, champions.json, augments.json, champion-shards/*.json)
+# 客户端通过自建 CDN / jsDelivr 极速无感同步
+name: Mayhem Data Harvest
+
+on:
+  schedule:
+    - cron: "0 4 * * *" # 每日 UTC 04:00 (北京时间 12:00) 自动执行
+  workflow_dispatch:
+    inputs:
+      patch:
+        description: "游戏补丁版本号 (如 16.16)"
+        required: false
+        default: "16.16"
+      force:
+        description: "强制重新构建"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mayhem-data-harvest
+  cancel-in-progress: true
+
+jobs:
+  harvest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Run Harvest Engine Tests
+        run: node --test scripts/harvest-mayhem.test.mjs
+
+      - name: Execute Mayhem Data Harvesting & Processing
+        run: node scripts/harvest-mayhem.mjs
+        env:
+          MAYHEM_PATCH: ${{ github.event.inputs.patch || '16.16' }}
+
+      - name: Verify Mayhem Manifest & Datasets Integrity
+        run: |
+          node -e "
+            const fs = require('fs');
+            const m = JSON.parse(fs.readFileSync('./data/mayhem/manifest.json', 'utf8'));
+            if (m.schemaVersion !== 1 || !m.files['champions.json'] || !m.files['augments.json']) {
+              console.error('Invalid manifest structure:', m);
+              process.exit(1);
+            }
+            console.log('✅ Manifest verification passed. Version:', m.version, 'Files count:', Object.keys(m.files).length);
+          "
+
+      - name: Commit and push if data changed
+        id: commit
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feat/mayhem-assist-m3'
+        run: |
+          if [ -z "$(git status --porcelain -- data/mayhem)" ]; then
+            echo "No data changes detected."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/mayhem
+          git commit -m "chore(data): 自动更新海克斯大乱斗全景大数据 [skip ci]"
+          git push origin HEAD:${{ github.ref }}

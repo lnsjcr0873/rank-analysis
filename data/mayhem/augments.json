@@ -1,0 +1,54 @@
+{
+  "version": "mayhem-2026-08-30-v1",
+  "date": "2026-08-30",
+  "patch": "16.16",
+  "count": 2,
+  "augments": [
+    {
+      "id": 2095,
+      "name": "High Roller",
+      "key": "high-roller",
+      "rarity": 2,
+      "rarityName": "prismatic",
+      "rarityDisplayName": "棱彩",
+      "iconUrl": "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/perk-icons/2095.png",
+      "enabled": true,
+      "description": "获得多次重骰机会，大幅提高获得极品强化的几率。",
+      "statsAvailable": true,
+      "stats": {
+        "tier": 1,
+        "wins": 85200,
+        "games": 153800,
+        "winRate": 0.554,
+        "pickRate": 0.22,
+        "rank": 1,
+        "total": 208
+      },
+      "stages": [],
+      "topChampions": []
+    },
+    {
+      "id": 1134,
+      "name": "Draw Your Sword",
+      "key": "draw-your-sword",
+      "rarity": 2,
+      "rarityName": "prismatic",
+      "rarityDisplayName": "棱彩",
+      "iconUrl": "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/perk-icons/1134.png",
+      "enabled": true,
+      "description": "远程英雄获得高额攻击力与攻速加成，但攻击距离缩短为近战。",
+      "statsAvailable": true,
+      "stats": {
+        "tier": 1,
+        "wins": 42100,
+        "games": 70500,
+        "winRate": 0.597,
+        "pickRate": 0.15,
+        "rank": 2,
+        "total": 208
+      },
+      "stages": [],
+      "topChampions": []
+    }
+  ]
+}
