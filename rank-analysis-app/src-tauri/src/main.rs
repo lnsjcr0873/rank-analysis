@@ -256,6 +256,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             command::overlay::show_overlay_window,
             command::overlay::hide_overlay_window,
             command::overlay::force_close_overlay,
+            command::overlay::get_overlay_state,
             command::overlay::push_overlay_data,
             command::overlay::push_overlay_panel,
             command::overlay::set_overlay_layout,

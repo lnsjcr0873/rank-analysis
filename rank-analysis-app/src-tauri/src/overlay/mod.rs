@@ -28,20 +28,54 @@ static APP_HANDLE: LazyLock<Mutex<Option<tauri::AppHandle>>> = LazyLock::new(|| 
 static CURRENT_ANCHOR: LazyLock<Mutex<String>> =
     LazyLock::new(|| Mutex::new("top-right".to_string()));
 
+/// 缓存当前激活的面板信封（供 Overlay 窗口加载完毕时即时拉取）
+static CURRENT_PANEL_ENVELOPE: LazyLock<Mutex<Option<serde_json::Value>>> =
+    LazyLock::new(|| Mutex::new(None));
+
+/// 缓存当前的 NextAction 列表
+static CURRENT_ACTIONS: LazyLock<Mutex<Vec<crate::live::NextAction>>> =
+    LazyLock::new(|| Mutex::new(Vec::new()));
+
+/// 记录当前窗口尺寸
+static CURRENT_WIDTH: LazyLock<Mutex<f64>> = LazyLock::new(|| Mutex::new(OVERLAY_WIDTH));
+static CURRENT_HEIGHT: LazyLock<Mutex<f64>> = LazyLock::new(|| Mutex::new(OVERLAY_HEIGHT));
+
 /// Overlay 窗口固定尺寸（评估文档 §3.1）。
 const OVERLAY_WIDTH: f64 = 320.0;
 const OVERLAY_HEIGHT: f64 = 200.0;
 /// 窗口与屏幕边缘的间距。
 const OVERLAY_MARGIN: f64 = 16.0;
 
+/// 设置当前激活的面板信封
+pub fn set_current_panel(envelope: serde_json::Value) {
+    *CURRENT_PANEL_ENVELOPE.lock().unwrap_or_else(|e| e.into_inner()) = Some(envelope);
+}
+
+/// 设置当前的 NextAction 建议数据
+pub fn set_current_actions(actions: Vec<crate::live::NextAction>) {
+    *CURRENT_ACTIONS.lock().unwrap_or_else(|e| e.into_inner()) = actions;
+}
+
+/// 获取当前所有激活的 Overlay 状态快照
+pub fn get_overlay_state() -> serde_json::Value {
+    let panel = CURRENT_PANEL_ENVELOPE.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    let actions = CURRENT_ACTIONS.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    serde_json::json!({
+        "panel": panel,
+        "actions": actions
+    })
+}
+
 /// 创建 overlay 窗口（只建一次，幂等）。
 ///
 /// 窗口初始不可见（`visible(false)`），由 [`show`] 在对局中激活。
 /// 创建失败不 panic——降级为主窗口内 Tab 展示（当前 M5a/M5b 行为）。
 fn create(app: &tauri::AppHandle) -> Result<(), String> {
+    let width = *CURRENT_WIDTH.lock().unwrap_or_else(|e| e.into_inner());
+    let height = *CURRENT_HEIGHT.lock().unwrap_or_else(|e| e.into_inner());
     let builder = WebviewWindowBuilder::new(app, "overlay", WebviewUrl::App("overlay.html".into()))
         .title("")
-        .inner_size(OVERLAY_WIDTH, OVERLAY_HEIGHT)
+        .inner_size(width, height)
         .decorations(false)
         .always_on_top(true)
         .focusable(false)
@@ -80,6 +114,8 @@ fn get_window() -> Option<tauri::WebviewWindow> {
 /// 并发首次 show 时后到者会因 label 冲突创建失败并告警返回——先到者已完成
 /// 显示与定位，无实际影响。
 pub fn show(app: &tauri::AppHandle) {
+    let width = *CURRENT_WIDTH.lock().unwrap_or_else(|e| e.into_inner());
+    let height = *CURRENT_HEIGHT.lock().unwrap_or_else(|e| e.into_inner());
     if get_window().is_none() {
         if OVERLAY_CREATED.load(Ordering::Relaxed) {
             log::info!("[overlay] 标志为已创建但窗口不存在，重建...");
@@ -90,6 +126,7 @@ pub fn show(app: &tauri::AppHandle) {
         }
     }
     if let Some(w) = get_window() {
+        let _ = w.set_size(tauri::LogicalSize::new(width, height));
         let _ = w.show();
         // 鼠标穿透：对局内悬浮建议不应拦截玩家对游戏窗口的操作
         let _ = w.set_ignore_cursor_events(true);
@@ -98,7 +135,7 @@ pub fn show(app: &tauri::AppHandle) {
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .clone();
-    position_by_anchor(app, OVERLAY_WIDTH, &anchor);
+    position_by_anchor(app, width, &anchor);
 }
 
 /// 隐藏 overlay 窗口（对局结束调用）。
@@ -125,6 +162,8 @@ pub fn layout(app: &tauri::AppHandle, width: f64, height: f64, anchor: &str) {
     *CURRENT_ANCHOR.lock().unwrap_or_else(|e| e.into_inner()) = anchor.to_string();
     let width = width.clamp(200.0, 900.0);
     let height = height.clamp(80.0, 500.0);
+    *CURRENT_WIDTH.lock().unwrap_or_else(|e| e.into_inner()) = width;
+    *CURRENT_HEIGHT.lock().unwrap_or_else(|e| e.into_inner()) = height;
     if let Some(w) = get_window() {
         let _ = w.set_size(tauri::LogicalSize::new(width, height));
     }
@@ -137,19 +176,20 @@ fn position_by_anchor(app: &tauri::AppHandle, width: f64, anchor: &str) {
         log::warn!("[overlay] 无法获取主显示器，窗口保持默认位置");
         return;
     };
-    let screen_w = monitor.size().width as i32;
+    let scale_factor = monitor.scale_factor();
+    let logical_screen_w = monitor.size().width as f64 / scale_factor;
     let x = match anchor {
-        "top-left" => OVERLAY_MARGIN as i32,
-        "top-center" => (screen_w - width as i32) / 2,
+        "top-left" => OVERLAY_MARGIN,
+        "top-center" => (logical_screen_w - width) / 2.0,
         // 默认右上（历史行为）
-        _ => screen_w - width as i32 - OVERLAY_MARGIN as i32,
+        _ => logical_screen_w - width - OVERLAY_MARGIN,
     };
     let y = match anchor {
-        "top-right" => 64, // 避开顶栏窗控按钮区域（最小化/最大化/关闭）
-        _ => OVERLAY_MARGIN as i32,
+        "top-right" => 64.0, // 避开顶栏窗控按钮区域（最小化/最大化/关闭）
+        _ => OVERLAY_MARGIN,
     };
     if let Some(w) = get_window() {
-        let _ = w.set_position(Position::Physical(tauri::PhysicalPosition::new(x, y)));
+        let _ = w.set_position(Position::Logical(tauri::LogicalPosition::new(x, y)));
     }
 }
 

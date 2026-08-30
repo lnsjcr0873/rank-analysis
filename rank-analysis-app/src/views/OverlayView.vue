@@ -8,7 +8,7 @@
  * - `overlay:config` 可选推送 { maxItems, opacity } 覆盖本地偏好。
  * 透明背景 + 鼠标穿透由 Rust 端窗口属性控制（set_ignore_cursor_events）。
  */
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { NEXT_ACTION_LABELS, URGENCY_COLORS, type NextAction } from '@renderer/services/nextAction'
@@ -49,11 +49,48 @@ let unlistenUpdate: UnlistenFn | null = null
 let unlistenConfig: UnlistenFn | null = null
 let unlistenPanel: UnlistenFn | null = null
 
+function applyPanelEnvelope(env: OverlayPanelEnvelope | null | undefined) {
+  if (!env) return
+  const { panel, payload } = env
+  if (panel === 'mayhem-augments') {
+    mayhemAugments.value = isMayhemAugmentsPayload(payload) ? payload : null
+  } else if (panel === 'companion-bubble') {
+    const text =
+      typeof (payload as { text?: unknown })?.text === 'string'
+        ? (payload as { text: string }).text
+        : ''
+    companionText.value = text
+    // 气泡自动消失（桥接层不推送清空消息时的兜底）
+    if (bubbleTimer) clearTimeout(bubbleTimer)
+    if (text) {
+      bubbleTimer = setTimeout(() => {
+        companionText.value = ''
+      }, 6000)
+    }
+  }
+}
+
 onMounted(async () => {
   updateMaxByHeight()
   window.addEventListener('resize', updateMaxByHeight)
-  // listen 失败（如 capability 缺失被 ACL 拒绝）不能让 Promise 悬空成
-  // unhandled rejection：记日志并保持 UI 可用（后续轮询推送仍会重试投递）。
+
+  // 1. 初始化时主动从 Rust 端获取最新状态快照（防止事件先于监听器到达而丢失）
+  try {
+    const state = (await invoke('get_overlay_state')) as {
+      panel?: OverlayPanelEnvelope
+      actions?: NextAction[]
+    }
+    if (Array.isArray(state?.actions)) {
+      actions.value = state.actions
+    }
+    if (state?.panel) {
+      applyPanelEnvelope(state.panel)
+    }
+  } catch (e) {
+    console.warn('[overlay] get_overlay_state 初始化异常:', e)
+  }
+
+  // 2. 注册实时事件监听
   try {
     unlistenUpdate = await listen<NextAction[]>('overlay:update', event => {
       actions.value = Array.isArray(event.payload) ? event.payload : []
@@ -68,47 +105,18 @@ onMounted(async () => {
       }
     })
     unlistenPanel = await listen<OverlayPanelEnvelope>('overlay:panel', event => {
-      const { panel, payload } = event.payload ?? {}
-      if (panel === 'mayhem-augments') {
-        mayhemAugments.value = isMayhemAugmentsPayload(payload) ? payload : null
-      } else if (panel === 'companion-bubble') {
-        const text =
-          typeof (payload as { text?: unknown })?.text === 'string'
-            ? (payload as { text: string }).text
-            : ''
-        companionText.value = text
-        // 气泡自动消失（桥接层不推送清空消息时的兜底）
-        if (bubbleTimer) clearTimeout(bubbleTimer)
-        if (text) {
-          bubbleTimer = setTimeout(() => {
-            companionText.value = ''
-          }, 6000)
-        }
-      }
+      applyPanelEnvelope(event.payload)
     })
   } catch (e) {
     console.warn('overlay event listen failed:', e)
   }
 })
 
-watch(
-  hasContent,
-  val => {
-    if (!val) {
-      void invoke('hide_overlay_window').catch(() => {})
-    } else {
-      void invoke('show_overlay_window').catch(() => {})
-    }
-  },
-  { immediate: true }
-)
-
 onUnmounted(() => {
   unlistenUpdate?.()
   unlistenConfig?.()
   unlistenPanel?.()
   window.removeEventListener('resize', updateMaxByHeight)
-  void invoke('hide_overlay_window').catch(() => {})
 })
 </script>
 
@@ -160,34 +168,35 @@ body {
 
 #overlay-app {
   background: transparent;
+  width: 100vw;
+  height: 100vh;
 }
 </style>
 
 <style scoped>
 .overlay-container {
-  position: fixed;
-  top: 0;
-  right: 0;
-  width: 320px;
-  max-height: 100vh;
-  overflow-y: auto;
-  padding: 12px;
+  width: 100%;
+  height: 100%;
+  padding: 8px 10px;
   box-sizing: border-box;
   pointer-events: none;
+  display: flex;
+  flex-direction: column;
 }
 
 .overlay-card {
   background: linear-gradient(
     180deg,
-    color-mix(in srgb, var(--bg-sunken) 90%, transparent),
-    color-mix(in srgb, var(--bg-raised) 94%, transparent)
+    color-mix(in srgb, var(--bg-sunken, #0f1015) 90%, transparent),
+    color-mix(in srgb, var(--bg-raised, #161822) 94%, transparent)
   );
-  border: 1px solid var(--brand-border);
-  border-top: 2px solid var(--brand);
+  border: 1px solid var(--brand-border, rgba(200, 155, 60, 0.4));
+  border-top: 2px solid var(--brand, #c89b3c);
   clip-path: var(--clip-corner-md);
-  padding: 12px;
-  backdrop-filter: blur(8px);
-  box-shadow: var(--shadow-2);
+  padding: 10px 12px;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6);
+  pointer-events: auto;
 }
 
 /* 多面板纵向堆叠时的间距 */

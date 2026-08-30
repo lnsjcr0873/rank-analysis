@@ -294,9 +294,11 @@ impl GameStateMonitor {
             });
         }
 
-        // 自动管理 Overlay 浮窗生命周期：若脱离 InProgress / 对局结束 / 断开连接，全局强制关闭并隐藏浮窗
+        // 自动管理 Overlay 浮窗生命周期：仅当对局结束（从 InProgress 脱离或断开连接）时，全局自动隐藏浮窗
+        let was_in_game =
+            self.last_state.connected && self.last_state.phase.as_deref() == Some("InProgress");
         let is_in_game = new_state.connected && new_state.phase.as_deref() == Some("InProgress");
-        if !is_in_game {
+        if was_in_game && !is_in_game {
             crate::overlay::hide();
         }
 

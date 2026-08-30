@@ -49,9 +49,9 @@ export async function setOverlayClickThrough(enabled: boolean): Promise<void> {
  */
 export async function previewAugmentOverlay(championId?: number): Promise<void> {
   const payload = await invoke('mayhem_score_preview', { championId })
-  await invoke('show_overlay_window')
-  await setOverlayLayout(560, 240, 'top-center')
   await pushOverlayPanel('mayhem-augments', payload)
+  await setOverlayLayout(560, 240, 'top-center')
+  await invoke('show_overlay_window')
 }
 
 /** 手动三选一：文本 → 词表匹配打分 → 显示并推送浮窗 */
@@ -65,9 +65,9 @@ export async function assistManual(
     championId,
     rerollsLeft
   })) as unknown
-  await invoke('show_overlay_window')
-  await setOverlayLayout(560, 240, 'top-center')
   await pushOverlayPanel('mayhem-augments', payload)
+  await setOverlayLayout(560, 240, 'top-center')
+  await invoke('show_overlay_window')
 }
 
 // ---------------------------------------------------------------------------

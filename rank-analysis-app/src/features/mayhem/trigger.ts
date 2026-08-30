@@ -361,8 +361,9 @@ export function getSharedAssistScheduler(): AssistScheduler {
           payload?: unknown
         }
         if (!outcome.pushed || !outcome.payload) return
-        await setOverlayLayout(560, 240, 'top-center')
         await pushOverlayPanel('mayhem-augments', outcome.payload)
+        await setOverlayLayout(560, 240, 'top-center')
+        await invoke('show_overlay_window')
       }
     })
   }

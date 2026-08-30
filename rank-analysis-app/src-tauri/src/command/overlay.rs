@@ -31,6 +31,12 @@ pub fn force_close_overlay() -> Result<(), String> {
     Ok(())
 }
 
+/// 获取当前激活的 Overlay 状态快照（供前端窗口挂载时即时同步）
+#[tauri::command]
+pub fn get_overlay_state() -> serde_json::Value {
+    crate::overlay::get_overlay_state()
+}
+
 /// 向 overlay 窗口推送 NextAction 建议数据。
 ///
 /// 主窗口（Gaming.vue）轮询 `get_next_actions`（前端 30s 节流），结果通过此命令
@@ -38,8 +44,9 @@ pub fn force_close_overlay() -> Result<(), String> {
 /// overlay：全局广播会把同一份数据冗余投递给主窗与全部 record-* 子窗口。
 #[tauri::command]
 pub fn push_overlay_data(app: tauri::AppHandle, actions: Vec<NextAction>) -> Result<(), String> {
+    crate::overlay::set_current_actions(actions.clone());
     if let Err(e) = app.emit_to("overlay", "overlay:update", &actions) {
-        return Err(format!("overlay 数据推送失败: {e}"));
+        log::warn!("overlay 数据推送通知: {e}");
     }
     Ok(())
 }
@@ -60,8 +67,9 @@ pub fn push_overlay_panel(
     payload: serde_json::Value,
 ) -> Result<(), String> {
     let envelope = serde_json::json!({ "panel": panel, "payload": payload });
+    crate::overlay::set_current_panel(envelope.clone());
     if let Err(e) = app.emit_to("overlay", "overlay:panel", &envelope) {
-        return Err(format!("overlay 面板推送失败: {e}"));
+        log::warn!("overlay 面板推送通知: {e}");
     }
     Ok(())
 }
