@@ -143,10 +143,7 @@ fn position_by_anchor(app: &tauri::AppHandle, width: f64, anchor: &str) {
         _ => OVERLAY_MARGIN as i32,
     };
     if let Some(w) = get_window() {
-        let _ = w.set_position(Position::Physical(tauri::PhysicalPosition::new(
-            x,
-            y,
-        )));
+        let _ = w.set_position(Position::Physical(tauri::PhysicalPosition::new(x, y)));
     }
 }
 
@@ -191,8 +188,5 @@ pub fn destroy() {
         log::info!("[overlay] 窗口已销毁");
     }
     OVERLAY_CREATED.store(false, Ordering::Relaxed);
-    APP_HANDLE
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .take();
+    APP_HANDLE.lock().unwrap_or_else(|e| e.into_inner()).take();
 }

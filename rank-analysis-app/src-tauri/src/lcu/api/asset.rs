@@ -778,7 +778,9 @@ pub fn ensure_offline_assets_loaded() {
 
     if item_empty {
         if let Ok(v) = crate::mayhem::store::read_local_json("items.json") {
-            let list = v.as_array().or_else(|| v.get("data").and_then(|d| d.as_array()));
+            let list = v
+                .as_array()
+                .or_else(|| v.get("data").and_then(|d| d.as_array()));
             if let Some(arr) = list {
                 let mut cache = ITEM_CACHE.write().unwrap();
                 for it in arr {
@@ -799,7 +801,9 @@ pub fn ensure_offline_assets_loaded() {
 
     if spell_empty {
         if let Ok(v) = crate::mayhem::store::read_local_json("summoner-spells.json") {
-            let list = v.as_array().or_else(|| v.get("data").and_then(|d| d.as_array()));
+            let list = v
+                .as_array()
+                .or_else(|| v.get("data").and_then(|d| d.as_array()));
             if let Some(arr) = list {
                 let mut cache = SPELL_CACHE.write().unwrap();
                 for sp in arr {
@@ -820,14 +824,23 @@ pub fn ensure_offline_assets_loaded() {
 
     if perk_empty {
         if let Ok(v) = crate::mayhem::store::read_local_json("augments.json") {
-            let list = v.as_array().or_else(|| v.get("data").and_then(|d| d.as_array()));
+            let list = v
+                .as_array()
+                .or_else(|| v.get("data").and_then(|d| d.as_array()));
             if let Some(arr) = list {
                 let mut cache = PERK_CACHE.write().unwrap();
                 for aug in arr {
                     if let (Some(id), Some(name)) = (aug["id"].as_i64(), aug["name"].as_str()) {
-                        let desc = aug["description"].as_str().or_else(|| aug["tooltip"].as_str()).unwrap_or_default().to_string();
+                        let desc = aug["description"]
+                            .as_str()
+                            .or_else(|| aug["tooltip"].as_str())
+                            .unwrap_or_default()
+                            .to_string();
                         let icon_path = aug["iconUrl"].as_str().unwrap_or_default().to_string();
-                        let rarity = aug["rarityDisplayName"].as_str().or_else(|| aug["rarityName"].as_str()).map(|s| s.to_string());
+                        let rarity = aug["rarityDisplayName"]
+                            .as_str()
+                            .or_else(|| aug["rarityName"].as_str())
+                            .map(|s| s.to_string());
                         cache.entry(id).or_insert(Perk {
                             id,
                             name: name.to_string(),
@@ -845,11 +858,16 @@ pub fn ensure_offline_assets_loaded() {
 
     if champ_empty {
         if let Ok(v) = crate::mayhem::store::read_local_json("champions.json") {
-            let list = v.as_array().or_else(|| v.get("data").and_then(|d| d.as_array()));
+            let list = v
+                .as_array()
+                .or_else(|| v.get("data").and_then(|d| d.as_array()));
             if let Some(arr) = list {
                 let mut cache = CHAMPION_CACHE.write().unwrap();
                 for c in arr {
-                    if let (Some(id), Some(title)) = (c["id"].as_i64(), c["title"].as_str().or_else(|| c["name"].as_str())) {
+                    if let (Some(id), Some(title)) = (
+                        c["id"].as_i64(),
+                        c["title"].as_str().or_else(|| c["name"].as_str()),
+                    ) {
                         let alias = c["alias"].as_str().unwrap_or_default().to_string();
                         let icon_path = c["iconUrl"].as_str().unwrap_or_default().to_string();
                         cache.entry(id).or_insert(Champion {

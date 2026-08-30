@@ -204,8 +204,20 @@ mod tests {
                 700_000,
                 HashMap::new(),
                 vec![
-                    ev("CHAMPION_KILL", 600_000, Some(MATE_A), Some(MATE_A), Some(50)),
-                    ev("CHAMPION_KILL", 615_000, Some(MATE_B), Some(MATE_B), Some(51)),
+                    ev(
+                        "CHAMPION_KILL",
+                        600_000,
+                        Some(MATE_A),
+                        Some(MATE_A),
+                        Some(50),
+                    ),
+                    ev(
+                        "CHAMPION_KILL",
+                        615_000,
+                        Some(MATE_B),
+                        Some(MATE_B),
+                        Some(51),
+                    ),
                     ev("CHAMPION_KILL", 630_000, Some(52), Some(52), Some(MATE_B)),
                     ev("CHAMPION_KILL", 645_000, Some(53), Some(53), Some(MATE_A)),
                 ],
@@ -329,8 +341,15 @@ mod tests {
             "归因评测失败明细：\n{}",
             report.failed.join("\n")
         );
-        assert_eq!(report.matched_count, report.expected_count, "recall 应为 1.0");
-        assert!(report.recall >= 0.8, "recall {:.2} 低于门槛 0.8", report.recall);
+        assert_eq!(
+            report.matched_count, report.expected_count,
+            "recall 应为 1.0"
+        );
+        assert!(
+            report.recall >= 0.8,
+            "recall {:.2} 低于门槛 0.8",
+            report.recall
+        );
         // 负例不产出 + 其余用例事件应有有效证据 → precision 高
         assert!(
             report.precision >= 0.5,

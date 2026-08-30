@@ -141,10 +141,7 @@ async fn fetch_remote() -> Result<LeagueServersConfig, String> {
 /// 拉取 + 择优应用。成功与失败都刷新 last_fetch（节流依据），失败保留现有映射。
 async fn refresh_from_remote() {
     let result = fetch_remote().await;
-    STORE
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .last_fetch = Some(Instant::now());
+    STORE.lock().unwrap_or_else(|e| e.into_inner()).last_fetch = Some(Instant::now());
     match result {
         Ok(config) => apply_config(config),
         Err(e) => log::warn!("SGP league-servers 远程拉取失败（保留现有映射）: {e}"),

@@ -190,7 +190,10 @@ pub fn champion_detail_in(
     let index: serde_json::Value = match read_local_json_in(root, "champion-shards/index.json") {
         Ok(v) => v,
         Err(e) => {
-            log::warn!("[mayhem] champion-shards/index.json fallback read failed: {}", e);
+            log::warn!(
+                "[mayhem] champion-shards/index.json fallback read failed: {}",
+                e
+            );
             return Ok(None);
         }
     };
@@ -445,7 +448,9 @@ pub async fn sync(force: bool) -> Result<Option<SyncReport>, String> {
         let mut reused = false;
         if existing.exists() {
             if let Ok(bytes) = std::fs::read(&existing) {
-                let valid = if let Some(expected_hex) = super::client::parse_sha256_hex(file.hash.as_deref()) {
+                let valid = if let Some(expected_hex) =
+                    super::client::parse_sha256_hex(file.hash.as_deref())
+                {
                     use sha2::{Digest, Sha256};
                     let actual = hex::encode(Sha256::digest(&bytes));
                     actual.eq_ignore_ascii_case(&expected_hex)
@@ -472,7 +477,8 @@ pub async fn sync(force: bool) -> Result<Option<SyncReport>, String> {
             } else {
                 super::client::join_origin(&file.url)
             };
-            total_bytes += super::client::download_verified(&url, file.hash.as_deref(), &dest).await?;
+            total_bytes +=
+                super::client::download_verified(&url, file.hash.as_deref(), &dest).await?;
             total_files += 1;
         }
     }
@@ -480,9 +486,9 @@ pub async fn sync(force: bool) -> Result<Option<SyncReport>, String> {
     // 校验全部通过后才落正式目录：
     // 在 Windows 下直接 remove_dir_all 容易因并发句柄被占用而失败并导致活跃数据丢失；
     // 采用“重命名旧目录为 .old_xxx 暂存 → staging 提升为 final_dir → 写指针 → 异步清理 .old_xxx”的安全轮转策略。
-    let backup_dir = root
-        .join("versions")
-        .join(format!("{}.old_{}", config.data_version, now_secs()));
+    let backup_dir =
+        root.join("versions")
+            .join(format!("{}.old_{}", config.data_version, now_secs()));
     if final_dir.exists() {
         if let Err(e) = std::fs::rename(&final_dir, &backup_dir) {
             log::warn!("[mayhem] rename old final_dir to backup failed: {}", e);

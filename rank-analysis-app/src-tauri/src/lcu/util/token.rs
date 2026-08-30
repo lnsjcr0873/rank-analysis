@@ -413,7 +413,8 @@ mod platform {
                         if name_lower.contains("leagueclient") {
                             fallback_pids.push(entry.th32ProcessID);
                         }
-                    } else if !name_lower.contains("leagueclient") && exe_name.contains(&name_lower) {
+                    } else if !name_lower.contains("leagueclient") && exe_name.contains(&name_lower)
+                    {
                         exact_pids.push(entry.th32ProcessID);
                     }
 
