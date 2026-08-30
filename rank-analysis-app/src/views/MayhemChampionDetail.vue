@@ -82,7 +82,13 @@
               />
               <span class="daug__name">{{ augNameOf(a.id) }}</span>
               <span class="ararity" :class="`rr-${a.rarityName}`">{{ a.rarityDisplayName }}</span>
+              <span class="daug__score" :class="augHexScore(a) >= 80 ? 'gold' : augHexScore(a) >= 65 ? 'blue' : 'gray'">
+                Score {{ augHexScore(a) }}
+              </span>
               <span class="daug__wr">{{ pct(a.stats.winRate) }}</span>
+              <span class="daug__delta" :class="{ pos: augDelta(a) >= 0, neg: augDelta(a) < 0 }">
+                {{ fmtDelta(augDelta(a)) }}
+              </span>
               <span class="daug__pr">选取 {{ pct(a.stats.pickRate) }}</span>
             </div>
           </div>
@@ -319,6 +325,13 @@ function pct(v: number | null | undefined): string {
   return v < 0 ? `-${text}%` : `${text}%`
 }
 
+function fmtDelta(v: number): string {
+  if (!Number.isFinite(v)) return '--'
+  const abs = Math.abs(v)
+  const text = (abs * 100).toFixed(1)
+  return v >= 0 ? `+${text}%` : `-${text}%`
+}
+
 function clampTier(v: number): number {
   return Math.min(Math.max(v, 1), 5)
 }
@@ -351,9 +364,25 @@ function spellName(id: number): string {
   return assets.detailOf('spell', id)?.name ?? `技能 #${id}`
 }
 
+type DetailAugment = ChampionDetailEntry['augments'][number]
+
 function augTooltip(id: number): string {
   const a = assets.detailOf('perk', id)
   return a?.description || a?.name || `强化 #${id}`
+}
+
+function augDelta(a: DetailAugment): number {
+  if (a.stats.winRate == null) return 0
+  const base = heroWinRate.value ?? 0.5
+  return a.stats.winRate - base
+}
+
+function augHexScore(a: DetailAugment): number {
+  const delta = augDelta(a)
+  const games = a.stats.games ?? (a.stats.winRateMinimumGames ?? 255)
+  const sampleBonus = Math.min(Math.log10(games + 1) * 6, 25)
+  const score = Math.min(99.9, Math.max(25.0, 50.0 + delta * 450 + (sampleBonus - 10)))
+  return Number(score.toFixed(1))
 }
 
 function fallbackIcon(ev: Event, remoteUrl?: string) {

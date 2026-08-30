@@ -64,12 +64,14 @@ const props = defineProps<{
 
 const assets = useRecordAssets()
 
-/** 当前激活视图：'matrix' (矩阵表格) | 'tree' (时序进化树) | 'toolbox' (对策工具箱) */
-const activeView = ref<'matrix' | 'tree' | 'toolbox'>('matrix')
+/** 当前激活视图：'matrix' (矩阵表格) | 'tree' (时序进化树) | 'items' (单装强度榜) | 'toolbox' (对策工具箱) */
+const activeView = ref<'matrix' | 'tree' | 'items' | 'toolbox'>('matrix')
 
 const searchQuery = ref('')
 const sortField = ref<'winRate' | 'pickRate' | 'winRateDelta' | 'games'>('winRateDelta')
 const sortOrder = ref<'desc' | 'asc'>('desc')
+const itemSortField = ref<'hexScore' | 'winRate' | 'netDelta' | 'games'>('hexScore')
+const itemSortOrder = ref<'desc' | 'asc'>('desc')
 const importingId = ref<string | null>(null)
 const importSuccessMsg = ref('')
 const copySuccess = ref(false)
@@ -332,6 +334,84 @@ const smartSwaps = computed(() => {
 
   return swaps.slice(0, 2)
 })
+
+/**
+ * ---------------------------------------------------------------------------
+ * 📊 单装强度榜（对比 hexdata.com.cn 深度升级：HexScore + 独立胜率 + 净收益归因 + 标签）
+ * ---------------------------------------------------------------------------
+ */
+export interface ItemRankingRow {
+  id: number
+  name: string
+  winRate: number
+  netDelta: number
+  games: number
+  hexScore: number
+  isCrown: boolean
+  isTrap: boolean
+  tags: string[]
+}
+
+const allItemRankings = computed<ItemRankingRow[]>(() => {
+  const baseWr = heroOverallWinRate.value
+  const list: ItemRankingRow[] = []
+
+  for (const [id, s] of itemAttributions.value.entries()) {
+    const name = itemName(id)
+    if (!name || name.startsWith('装备 #')) continue
+    const winRate = Math.min(Math.max(baseWr + s.netDelta, 0.25), 0.85)
+    // 综合 HexScore 评分：基准 50 + 净收益增益 * 400 + 样本置信度加成 (0~25)
+    const sampleBonus = Math.min(Math.log10(s.totalGames + 1) * 6, 25)
+    const hexScore = Math.min(99.9, Math.max(25.0, 50 + s.netDelta * 400 + (sampleBonus - 10)))
+    const isCrown = s.netDelta >= 0.02 && s.totalGames >= 300
+    const isTrap = s.netDelta <= -0.008 && s.totalGames >= 400
+
+    const tags: string[] = []
+    if (isCrown) tags.push('🌟 质变神装')
+    if (isTrap) tags.push('⚠️ 避坑陷阱')
+    if (s.totalGames >= 5000) tags.push('🔥 高频主力')
+
+    list.push({
+      id,
+      name,
+      winRate,
+      netDelta: s.netDelta,
+      games: s.totalGames,
+      hexScore: Number(hexScore.toFixed(1)),
+      isCrown,
+      isTrap,
+      tags
+    })
+  }
+
+  return list.sort((a, b) => b.hexScore - a.hexScore)
+})
+
+const filteredItemRankings = computed<ItemRankingRow[]>(() => {
+  let list = [...allItemRankings.value]
+  if (searchQuery.value.trim()) {
+    const q = searchQuery.value.trim().toLowerCase()
+    list = list.filter(r => r.name.toLowerCase().includes(q))
+  }
+  list.sort((a, b) => {
+    let diff = 0
+    if (itemSortField.value === 'hexScore') diff = a.hexScore - b.hexScore
+    else if (itemSortField.value === 'winRate') diff = a.winRate - b.winRate
+    else if (itemSortField.value === 'netDelta') diff = a.netDelta - b.netDelta
+    else if (itemSortField.value === 'games') diff = a.games - b.games
+    return itemSortOrder.value === 'desc' ? -diff : diff
+  })
+  return list
+})
+
+function toggleItemSort(field: 'hexScore' | 'winRate' | 'netDelta' | 'games') {
+  if (itemSortField.value === field) {
+    itemSortOrder.value = itemSortOrder.value === 'desc' ? 'asc' : 'desc'
+  } else {
+    itemSortField.value = field
+    itemSortOrder.value = 'desc'
+  }
+}
 
 /**
  * ---------------------------------------------------------------------------
@@ -783,6 +863,14 @@ function onCopySummary() {
       </button>
       <button
         class="matrix-tab-btn"
+        :class="{ active: activeView === 'items' }"
+        @click="activeView = 'items'"
+      >
+        <Flame class="tab-ic" />
+        <span>单装强度排行 ({{ allItemRankings.length }})</span>
+      </button>
+      <button
+        class="matrix-tab-btn"
         :class="{ active: activeView === 'tree' }"
         @click="activeView = 'tree'"
       >
@@ -974,7 +1062,160 @@ function onCopySummary() {
       </div>
     </div>
 
-    <!-- ==================== VIEW 2: 出装时序分支树 ==================== -->
+    <!-- ==================== VIEW 2: 单装强度排行表格 (hexdata 深度升级版) ==================== -->
+    <div v-else-if="activeView === 'items'" class="view-panel">
+      <!-- 工具栏 -->
+      <div class="matrix-toolbar">
+        <div class="mtb-search">
+          <Search class="search-ic" />
+          <input
+            v-model="searchQuery"
+            type="text"
+            placeholder="搜索单件装备（如：金铲铲、破败、无尽、流水法杖…）"
+          />
+        </div>
+        <div class="mtb-stats">
+          已聚合 <strong>{{ filteredItemRankings.length }}</strong> 件装备 · 包含 <strong>HexScore 综合评分</strong>、独立胜率与净贡献
+        </div>
+      </div>
+
+      <!-- 单装数据表格 -->
+      <div class="matrix-table-container">
+        <table class="matrix-table">
+          <thead>
+            <tr>
+              <th class="th-combo">装备名称</th>
+              <th class="th-sortable" @click="toggleItemSort('hexScore')">
+                <div class="th-content">
+                  <span>HexScore 综合评分</span>
+                  <span class="sort-arrows">
+                    <ChevronUp
+                      v-if="itemSortField === 'hexScore' && itemSortOrder === 'asc'"
+                      class="arr on"
+                    />
+                    <ChevronDown
+                      v-else-if="itemSortField === 'hexScore' && itemSortOrder === 'desc'"
+                      class="arr on"
+                    />
+                    <ArrowUpDown v-else class="arr" />
+                  </span>
+                </div>
+              </th>
+              <th class="th-sortable" @click="toggleItemSort('winRate')">
+                <div class="th-content">
+                  <span>单装独立胜率</span>
+                  <span class="sort-arrows">
+                    <ChevronUp
+                      v-if="itemSortField === 'winRate' && itemSortOrder === 'asc'"
+                      class="arr on"
+                    />
+                    <ChevronDown
+                      v-else-if="itemSortField === 'winRate' && itemSortOrder === 'desc'"
+                      class="arr on"
+                    />
+                    <ArrowUpDown v-else class="arr" />
+                  </span>
+                </div>
+              </th>
+              <th class="th-sortable" @click="toggleItemSort('netDelta')">
+                <div class="th-content">
+                  <span>胜率净收益 (Δ)</span>
+                  <span class="sort-arrows">
+                    <ChevronUp
+                      v-if="itemSortField === 'netDelta' && itemSortOrder === 'asc'"
+                      class="arr on"
+                    />
+                    <ChevronDown
+                      v-else-if="itemSortField === 'netDelta' && itemSortOrder === 'desc'"
+                      class="arr on"
+                    />
+                    <ArrowUpDown v-else class="arr" />
+                  </span>
+                </div>
+              </th>
+              <th class="th-sortable" @click="toggleItemSort('games')">
+                <div class="th-content">
+                  <span>样本场次</span>
+                  <span class="sort-arrows">
+                    <ChevronUp
+                      v-if="itemSortField === 'games' && itemSortOrder === 'asc'"
+                      class="arr on"
+                    />
+                    <ChevronDown
+                      v-else-if="itemSortField === 'games' && itemSortOrder === 'desc'"
+                      class="arr on"
+                    />
+                    <ArrowUpDown v-else class="arr" />
+                  </span>
+                </div>
+              </th>
+              <th class="th-act">实战标签与定位</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="item in filteredItemRankings"
+              :key="item.id"
+              class="matrix-row"
+              :class="{ 'row-core': item.isCrown, 'row-trap': item.isTrap }"
+            >
+              <td class="td-combo">
+                <div class="combo-icons">
+                  <div class="combo-icon-wrap">
+                    <img
+                      :src="itemSrc(item.id)"
+                      :alt="item.name"
+                      :title="`${item.name} - ${itemDesc(item.id)}`"
+                      class="item-icon"
+                      loading="lazy"
+                    />
+                  </div>
+                </div>
+                <div class="combo-names">
+                  <span class="names-text">{{ item.name }}</span>
+                </div>
+              </td>
+              <td class="td-num">
+                <span
+                  class="hex-score-badge"
+                  :class="item.hexScore >= 80 ? 'gold' : item.hexScore >= 65 ? 'blue' : 'gray'"
+                >
+                  {{ item.hexScore }}
+                </span>
+              </td>
+              <td class="td-num">
+                <span class="val-wr" :class="{ high: item.winRate >= 0.54, low: item.winRate < 0.48 }">
+                  {{ pct(item.winRate) }}
+                </span>
+              </td>
+              <td class="td-num">
+                <span class="val-delta" :class="{ pos: item.netDelta >= 0, neg: item.netDelta < 0 }">
+                  {{ fmtDelta(item.netDelta) }}
+                </span>
+              </td>
+              <td class="td-num">
+                <span class="sample-count font-number">{{ fmtGames(item.games) }}</span>
+              </td>
+              <td class="td-act">
+                <div class="item-tag-list">
+                  <span
+                    v-for="tag in item.tags"
+                    :key="tag"
+                    class="item-tag"
+                    :class="{ crown: item.isCrown, trap: item.isTrap }"
+                  >
+                    {{ tag }}
+                  </span>
+                  <span v-if="!item.tags.length" class="item-tag normal">常规对策</span>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ==================== VIEW 3: 出装时序分支树 ==================== -->
     <div v-else-if="activeView === 'tree'" class="view-panel">
       <div v-if="evolutionBranches.length" class="tree-branches-list">
         <div v-for="(branch, bi) in evolutionBranches" :key="bi" class="branch-card">
@@ -2059,6 +2300,57 @@ function onCopySummary() {
   width: 22px;
   height: 22px;
   border-radius: 3px;
+  border: 1px solid var(--border-subtle);
+}
+
+.hex-score-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-family-mono);
+  font-weight: var(--font-weight-bold);
+  font-size: 13px;
+}
+.hex-score-badge.gold {
+  background: rgba(234, 179, 8, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(234, 179, 8, 0.4);
+}
+.hex-score-badge.blue {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.4);
+}
+.hex-score-badge.gray {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+}
+
+.item-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.item-tag {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+.item-tag.crown {
+  background: rgba(234, 179, 8, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(234, 179, 8, 0.4);
+}
+.item-tag.trap {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+.item-tag.normal {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-tertiary);
   border: 1px solid var(--border-subtle);
 }
 </style>
