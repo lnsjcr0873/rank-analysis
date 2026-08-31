@@ -34,18 +34,6 @@
           <Keyboard class="btn-ico" />
           {{ manualOpen ? '收起手动' : '手动三选一' }}
         </button>
-        <button
-          class="btn gho sm"
-          :title="
-            mayhemStore.viewMode === 'matrix'
-              ? '切换为经典列表卡片视图'
-              : '切换为 Meta 矩阵看板视图'
-          "
-          @click="toggleViewMode"
-        >
-          <LayoutGrid class="btn-ico" />
-          {{ mayhemStore.viewMode === 'matrix' ? '切换至经典列表' : '切换至矩阵看板' }}
-        </button>
         <button class="btn gho sm" :disabled="syncing" @click="onSync(true)">
           <RefreshCw class="btn-ico" :class="{ spinning: syncing }" />
           {{ syncing ? '同步中…' : '刷新数据' }}
@@ -85,110 +73,125 @@
         </button>
       </div>
 
-      <!-- 全新 Meta 矩阵看板视图 (AramMeta 进阶版) -->
-      <MayhemMatrixView v-if="mayhemStore.viewMode === 'matrix'" />
+      <!-- 经典列表卡片视图 -->
+      <div class="m-tabs">
+        <button
+          v-for="t in TABS"
+          :key="t.key"
+          class="mtab"
+          :class="{ on: activeTab === t.key }"
+          @click="switchTab(t.key)"
+        >
+          {{ t.label }}
+        </button>
+      </div>
 
-      <!-- 经典列表卡片视图（保留原有 UI/UX） -->
-      <div v-else class="classic-mode-container">
-        <div class="m-tabs">
+      <div class="m-toolbar">
+        <input v-model.trim="search" class="m-search" type="search" placeholder="搜索…" />
+
+        <div v-if="activeTab === 'champions'" class="m-roles">
           <button
-            v-for="t in TABS"
-            :key="t.key"
-            class="mtab"
-            :class="{ on: activeTab === t.key }"
-            @click="switchTab(t.key)"
+            v-for="r in roleOptions"
+            :key="r.key"
+            class="chip"
+            :class="{ 'chip--on': activeRole === r.key }"
+            @click="activeRole = r.key"
           >
-            {{ t.label }}
+            {{ r.label }}
           </button>
         </div>
 
-        <div class="m-toolbar">
-          <input v-model.trim="search" class="m-search" type="search" placeholder="搜索…" />
-
-          <div v-if="activeTab === 'champions'" class="m-roles">
-            <button
-              v-for="r in roleOptions"
-              :key="r.key"
-              class="chip"
-              :class="{ 'chip--on': activeRole === r.key }"
-              @click="activeRole = r.key"
-            >
-              {{ r.label }}
-            </button>
-          </div>
-
-          <div v-else-if="activeTab === 'augments'" class="m-roles">
-            <button
-              v-for="r in RARITY_OPTIONS"
-              :key="r.key"
-              class="chip"
-              :class="{ 'chip--on': activeRarity === r.key }"
-              @click="activeRarity = r.key"
-            >
-              {{ r.label }}
-            </button>
-          </div>
-
-          <!-- 强化榜工具行：低样本开关 / 浮窗预览 / 对局监听 / 手动入口 -->
-          <template v-if="activeTab === 'augments'">
-            <label class="m-toggle">
-              <input v-model="showNoSample" type="checkbox" /> 显示无胜率样本
-            </label>
-            <button class="btn gho sm" :disabled="previewing" @click="onPreviewPanel">
-              {{ previewing ? '推送中…' : '预览浮窗' }}
-            </button>
-            <button class="btn gho sm" :class="{ 'btn--on': assistRunning }" @click="toggleAssist">
-              {{ assistRunning ? '停止对局监听' : '启动对局监听' }}
-            </button>
-            <button class="btn gho sm" @click="manualOpen = !manualOpen">手动三选一</button>
-            <button class="btn gho sm" :disabled="calibrating" @click="onCalibrate">
-              {{ calibrating ? '截取中…' : '校准截图' }}
-            </button>
-            <span v-if="lastTick" class="m-toggle">
-              {{ lastTick.note
-              }}<template v-if="lastTick.maxStddev != null">
-                · 峰值 {{ lastTick.maxStddev.toFixed(1) }}</template
-              >
-            </span>
-          </template>
-        </div>
-
-        <!-- 校准视图：三张标题带的实际截取内容，用于对准 capture.rs 标定常数 -->
-        <div v-if="bandDump.length" class="m-calib">
-          <img
-            v-for="d in bandDump"
-            :key="d.slot"
-            class="m-calib__shot"
-            :src="`data:image/bmp;base64,${d.bmpBase64}`"
-            :alt="`卡位 ${d.slot}`"
-            :title="`卡位 ${d.slot}（左/中/右）实际截取区域`"
-          />
-          <span class="m-toggle">
-            若框未对准卡名，请调整 src-tauri/src/mayhem/capture.rs 的标定常数后重新截取。
-          </span>
-        </div>
-
-        <!-- Tab 1 英雄榜 -->
-        <template v-if="activeTab === 'champions'">
-          <div v-if="loading && !champions.length" class="m-empty">正在加载数据…</div>
-          <EmptyState
-            v-else-if="!filteredChampions.length"
-            :icon="SearchX"
-            title="没有符合条件的英雄"
-            description="尝试更换搜索关键词或职业分类"
+        <!-- 缩略视图切换按钮 -->
+        <div v-if="activeTab === 'champions'" class="m-view-toggle">
+          <button
+            class="chip"
+            :class="{ 'chip--on': isCompactView }"
+            :title="
+              isCompactView
+                ? '当前为缩略模式（头像+胜率），点击切回标准大框'
+                : '点击切换为缩略模式（头像+胜率）'
+            "
+            @click="toggleCompactView"
           >
-            <template #action>
-              <button class="btn gho sm" @click="onResetChampFilter">清空筛选</button>
-            </template>
-          </EmptyState>
-          <div v-else class="m-grid">
-            <button
-              v-for="c in filteredChampions"
-              :key="c.id"
-              class="ccard"
-              :title="`${c.name}·${c.title}`"
-              @click="openChampion(c.id)"
+            <Grid2X2 v-if="!isCompactView" class="btn-ico-sm" />
+            <LayoutGrid v-else class="btn-ico-sm" />
+            {{ isCompactView ? '缩略模式' : '标准大框' }}
+          </button>
+        </div>
+
+        <div v-else-if="activeTab === 'augments'" class="m-roles">
+          <button
+            v-for="r in RARITY_OPTIONS"
+            :key="r.key"
+            class="chip"
+            :class="{ 'chip--on': activeRarity === r.key }"
+            @click="activeRarity = r.key"
+          >
+            {{ r.label }}
+          </button>
+        </div>
+
+        <!-- 强化榜工具行：低样本开关 / 浮窗预览 / 对局监听 / 手动入口 -->
+        <template v-if="activeTab === 'augments'">
+          <label class="m-toggle">
+            <input v-model="showNoSample" type="checkbox" /> 显示无胜率样本
+          </label>
+          <button class="btn gho sm" :disabled="previewing" @click="onPreviewPanel">
+            {{ previewing ? '推送中…' : '预览浮窗' }}
+          </button>
+          <button class="btn gho sm" :class="{ 'btn--on': assistRunning }" @click="toggleAssist">
+            {{ assistRunning ? '停止对局监听' : '启动对局监听' }}
+          </button>
+          <button class="btn gho sm" @click="manualOpen = !manualOpen">手动三选一</button>
+          <button class="btn gho sm" :disabled="calibrating" @click="onCalibrate">
+            {{ calibrating ? '截取中…' : '校准截图' }}
+          </button>
+          <span v-if="lastTick" class="m-toggle">
+            {{ lastTick.note
+            }}<template v-if="lastTick.maxStddev != null">
+              · 峰值 {{ lastTick.maxStddev.toFixed(1) }}</template
             >
+          </span>
+        </template>
+      </div>
+
+      <!-- 校准视图：三张标题带的实际截取内容，用于对准 capture.rs 标定常数 -->
+      <div v-if="bandDump.length" class="m-calib">
+        <img
+          v-for="d in bandDump"
+          :key="d.slot"
+          class="m-calib__shot"
+          :src="`data:image/bmp;base64,${d.bmpBase64}`"
+          :alt="`卡位 ${d.slot}`"
+          :title="`卡位 ${d.slot}（左/中/右）实际截取区域`"
+        />
+        <span class="m-toggle">
+          若框未对准卡名，请调整 src-tauri/src/mayhem/capture.rs 的标定常数后重新截取。
+        </span>
+      </div>
+
+      <!-- Tab 1 英雄榜 -->
+      <template v-if="activeTab === 'champions'">
+        <div v-if="loading && !champions.length" class="m-empty">正在加载数据…</div>
+        <EmptyState
+          v-else-if="!filteredChampions.length"
+          :icon="SearchX"
+          title="没有符合条件的英雄"
+          description="尝试更换搜索关键词或职业分类"
+        >
+          <template #action>
+            <button class="btn gho sm" @click="onResetChampFilter">清空筛选</button>
+          </template>
+        </EmptyState>
+        <div v-else :class="['m-grid', { 'm-grid--compact': isCompactView }]">
+          <button
+            v-for="c in filteredChampions"
+            :key="c.id"
+            :class="['ccard', { 'ccard--compact': isCompactView }]"
+            :title="`${c.name}·${c.title} (胜率: ${pct(c.stats.winRate)} / 选取: ${pct(c.stats.pickRate)})`"
+            @click="openChampion(c.id)"
+          >
+            <template v-if="!isCompactView">
               <span class="ctier" :class="`t${tierOf(c)}`">T{{ tierOf(c) }}</span>
               <img class="cico" :src="c.iconUrl" :alt="c.title" loading="lazy" />
               <span class="cname">{{ c.title }}</span>
@@ -198,128 +201,135 @@
               <span class="croles">
                 <i v-for="role in c.roles.slice(0, 2)" :key="role">{{ roleLabel(role) }}</i>
               </span>
-            </button>
-          </div>
-        </template>
-
-        <!-- Tab 2 强化榜 -->
-        <template v-else-if="activeTab === 'augments'">
-          <div v-if="augsLoading && !augments.length" class="m-empty">正在加载数据…</div>
-          <EmptyState
-            v-else-if="!filteredAugments.length"
-            :icon="SearchX"
-            title="没有符合条件的强化"
-            description="尝试更换搜索关键词或稀有度筛选"
-          >
-            <template #action>
-              <button class="btn gho sm" @click="onResetAugFilter">清空筛选</button>
             </template>
-          </EmptyState>
-          <div v-else class="m-grid m-grid--aug">
-            <div v-for="a in filteredAugments" :key="a.id" class="acard" :title="plainDesc(a)">
-              <span v-if="tierOfAug(a)" class="ctier" :class="`t${tierOfAug(a)}`"
-                >T{{ tierOfAug(a) }}</span
-              >
+            <template v-else>
+              <div class="c-avatar-wrap">
+                <span class="ctier-badge" :class="`t${tierOf(c)}`">T{{ tierOf(c) }}</span>
+                <img class="cico-compact" :src="c.iconUrl" :alt="c.title" loading="lazy" />
+              </div>
+              <span class="cwr-compact">{{ pct(c.stats.winRate) }}</span>
+            </template>
+          </button>
+        </div>
+      </template>
+
+      <!-- Tab 2 强化榜 -->
+      <template v-else-if="activeTab === 'augments'">
+        <div v-if="augsLoading && !augments.length" class="m-empty">正在加载数据…</div>
+        <EmptyState
+          v-else-if="!filteredAugments.length"
+          :icon="SearchX"
+          title="没有符合条件的强化"
+          description="尝试更换搜索关键词或稀有度筛选"
+        >
+          <template #action>
+            <button class="btn gho sm" @click="onResetAugFilter">清空筛选</button>
+          </template>
+        </EmptyState>
+        <div v-else class="m-grid m-grid--aug">
+          <div v-for="a in filteredAugments" :key="a.id" class="acard" :title="plainDesc(a)">
+            <span v-if="tierOfAug(a)" class="ctier" :class="`t${tierOfAug(a)}`"
+              >T{{ tierOfAug(a) }}</span
+            >
+            <img
+              class="aico"
+              :src="perkSrc(a.id)"
+              :alt="a.name"
+              loading="lazy"
+              @error="fallbackIcon($event, a.iconUrl)"
+            />
+            <span class="aname">{{ a.name }}</span>
+            <span class="ararity" :class="`rr-${a.rarityName}`">{{ a.rarityDisplayName }}</span>
+            <span class="awr">{{ pct(a.stats?.winRate) }}</span>
+            <span class="apr">
+              选取 {{ pct(a.stats?.pickRate) }}
+              <em v-if="stageOfAug(a)">· 第{{ stageOfAug(a) }}轮最佳</em>
+            </span>
+            <span v-if="a.topChampions?.length" class="atops">
               <img
-                class="aico"
-                :src="perkSrc(a.id)"
-                :alt="a.name"
+                v-for="tc in a.topChampions.slice(0, 5)"
+                :key="tc.id"
+                :src="tc.iconUrl"
+                :alt="tc.title"
+                :title="`${tc.name}·${tc.title}`"
                 loading="lazy"
-                @error="fallbackIcon($event, a.iconUrl)"
               />
-              <span class="aname">{{ a.name }}</span>
-              <span class="ararity" :class="`rr-${a.rarityName}`">{{ a.rarityDisplayName }}</span>
-              <span class="awr">{{ pct(a.stats?.winRate) }}</span>
-              <span class="apr">
-                选取 {{ pct(a.stats?.pickRate) }}
-                <em v-if="stageOfAug(a)">· 第{{ stageOfAug(a) }}轮最佳</em>
-              </span>
-              <span v-if="a.topChampions?.length" class="atops">
-                <img
-                  v-for="tc in a.topChampions.slice(0, 5)"
-                  :key="tc.id"
-                  :src="tc.iconUrl"
-                  :alt="tc.title"
-                  :title="`${tc.name}·${tc.title}`"
-                  loading="lazy"
-                />
-              </span>
+            </span>
+          </div>
+        </div>
+      </template>
+
+      <!-- Tab 3 我的数据 -->
+      <template v-else>
+        <div class="mine-head">
+          <button class="btn pri sm" :disabled="importing" @click="onImport">
+            <Download class="btn-ico" :class="{ spinning: importing }" />
+            {{ importing ? '导入中…' : '导入最近战绩' }}
+          </button>
+          <span v-if="importNote" class="mine-note">{{ importNote }}</span>
+        </div>
+
+        <section class="d-sec">
+          <h3>我的英雄</h3>
+          <EmptyState
+            v-if="!myChamps.length"
+            :icon="Inbox"
+            title="暂无自采英雄数据"
+            description="打完一局海克斯大乱斗后点上方「导入最近战绩」即可汇总个人绝活"
+          />
+          <div v-else class="mylist">
+            <div
+              v-for="c in myChamps"
+              :key="c.championId"
+              class="myrow"
+              @click="openChampion(c.championId)"
+            >
+              <img
+                class="myrow__ico"
+                :src="`${assetPrefix}/champion/${c.championId}`"
+                alt=""
+                loading="lazy"
+              />
+              <span class="myrow__name">{{ champName(c.championId) }}</span>
+              <span class="myrow__g">{{ c.games }} 场</span>
+              <span class="mybar"><i :style="{ width: wrPct(c) }" /></span>
+              <span class="myrow__wr">{{ pct(c.wins / Math.max(c.games, 1)) }}</span>
+              <span class="myrow__kda">KDA {{ kda(c.kills, c.deaths, c.assists) }}</span>
             </div>
           </div>
-        </template>
+        </section>
 
-        <!-- Tab 3 我的数据 -->
-        <template v-else>
-          <div class="mine-head">
-            <button class="btn pri sm" :disabled="importing" @click="onImport">
-              <Download class="btn-ico" :class="{ spinning: importing }" />
-              {{ importing ? '导入中…' : '导入最近战绩' }}
-            </button>
-            <span v-if="importNote" class="mine-note">{{ importNote }}</span>
+        <section class="d-sec">
+          <h3>我的强化</h3>
+          <EmptyState
+            v-if="!myAugs.length"
+            :icon="Inbox"
+            title="暂无自采强化数据"
+            description="打完一局海克斯大乱斗后点上方「导入最近战绩」即可汇总强化表现"
+          />
+          <div v-else class="mylist mylist--aug">
+            <div
+              v-for="a in myAugs.slice(0, 20)"
+              :key="a.augmentId"
+              class="myrow"
+              :title="augTooltipOf(a.augmentId)"
+            >
+              <img
+                class="myrow__ico sq"
+                :src="perkSrc(a.augmentId)"
+                alt=""
+                loading="lazy"
+                @error="fallbackIcon($event, augRemoteIcon(a.augmentId))"
+              />
+              <span class="myrow__name">{{ augNameOf(a.augmentId) }}</span>
+              <span class="myrow__g">{{ a.games }} 场</span>
+              <span class="mybar"><i :style="{ width: augWrPct(a) }" /></span>
+              <span class="myrow__wr">{{ pct(a.wins / Math.max(a.games, 1)) }}</span>
+              <span class="myrow__kda"></span>
+            </div>
           </div>
-
-          <section class="d-sec">
-            <h3>我的英雄</h3>
-            <EmptyState
-              v-if="!myChamps.length"
-              :icon="Inbox"
-              title="暂无自采英雄数据"
-              description="打完一局海克斯大乱斗后点上方「导入最近战绩」即可汇总个人绝活"
-            />
-            <div v-else class="mylist">
-              <div
-                v-for="c in myChamps"
-                :key="c.championId"
-                class="myrow"
-                @click="openChampion(c.championId)"
-              >
-                <img
-                  class="myrow__ico"
-                  :src="`${assetPrefix}/champion/${c.championId}`"
-                  alt=""
-                  loading="lazy"
-                />
-                <span class="myrow__name">{{ champName(c.championId) }}</span>
-                <span class="myrow__g">{{ c.games }} 场</span>
-                <span class="mybar"><i :style="{ width: wrPct(c) }" /></span>
-                <span class="myrow__wr">{{ pct(c.wins / Math.max(c.games, 1)) }}</span>
-                <span class="myrow__kda">KDA {{ kda(c.kills, c.deaths, c.assists) }}</span>
-              </div>
-            </div>
-          </section>
-
-          <section class="d-sec">
-            <h3>我的强化</h3>
-            <EmptyState
-              v-if="!myAugs.length"
-              :icon="Inbox"
-              title="暂无自采强化数据"
-              description="打完一局海克斯大乱斗后点上方「导入最近战绩」即可汇总强化表现"
-            />
-            <div v-else class="mylist mylist--aug">
-              <div
-                v-for="a in myAugs.slice(0, 20)"
-                :key="a.augmentId"
-                class="myrow"
-                :title="augTooltipOf(a.augmentId)"
-              >
-                <img
-                  class="myrow__ico sq"
-                  :src="perkSrc(a.augmentId)"
-                  alt=""
-                  loading="lazy"
-                  @error="fallbackIcon($event, augRemoteIcon(a.augmentId))"
-                />
-                <span class="myrow__name">{{ augNameOf(a.augmentId) }}</span>
-                <span class="myrow__g">{{ a.games }} 场</span>
-                <span class="mybar"><i :style="{ width: augWrPct(a) }" /></span>
-                <span class="myrow__wr">{{ pct(a.wins / Math.max(a.games, 1)) }}</span>
-                <span class="myrow__kda"></span>
-              </div>
-            </div>
-          </section>
-        </template>
-      </div>
+        </section>
+      </template>
 
       <p class="m-note">
         数据来源：aramgg 公开客户端 API（腾讯国服公开统计口径，T 级官方、胜率随版本每日更新）。
@@ -344,6 +354,7 @@ import EmptyState from '../components/ui/EmptyState.vue'
 import {
   Download,
   Eye,
+  Grid2X2,
   Inbox,
   Keyboard,
   LayoutGrid,
@@ -368,7 +379,6 @@ import {
   type MyAugmentStat,
   type MyChampionStat
 } from '../features/mayhem/services/mayhemData'
-import MayhemMatrixView from './mayhem/MayhemMatrixView.vue'
 import { useMayhemStore } from '../features/mayhem/stores/mayhemStore'
 import { assistManual, previewAugmentOverlay } from '../features/overlay/panels'
 import { applyOverlayHotkey } from '../features/overlay/hotkeys'
@@ -402,9 +412,10 @@ const CHANGES_SEEN_KEY = 'mayhem-changes-seen-version'
 const router = useRouter()
 const mayhemStore = useMayhemStore()
 
-function toggleViewMode() {
-  const next = mayhemStore.viewMode === 'matrix' ? 'classic' : 'matrix'
-  void mayhemStore.setViewMode(next)
+const isCompactView = ref(localStorage.getItem('mayhem_compact_view') === 'true')
+function toggleCompactView() {
+  isCompactView.value = !isCompactView.value
+  localStorage.setItem('mayhem_compact_view', String(isCompactView.value))
 }
 
 const status = computed({

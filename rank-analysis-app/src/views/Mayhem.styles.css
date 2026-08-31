@@ -98,6 +98,18 @@
   gap: 6px;
   flex-wrap: wrap;
 }
+.m-view-toggle {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+}
+.btn-ico-sm {
+  width: 13px;
+  height: 13px;
+  margin-right: 4px;
+  display: inline-block;
+  vertical-align: middle;
+}
 .chip {
   background: transparent;
   border: 1px solid var(--border-strong);
@@ -125,6 +137,10 @@
   grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
   gap: var(--space-12);
 }
+.m-grid--compact {
+  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+  gap: 8px;
+}
 .ccard {
   position: relative;
   display: flex;
@@ -143,6 +159,49 @@
 .ccard:hover {
   border-color: var(--brand-border);
   transform: translateY(-2px);
+}
+.ccard--compact {
+  padding: 8px 4px 6px;
+  gap: 4px;
+}
+.c-avatar-wrap {
+  position: relative;
+  width: 52px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cico-compact {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 2px solid var(--border-strong);
+  transition:
+    border-color 0.15s ease,
+    transform 0.15s ease;
+}
+.ccard--compact:hover .cico-compact {
+  border-color: var(--brand-border);
+  transform: scale(1.05);
+}
+.ctier-badge {
+  position: absolute;
+  top: -2px;
+  right: -4px;
+  font-size: 9px;
+  font-weight: var(--font-weight-bold);
+  padding: 0 4px;
+  background: #141416;
+  z-index: 2;
+  letter-spacing: 0.02em;
+}
+.cwr-compact {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  color: #7fe08f;
+  font-family: var(--font-family-mono);
+  line-height: 1.2;
 }
 .ctier {
   position: absolute;

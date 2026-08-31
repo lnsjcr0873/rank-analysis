@@ -294,12 +294,12 @@ function selectHero(id: number) {
   }
 }
 
-function openMayhemMatrix(id?: number) {
+function openMayhemDetail(id?: number) {
   const targetId = id || selectedChampionId.value || myHandChampionId.value
   if (targetId) {
-    void router.push({ path: '/mayhem', query: { championId: String(targetId) } })
+    void router.push({ path: `/Mayhem/champion/${targetId}` })
   } else {
-    void router.push('/mayhem')
+    void router.push('/Mayhem')
   }
 }
 
@@ -395,9 +395,9 @@ onUnmounted(() => {
         <Activity v-else :size="13" />
         <span>{{ gaps?.sentence ?? '阵容分析中…' }}</span>
       </div>
-      <button class="mdp-matrix-link" @click="openMayhemMatrix()">
+      <button class="mdp-matrix-link" @click="openMayhemDetail()">
         <ExternalLink :size="13" />
-        <span>大乱斗矩阵看板</span>
+        <span>大乱斗数据中心</span>
       </button>
     </div>
 
@@ -559,9 +559,9 @@ onUnmounted(() => {
             <Copy v-else :size="13" />
             <span>{{ copySuccess ? '已复制' : '复制指南' }}</span>
           </button>
-          <button class="mdp-btn mdp-btn--matrix" @click="openMayhemMatrix(selectedChampionId)">
+          <button class="mdp-btn mdp-btn--matrix" @click="openMayhemDetail(selectedChampionId)">
             <ExternalLink :size="13" />
-            <span>完整矩阵</span>
+            <span>英雄详情</span>
           </button>
         </div>
       </div>

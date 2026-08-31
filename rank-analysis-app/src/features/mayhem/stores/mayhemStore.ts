@@ -16,11 +16,8 @@ import {
   type MyAugmentStat,
   type ChampionDetailEntry
 } from '../services/mayhemData'
-import { getConfigByIpc, putConfigByIpc } from '@renderer/services/ipc'
 import { getSharedAssistScheduler, type AssistTick } from '../trigger'
 import { setOverlayClickThrough } from '@renderer/features/overlay/panels'
-
-export type MayhemViewMode = 'matrix' | 'classic'
 
 export const useMayhemStore = defineStore('mayhem', () => {
   const champions = ref<MayhemChampion[]>([])
@@ -35,36 +32,7 @@ export const useMayhemStore = defineStore('mayhem', () => {
   const error = ref('')
   const selectedChampionId = ref<number | null>(null)
 
-  // 视图模式：'matrix'（全新 AramMeta 矩阵看板）或 'classic'（经典列表卡片）
-  const viewMode = ref<MayhemViewMode>('matrix')
-
   const isDataReady = computed(() => champions.value.length > 0)
-
-  async function initViewMode(): Promise<void> {
-    try {
-      const saved = await getConfigByIpc<string>('mayhem.viewMode')
-      if (saved === 'classic' || saved === 'matrix') {
-        viewMode.value = saved
-        return
-      }
-    } catch {
-      /* 回退到 localStorage */
-    }
-    const ls = localStorage.getItem('mayhem.viewMode')
-    if (ls === 'classic' || ls === 'matrix') {
-      viewMode.value = ls
-    }
-  }
-
-  async function setViewMode(mode: MayhemViewMode): Promise<void> {
-    viewMode.value = mode
-    localStorage.setItem('mayhem.viewMode', mode)
-    try {
-      await putConfigByIpc('mayhem.viewMode', mode)
-    } catch {
-      /* 存储失败静默 */
-    }
-  }
 
   /**
    * 加载英雄榜数据。内存中已有数据时直接秒开，后台可静默刷新。
