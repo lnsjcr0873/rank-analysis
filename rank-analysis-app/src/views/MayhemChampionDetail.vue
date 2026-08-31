@@ -256,8 +256,25 @@ import {
   type SituationalItem
 } from '../features/mayhem/services/mayhemData'
 import { useMayhemStore } from '../features/mayhem/stores/mayhemStore'
+import { getAramChampionBuilds, type AramChampionBuilds } from '@renderer/services/opgg'
 import MayhemEndgameBuildMatrix from '@renderer/components/mayhem/MayhemEndgameBuildMatrix.vue'
 import { isBootItem } from '@renderer/utils/item'
+
+const ROLE_LABELS: Record<string, string> = {
+  tank: '坦克',
+  fighter: '战士',
+  assassin: '刺客',
+  mage: '法师',
+  marksman: '射手',
+  support: '辅助'
+}
+
+const RARITY_OPTIONS = [
+  { key: 'all', label: '全部' },
+  { key: 'prismatic', label: '棱彩' },
+  { key: 'gold', label: '黄金' },
+  { key: 'silver', label: '白银' }
+]
 
 const route = useRoute()
 const router = useRouter()
@@ -494,36 +511,46 @@ async function load() {
       balanceTags.value = buildBalanceTags(balance)
 
       // 🌟 深度数据融合：若狂暴大乱斗数据中缺少加点时序或召唤师技能，自动通过 OP.GG ARAM 官方深度库融合
-      const opggAram = await getAramChampionBuilds(championId.value).catch(() => null)
+      const opggAram = (await getAramChampionBuilds(championId.value).catch(
+        () => null
+      )) as AramChampionBuilds | null
       if (opggAram && detail.value.builds?.length) {
         for (const b of detail.value.builds) {
           if (!b.skillOrders?.length && opggAram.skillMasteries?.length) {
-            b.skillOrders = opggAram.skillMasteries.map(sm => ({
-              skillOrder: sm.ids.map(k => (k === 'Q' ? 1 : k === 'W' ? 2 : k === 'E' ? 3 : 4)),
-              skillKeys: sm.ids,
-              games: Number(sm.play),
-              wins: Number(sm.win),
-              winRate: sm.win / Math.max(sm.play, 1),
-              pickRate: sm.pickRate
-            }))
+            b.skillOrders = opggAram.skillMasteries.map(
+              (sm: { ids: string[]; play: number; win: number; pickRate: number }) => ({
+                skillOrder: sm.ids.map((k: string) =>
+                  k === 'Q' ? 1 : k === 'W' ? 2 : k === 'E' ? 3 : 4
+                ),
+                skillKeys: sm.ids,
+                games: Number(sm.play),
+                wins: Number(sm.win),
+                winRate: sm.win / Math.max(sm.play, 1),
+                pickRate: sm.pickRate
+              })
+            )
           }
           if (!b.summonerSpells?.length && opggAram.summonerSpells?.length) {
-            b.summonerSpells = opggAram.summonerSpells.map(ss => ({
-              summonerSpellIds: ss.ids,
-              games: Number(ss.play),
-              wins: Number(ss.win),
-              winRate: ss.win / Math.max(ss.play, 1),
-              pickRate: ss.pickRate
-            }))
+            b.summonerSpells = opggAram.summonerSpells.map(
+              (ss: { ids: number[]; play: number; win: number; pickRate: number }) => ({
+                summonerSpellIds: ss.ids,
+                games: Number(ss.play),
+                wins: Number(ss.win),
+                winRate: ss.win / Math.max(ss.play, 1),
+                pickRate: ss.pickRate
+              })
+            )
           }
           if (!b.startingItems?.length && opggAram.starterItems?.length) {
-            b.startingItems = opggAram.starterItems.map(st => ({
-              itemIds: st.ids,
-              games: Number(st.play),
-              wins: Number(st.win),
-              winRate: st.win / Math.max(st.play, 1),
-              pickRate: st.pickRate
-            }))
+            b.startingItems = opggAram.starterItems.map(
+              (st: { ids: number[]; play: number; win: number; pickRate: number }) => ({
+                itemIds: st.ids,
+                games: Number(st.play),
+                wins: Number(st.win),
+                winRate: st.win / Math.max(st.play, 1),
+                pickRate: st.pickRate
+              })
+            )
           }
         }
       }
