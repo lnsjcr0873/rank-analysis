@@ -256,29 +256,13 @@ import {
   type SituationalItem
 } from '../features/mayhem/services/mayhemData'
 import { useMayhemStore } from '../features/mayhem/stores/mayhemStore'
-import { getAramChampionBuilds } from '@renderer/services/opgg'
-
-const ROLE_LABELS: Record<string, string> = {
-  tank: '坦克',
-  fighter: '战士',
-  assassin: '刺客',
-  mage: '法师',
-  marksman: '射手',
-  support: '辅助'
-}
-
-const RARITY_OPTIONS = [
-  { key: 'all', label: '全部' },
-  { key: 'prismatic', label: '棱彩' },
-  { key: 'gold', label: '黄金' },
-  { key: 'silver', label: '白银' }
-]
+import MayhemEndgameBuildMatrix from '@renderer/components/mayhem/MayhemEndgameBuildMatrix.vue'
+import { isBootItem } from '@renderer/utils/item'
 
 const route = useRoute()
 const router = useRouter()
 const assets = useRecordAssets()
 const mayhemStore = useMayhemStore()
-import MayhemEndgameBuildMatrix from '@renderer/components/mayhem/MayhemEndgameBuildMatrix.vue'
 
 const detail = ref<ChampionDetailEntry | null>(null)
 const loading = ref(false)
@@ -414,14 +398,16 @@ function situationals(b: MayhemBuild): SituationalItem[] {
 
 function topExtensions(b: MayhemBuild): ItemExtension[] {
   const map = new Map<number, ItemExtension>()
-  const primaryCoreIds = new Set<number>(b.coreItems?.[0]?.itemIds ?? [])
+  const primaryCoreIds = new Set<number>(
+    (b.coreItems?.[0]?.itemIds ?? []).filter(id => !isBootItem(id))
+  )
 
   for (const ext of b.itemExtensions ?? []) {
-    const itemId = ext.itemIds[0]
+    const itemId = ext.itemIds.find(id => !isBootItem(id))
     if (!itemId || primaryCoreIds.has(itemId)) continue
     const existing = map.get(itemId)
     if (!existing) {
-      map.set(itemId, { ...ext })
+      map.set(itemId, { ...ext, itemIds: [itemId] })
     } else {
       const totalGames = existing.games + ext.games
       const totalWins =

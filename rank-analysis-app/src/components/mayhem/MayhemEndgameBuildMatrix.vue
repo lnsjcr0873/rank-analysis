@@ -41,6 +41,7 @@ import {
   type SituationalItem
 } from '@renderer/features/mayhem/services/mayhemData'
 import { importMayhemItemSet } from '@renderer/services/importRunes'
+import { isBootItem } from '@renderer/utils/item'
 
 interface ChampionBaseInfo {
   id: number
@@ -159,10 +160,23 @@ const allTrioRows = computed<TrioBuildRow[]>(() => {
   const seenKey = new Set<string>()
   const baseHeroWr = heroOverallWinRate.value
 
-  // 1. 从 coreItems 导入主要核心三件套
+  // 1. 从 coreItems 导入主要核心三件套（严格排除鞋子，只保留大件装备）
   for (const [idx, cs] of (props.build.coreItems ?? []).entries()) {
     if (!cs.itemIds || cs.itemIds.length < 2) continue
-    const ids = [...cs.itemIds].slice(0, 3)
+    const nonBootCoreIds = cs.itemIds.filter(id => !isBootItem(id))
+    if (nonBootCoreIds.length < 2) continue
+
+    let ids = nonBootCoreIds.slice(0, 3)
+    if (ids.length < 3) {
+      const ext = (props.build.itemExtensions ?? []).find(e =>
+        e.itemIds?.some(id => !isBootItem(id) && !ids.includes(id))
+      )
+      const third = ext?.itemIds?.find(id => !isBootItem(id) && !ids.includes(id))
+      if (third) {
+        ids = [...ids, third]
+      }
+    }
+
     const sortedKey = [...ids].sort().join('-')
     if (seenKey.has(sortedKey)) continue
     seenKey.add(sortedKey)
@@ -186,11 +200,12 @@ const allTrioRows = computed<TrioBuildRow[]>(() => {
     })
   }
 
-  // 2. 从 itemExtensions 融合第 4/5 件神装的延伸三件套
+  // 2. 从 itemExtensions 融合第 4/5 件神装的延伸三件套（严格排除鞋子）
   for (const ext of props.build.itemExtensions ?? []) {
     if (!ext.coreItemIds || ext.coreItemIds.length < 2 || !ext.itemIds?.length) continue
-    const primary2 = ext.coreItemIds.filter(id => id > 0).slice(0, 2)
-    const extItem = ext.itemIds[0]
+    const primary2 = ext.coreItemIds.filter(id => id > 0 && !isBootItem(id)).slice(0, 2)
+    if (primary2.length < 2) continue
+    const extItem = ext.itemIds.find(id => !isBootItem(id))
     if (!extItem || primary2.includes(extItem)) continue
 
     const ids = [...primary2, extItem]
@@ -251,6 +266,7 @@ const itemAttributions = computed<Map<number, ItemAttribution>>(() => {
   for (const row of allTrioRows.value) {
     const weight = Math.log10(row.games + 10)
     for (const id of row.itemIds) {
+      if (isBootItem(id)) continue
       if (!map.has(id)) {
         map.set(id, {
           id,
@@ -439,12 +455,14 @@ const evolutionBranches = computed<EvolutionBranch[]>(() => {
   const exts = props.build.itemExtensions ?? []
   if (!exts.length) return branches
 
-  // 按基础前两件/三件分组
+  // 按基础前两件/三件分组（排除鞋子）
   const map = new Map<string, { base: number[]; exts: typeof exts }>()
   for (const e of exts) {
-    const baseKey = e.coreItemIds.slice(0, 2).sort().join('-')
+    const nonBootBases = e.coreItemIds.filter(id => !isBootItem(id)).slice(0, 2)
+    if (nonBootBases.length < 2) continue
+    const baseKey = nonBootBases.sort().join('-')
     if (!map.has(baseKey)) {
-      map.set(baseKey, { base: e.coreItemIds.slice(0, 2), exts: [] })
+      map.set(baseKey, { base: nonBootBases, exts: [] })
     }
     map.get(baseKey)!.exts.push(e)
   }
@@ -457,9 +475,11 @@ const evolutionBranches = computed<EvolutionBranch[]>(() => {
     const step3: EvolutionStepNode[] = []
 
     for (const e of group.exts) {
+      const nonBootItems = (e.itemIds ?? []).filter(id => !isBootItem(id))
+      if (!nonBootItems.length) continue
       const node: EvolutionStepNode = {
         step: e.step,
-        itemIds: e.itemIds,
+        itemIds: nonBootItems,
         games: e.games,
         wins: e.wins ?? Math.round(e.winRate * e.games),
         winRate: e.winRate,

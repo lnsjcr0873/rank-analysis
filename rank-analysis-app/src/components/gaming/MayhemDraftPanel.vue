@@ -47,6 +47,7 @@ import {
   type BenchEntry,
   type ChampMetaMap
 } from '@renderer/features/mayhem/draft'
+import { isBootItem } from '@renderer/utils/item'
 
 interface DraftContext {
   queueId: number | null
@@ -188,17 +189,29 @@ function tierBadgeClass(tier: number | null | undefined): string {
   return `tier-t${tier}`
 }
 
-/** 延伸装备去重聚合 */
+/** 核心出装链（严格排除鞋子） */
+function getCoreBuildItems(b?: MayhemBuild): number[] {
+  if (!b) return []
+  const nonBootIds = (b.coreItems?.[0]?.itemIds ?? []).filter(id => !isBootItem(id))
+  if (nonBootIds.length >= 3) return nonBootIds.slice(0, 3)
+  const ext = (b.itemExtensions ?? []).find(e =>
+    e.itemIds?.some(id => !isBootItem(id) && !nonBootIds.includes(id))
+  )
+  const third = ext?.itemIds?.find(id => !isBootItem(id) && !nonBootIds.includes(id))
+  return third ? [...nonBootIds, third] : nonBootIds
+}
+
+/** 延伸装备去重聚合（严格排除鞋子） */
 function topExtensions(b: MayhemBuild): ItemExtension[] {
   const map = new Map<number, ItemExtension>()
-  const primaryCoreIds = new Set<number>(b.coreItems?.[0]?.itemIds ?? [])
+  const primaryCoreIds = new Set<number>(getCoreBuildItems(b))
 
   for (const ext of b.itemExtensions ?? []) {
-    const itemId = ext.itemIds[0]
+    const itemId = ext.itemIds.find(id => !isBootItem(id))
     if (!itemId || primaryCoreIds.has(itemId)) continue
     const existing = map.get(itemId)
     if (!existing) {
-      map.set(itemId, { ...ext })
+      map.set(itemId, { ...ext, itemIds: [itemId] })
     } else {
       const totalGames = existing.games + ext.games
       const totalWins =
@@ -294,7 +307,9 @@ function copyGuide() {
   if (!championDetail.value) return
   const c = championDetail.value.champion
   const b = championDetail.value.builds?.[0]
-  const coreNames = (b?.coreItems[0]?.itemIds ?? []).map(id => itemName(id)).join(' + ')
+  const coreNames = getCoreBuildItems(b)
+    .map(id => itemName(id))
+    .join(' + ')
   const text = `【${c.name} · ${c.title}】狂暴大乱斗指南
 全服胜率：${pct(c.stats.winRate)} | 选用率：${pct(c.stats.pickRate)}
 核心两件套：${coreNames || '无'}
@@ -558,14 +573,14 @@ onUnmounted(() => {
           <div class="mdp-col-label"><Swords :size="13" /> 核心出装链</div>
           <div class="mdp-core-items-row">
             <template
-              v-for="(id, idx) in championDetail.builds[0].coreItems?.[0]?.itemIds ?? []"
+              v-for="(id, idx) in getCoreBuildItems(championDetail.builds[0])"
               :key="`${id}-${idx}`"
             >
               <div class="mdp-item-slot" :title="itemName(id)">
                 <img :src="itemSrc(id)" :alt="itemName(id)" loading="lazy" />
               </div>
               <ChevronRight
-                v-if="idx < championDetail.builds[0].coreItems[0].itemIds.length - 1"
+                v-if="idx < getCoreBuildItems(championDetail.builds[0]).length - 1"
                 class="mdp-arrow"
               />
             </template>

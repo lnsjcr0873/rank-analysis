@@ -26,6 +26,7 @@ import {
 import { useMayhemStore } from '@renderer/features/mayhem/stores/mayhemStore'
 import { importRunePage } from '@renderer/services/importRunes'
 import MayhemEndgameBuildMatrix from '@renderer/components/mayhem/MayhemEndgameBuildMatrix.vue'
+import { isBootItem } from '@renderer/utils/item'
 
 const mayhemStore = useMayhemStore()
 
@@ -253,7 +254,10 @@ function onCopyReport() {
   if (!detail.value) return
   const c = detail.value.champion
   const b = currentBuild.value
-  const coreNames = (b?.coreItems[0]?.itemIds ?? []).map(id => itemName(id)).join(' + ')
+  const coreNames = (b?.coreItems[0]?.itemIds.filter(id => !isBootItem(id)) ?? [])
+    .slice(0, 3)
+    .map(id => itemName(id))
+    .join(' + ')
   const text = `【${c.name} · ${c.title}】大乱斗实战指南
 全服胜率：${pct(c.stats.winRate)} | 选用率：${pct(c.stats.pickRate)}
 推荐流派：${b ? buildTitle(b, activeBuildIndex.value) : '通用'}
