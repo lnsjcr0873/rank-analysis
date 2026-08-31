@@ -656,22 +656,22 @@ async function onImport() {
 }
 
 function champName(id: number): string {
-  const c = champions.value.find(x => x.id === id)
+  const c = champions.value.find((x: MayhemChampion) => x.id === id)
   return c ? `${c.title}（${c.name}）` : `英雄 #${id}`
 }
 
 function augNameOf(id: number): string {
-  const a = augments.value.find(x => x.id === id)
+  const a = augments.value.find((x: MayhemAugment) => x.id === id)
   return a?.name ?? `强化 #${id}`
 }
 
 function augTooltipOf(id: number): string {
-  const a = augments.value.find(x => x.id === id)
+  const a = augments.value.find((x: MayhemAugment) => x.id === id)
   return a ? plainDesc(a) || a.name : ''
 }
 
 function augRemoteIcon(id: number): string | undefined {
-  return augments.value.find(x => x.id === id)?.iconUrl
+  return augments.value.find((x: MayhemAugment) => x.id === id)?.iconUrl
 }
 
 function wrPct(c: MyChampionStat): string {

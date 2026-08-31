@@ -95,7 +95,6 @@ export const useMayhemStore = defineStore('mayhem', () => {
    * 页面挂载时初始化：确保数据立即可用，避免因切页导致的空白或闪烁。
    */
   async function init(): Promise<void> {
-    await initViewMode()
     // 无论 status 状态为何，优先读取本地现存缓存，保证页面秒开不白屏
     await loadChampions()
     void loadMine()
@@ -216,13 +215,10 @@ export const useMayhemStore = defineStore('mayhem', () => {
     syncing,
     error,
     selectedChampionId,
-    viewMode,
     isDataReady,
     assistRunning,
     lastAssistTick,
     init,
-    initViewMode,
-    setViewMode,
     loadChampions,
     loadAugments,
     loadMine,
