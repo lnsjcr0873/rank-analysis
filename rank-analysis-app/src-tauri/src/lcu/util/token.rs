@@ -108,8 +108,13 @@ fn try_auth_from_pid(pid: u32) -> Result<(String, String), AuthError> {
         Ok(_) => lockfile_auth_for_pid(pid).map_err(AuthError::Other),
         Err(platform::CmdError::Failed(e)) => lockfile_auth_for_pid(pid)
             .map_err(|lf| AuthError::Other(format!("命令行读取失败({e}); lockfile: {lf}"))),
-        // 权限不足：lockfile 路径同样拿不到，直接归类，交由上层引导提权。
-        Err(platform::CmdError::AccessDenied) => Err(AuthError::AccessDenied),
+        // 权限不足：仍尝试 lockfile 兜底（磁盘文件读取受限于安装目录权限，往往可读）
+        Err(platform::CmdError::AccessDenied) => {
+            if let Ok(auth) = lockfile_auth_for_pid(pid) {
+                return Ok(auth);
+            }
+            Err(AuthError::AccessDenied)
+        }
     }
 }
 
@@ -197,7 +202,23 @@ pub fn get_auth_detailed() -> Result<(String, String), AuthError> {
     let mut saw_access_denied = false;
     let mut last_other: Option<String> = None;
 
-    // 先尝试非缓存的进程（缓存进程留作最后兜底，沿用历史行为）。
+    // 优先尝试上次成功的 cached_pid（若其仍在存活进程列表内）
+    if cached_pid > 0 && pids.contains(&cached_pid) {
+        match try_auth_from_pid(cached_pid) {
+            Ok(auth) => {
+                log::info!("使用缓存 PID {} 命中认证", cached_pid);
+                return Ok(auth);
+            }
+            Err(AuthError::AccessDenied) => saw_access_denied = true,
+            Err(AuthError::Other(e)) => {
+                log::debug!("获取缓存进程 {} 的认证失败: {}", cached_pid, e);
+                last_other = Some(e);
+            }
+            Err(AuthError::NotRunning) => {}
+        }
+    }
+
+    // 尝试其余进程
     for &pid in pids.iter().filter(|&&p| p != cached_pid) {
         log::debug!("正在检查PID: {}", pid);
         match try_auth_from_pid(pid) {
@@ -212,14 +233,6 @@ pub fn get_auth_detailed() -> Result<(String, String), AuthError> {
                 last_other = Some(e);
             }
             Err(AuthError::NotRunning) => {}
-        }
-    }
-
-    // 兜底：缓存 pid 仍在存活进程里时再试一次。
-    if cached_pid > 0 && pids.contains(&cached_pid) {
-        if let Ok(auth) = try_auth_from_pid(cached_pid) {
-            log::info!("使用缓存 PID {} 命中", cached_pid);
-            return Ok(auth);
         }
     }
 

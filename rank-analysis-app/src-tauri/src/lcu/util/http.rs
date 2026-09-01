@@ -102,14 +102,25 @@ fn refresh_auth() -> Result<(String, String), String> {
         return Ok(auth_guard.clone());
     }
 
-    // 仅成功才推进节流时间戳：客户端重启瞬间的一次失败刷新若也占坑，
-    // 后续 1s 内的重试会全部复用旧凭据继续失败。
-    let (token, port) = get_auth()?;
-    *last_refresh_guard = now;
-    let auth = AUTH.get_or_init(|| Mutex::new((String::new(), String::new())));
-    let mut guard = lock_or_recover(auth);
-    *guard = (token.clone(), port.clone());
-    Ok((token, port))
+    // 尝试获取最新凭证，若重新读取因反作弊/系统抖动失败但既有凭据有效，则继续沿用
+    match get_auth() {
+        Ok((token, port)) => {
+            *last_refresh_guard = now;
+            let auth = AUTH.get_or_init(|| Mutex::new((String::new(), String::new())));
+            let mut guard = lock_or_recover(auth);
+            *guard = (token.clone(), port.clone());
+            Ok((token, port))
+        }
+        Err(e) => {
+            let auth = AUTH.get_or_init(|| Mutex::new((String::new(), String::new())));
+            let guard = lock_or_recover(auth);
+            if !guard.0.is_empty() && !guard.1.is_empty() {
+                Ok(guard.clone())
+            } else {
+                Err(e)
+            }
+        }
+    }
 }
 fn build_url(token: &str, uri: &str, port: &str) -> String {
     let uri = uri.trim_start_matches('/');

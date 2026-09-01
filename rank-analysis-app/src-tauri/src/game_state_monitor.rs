@@ -197,10 +197,11 @@ impl GameStateMonitor {
             }
         };
 
-        // 断连去抖：上次已连接且失败未达阈值（或权限类需立即上报）时，
-        // 维持 connected=true 并沿用上次已知的召唤师/阶段，避免对局结束
-        // 前后 LCU 忙/重启窗口的单次误报把前端从对局页/战绩页踢走。
-        let deny_immediate = fail_reason_code.as_deref() == Some("ACCESS_DENIED");
+        // 断连去抖：上次已连接且失败未达阈值（或冷启动权限不足需立即上报）时，
+        // 维持 connected=true 并沿用上次已知的召唤师/阶段，避免对局进入/结束
+        // 前后 LCU 忙/反作弊拦截窗口的单次抖动把前端从对局页/战绩页踢走。
+        let deny_immediate =
+            !self.last_state.connected && fail_reason_code.as_deref() == Some("ACCESS_DENIED");
         let connected = resolved_connected(
             self.last_state.connected,
             self.consecutive_failures,
@@ -392,7 +393,13 @@ pub async fn start_game_state_monitor(app_handle: AppHandle, stop: Arc<AtomicBoo
 ///
 /// 规则：
 /// - 探测成功 → 恒为 true（计数清零由调用方负责）
-/// - 失败且归类为 ACCESS_DENIED → 恒为 false（持久权限问题需立即引导提权）
+/// 断连去抖纯函数：给定上次连接态、连续失败次数、本次探测成败与失败归类，
+/// 返回对外呈现的 connected。
+///
+/// 规则：
+/// - 探测成功 → 恒为 true（计数清零由调用方负责）
+/// - 冷启动未连接态下：失败且归类为 ACCESS_DENIED → 恒为 false（持久权限问题需立即引导提权）
+/// - 已连接态下：若出现短暂失败或 ACCESS_DENIED（游戏加载期反作弊拦截系统调用等），受宽限阈值保护
 /// - 其余失败：上次已连接且未达阈值时维持 true（宽限），否则 false
 fn resolved_connected(
     last_connected: bool,
@@ -403,7 +410,7 @@ fn resolved_connected(
     if probe_ok {
         return true;
     }
-    if fail_reason_code == Some("ACCESS_DENIED") {
+    if !last_connected && fail_reason_code == Some("ACCESS_DENIED") {
         return false;
     }
     last_connected && consecutive_failures < DISCONNECT_FAIL_STREAK
@@ -423,8 +430,14 @@ mod tests {
     }
 
     #[test]
-    fn access_denied_disconnects_immediately_even_on_first_failure() {
-        assert!(!resolved_connected(true, 1, false, DENIED));
+    fn access_denied_on_cold_start_disconnects_immediately() {
+        assert!(!resolved_connected(false, 1, false, DENIED));
+    }
+
+    #[test]
+    fn access_denied_while_connected_stays_in_grace() {
+        // 已连接态下出现 ACCESS_DENIED（反作弊启动等），依然享受宽限保护
+        assert!(resolved_connected(true, 1, false, DENIED));
     }
 
     #[test]

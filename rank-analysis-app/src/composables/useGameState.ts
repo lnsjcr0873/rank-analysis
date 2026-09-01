@@ -124,20 +124,15 @@ function handleConnectionRoute(state: GameStateEvent) {
   }
 
   if (!state.connected) {
-    // 断连宽限：到点仍未恢复才落地主页（状态卡承接原 Loading 职责）。
-    // 设置页与对局页豁免：设置不依赖 LCU 连接；对局页在选人/加载/对局中自身具有状态机与断线恢复横幅，
-    // 豁免避免游戏加载过渡（ChampSelect -> GameStart/InProgress）瞬时抖动把用户踢回主页
+    // 断连宽限：仅在停留在废弃的 /Loading 等待门时落地主页（状态卡承接原 Loading 职责）。
+    // 所有功能页面（/Gaming、/Record、/Champions、/Rules、/Mayhem、/Settings 等）绝不强制跳出，
+    // 页面内及顶部状态指示器会自行呈现离线/重连态，避免打断用户的对局或浏览。
     cancelKick()
     kickTimer = setTimeout(() => {
       kickTimer = null
       if (isConnected.value) return
       const p = router.currentRoute.value.path
-      if (
-        !p.startsWith('/Home') &&
-        !p.startsWith('/Settings') &&
-        !p.startsWith('/Loading') &&
-        !p.startsWith('/Gaming')
-      ) {
+      if (p === '/Loading') {
         router.push({ path: '/Home' })
       }
     }, DISCONNECT_GRACE_MS)
