@@ -191,6 +191,10 @@ pub struct PreGroupMarker {
     pub marker_type: String,
 }
 
+static CURRENT_SESSION_TASK: std::sync::LazyLock<
+    tokio::sync::Mutex<Option<tokio::task::AbortHandle>>,
+> = std::sync::LazyLock::new(|| tokio::sync::Mutex::new(None));
+
 /// 获取当前对局会话数据（事件推送模式）。
 ///
 /// 这是前端调用的主入口命令。函数立即返回，实际数据处理在后台任务中执行，
@@ -219,8 +223,15 @@ pub async fn get_session_data(app_handle: AppHandle) -> Result<(), String> {
     // 领取序列号：一旦有更新的调用进来，本任务的所有推送将被作废（防旧局数据晚到覆盖）。
     let seq = begin_session_task(&SESSION_TASK_SEQ);
 
+    // 中止上一个未完成的 session 任务，立即释放其占用的并发信号量及网络请求
+    let mut lock = CURRENT_SESSION_TASK.lock().await;
+    if let Some(prev) = lock.take() {
+        log::info!("Aborting previous session task to release semaphore permits");
+        prev.abort();
+    }
+
     // 在后台线程处理，避免阻塞
-    tokio::spawn(async move {
+    let handle = tokio::spawn(async move {
         match process_session_data(app_handle.clone(), seq).await {
             Ok(_) => {
                 log::info!("Session data processing completed (seq {})", seq);
@@ -234,6 +245,8 @@ pub async fn get_session_data(app_handle: AppHandle) -> Result<(), String> {
             }
         }
     });
+
+    *lock = Some(handle.abort_handle());
 
     Ok(())
 }

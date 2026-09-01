@@ -37,8 +37,8 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 /// 主动断开进入重连循环。
 const READ_IDLE_TIMEOUT: Duration = Duration::from_secs(60);
 
-/// 同一来源事件的会话刷新最小间隔（防抖窗口）。
-const SESSION_REFRESH_DEBOUNCE: Duration = Duration::from_millis(500);
+/// 同一来源事件的会话刷新最小间隔（防抖窗口提升至 1500ms，避免密集事件重复触发全量会话拉取）。
+const SESSION_REFRESH_DEBOUNCE: Duration = Duration::from_millis(1500);
 
 pub struct LcuListener {
     app_handle: AppHandle,

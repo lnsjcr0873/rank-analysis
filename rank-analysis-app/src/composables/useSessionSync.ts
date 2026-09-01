@@ -284,10 +284,11 @@ export function useSessionSync() {
 
     if (!enoughSubteams && retryCount < MAX_RETRIES) {
       retryCount++
+      const delay = RETRY_DELAY_MS * retryCount // 线性退避：3s, 6s, 9s
       trackedSetTimeout(() => {
         requestSessionData()
-        trackedSetTimeout(checkAndRetryFetch, RETRY_RECHECK_DELAY_MS)
-      }, RETRY_DELAY_MS)
+        trackedSetTimeout(checkAndRetryFetch, RETRY_RECHECK_DELAY_MS + delay)
+      }, delay)
     }
   }
 
@@ -396,7 +397,8 @@ export function useSessionSync() {
             'PreEndOfGame',
             'EndOfGame'
           ].includes(phase) &&
-          (!sessionData.phase || lastMonitorPhase !== phase)
+          (!sessionData.phase ||
+            (lastMonitorPhase !== phase && phase !== 'GameStart' && phase !== 'InProgress'))
         ) {
           requestSessionData()
         }
