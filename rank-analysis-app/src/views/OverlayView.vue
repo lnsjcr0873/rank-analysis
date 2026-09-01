@@ -35,15 +35,17 @@ const hasContent = computed(
     companionText.value.length > 0
 )
 
-watch(
-  hasContent,
-  async val => {
-    if (!val) {
-      await invoke('hide_overlay_window').catch(() => {})
-    }
-  },
-  { immediate: true }
-)
+/**
+ * 内容有无 ↔ 窗口显隐必须**双向**同步。
+ *
+ * 这里不能只写 hide 分支、也不能带 `immediate`：OverlayView 是 overlay 窗口的根组件
+ * （overlay.ts 里 `createApp(OverlayView).mount`），`immediate` 会在 setup 阶段——早于
+ * onMounted 拉 `get_overlay_state` 快照——就以空内容触发一次，把 Rust 端刚 show 出来的
+ * 窗口立刻隐藏；而缺 show 分支则意味着随后数据到位也永远不会再显示出来。
+ */
+watch(hasContent, async val => {
+  await invoke(val ? 'show_overlay_window' : 'hide_overlay_window').catch(() => {})
+})
 
 /** 屏幕高度自适应：每条约 26px，预留头部与边距，避免低分辨率下溢出屏幕 */
 const maxByHeight = ref(99)

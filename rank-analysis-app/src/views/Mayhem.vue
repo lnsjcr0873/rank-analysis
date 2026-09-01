@@ -131,18 +131,13 @@
           </button>
         </div>
 
-        <!-- 强化榜工具行：低样本开关 / 浮窗预览 / 对局监听 / 手动入口 -->
+        <!-- 强化榜工具行：低样本开关 / 校准截图 / 监听状态。
+             浮窗预览、对局监听、手动三选一已上提到 PageStage 的 actions 槽（全 Tab 可用），
+             此处不再重复渲染——两份同态曾显示不同文案（"监听已开启" vs "停止对局监听"）。 -->
         <template v-if="activeTab === 'augments'">
           <label class="m-toggle">
             <input v-model="showNoSample" type="checkbox" /> 显示无胜率样本
           </label>
-          <button class="btn gho sm" :disabled="previewing" @click="onPreviewPanel">
-            {{ previewing ? '推送中…' : '预览浮窗' }}
-          </button>
-          <button class="btn gho sm" :class="{ 'btn--on': assistRunning }" @click="toggleAssist">
-            {{ assistRunning ? '停止对局监听' : '启动对局监听' }}
-          </button>
-          <button class="btn gho sm" @click="manualOpen = !manualOpen">手动三选一</button>
           <button class="btn gho sm" :disabled="calibrating" @click="onCalibrate">
             {{ calibrating ? '截取中…' : '校准截图' }}
           </button>

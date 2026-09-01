@@ -312,7 +312,7 @@ function copyGuide() {
     .join(' + ')
   const text = `【${c.name} · ${c.title}】狂暴大乱斗指南
 全服胜率：${pct(c.stats.winRate)} | 选用率：${pct(c.stats.pickRate)}
-核心两件套：${coreNames || '无'}
+核心三件套：${coreNames || '无'}
 加点路线：${b?.skillOrders[0] ? skillSummary(b.skillOrders[0].skillKeys) : '主 Q 副 E'}`
 
   navigator.clipboard?.writeText(text).then(() => {
