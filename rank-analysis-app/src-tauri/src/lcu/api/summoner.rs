@@ -4,7 +4,7 @@
 
 use std::sync::LazyLock;
 
-use crate::lcu::util::http::lcu_get;
+use crate::lcu::util::http::{lcu_get, lcu_get_unthrottled};
 use moka::future::Cache;
 use serde::{Deserialize, Serialize};
 
@@ -55,9 +55,17 @@ impl Summoner {
         Ok(summoner)
     }
 
-    /// 获取当前登录客户端的召唤师信息。
+    /// 实时探测当前登录客户端的召唤师（用于健康检测/状态监听，不回退缓存，不走批量限流信号量）。
+    pub async fn get_my_summoner_live() -> Result<Self, String> {
+        let summoner = lcu_get_unthrottled::<Self>("lol-summoner/v1/current-summoner").await?;
+        let mut lock = MY_SUMMONER_CACHE.write().await;
+        *lock = Some(summoner.clone());
+        Ok(summoner)
+    }
+
+    /// 获取当前登录客户端的召唤师信息（失败时回退最近已知缓存）。
     pub async fn get_my_summoner() -> Result<Self, String> {
-        match lcu_get::<Self>("lol-summoner/v1/current-summoner").await {
+        match lcu_get_unthrottled::<Self>("lol-summoner/v1/current-summoner").await {
             Ok(summoner) => {
                 let mut lock = MY_SUMMONER_CACHE.write().await;
                 *lock = Some(summoner.clone());

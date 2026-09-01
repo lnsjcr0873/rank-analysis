@@ -117,7 +117,7 @@ pub struct GameStateMonitor {
 ///
 /// 权限不足（ACCESS_DENIED）不受此阈值保护——那是持久状态，需要立即
 /// 上报以引导用户提权重启。
-const DISCONNECT_FAIL_STREAK: u32 = 5;
+const DISCONNECT_FAIL_STREAK: u32 = 8;
 
 impl GameStateMonitor {
     /// 创建新的游戏状态监听器实例。
@@ -159,18 +159,22 @@ impl GameStateMonitor {
     /// - 调用 LCU API 获取游戏阶段
     /// - 可能启动 WebSocket 监听任务
     async fn check_and_emit(&mut self) {
-        // 单请求包一层短超时：LCU HTTP 客户端超时 50s，两次串行最坏 ~100s，
-        // 期间状态事件停发、前端「已连接」判断冻结。本机接口正常亚秒级返回，
-        // 5s 足够；超时按「未连接（OTHER）」归类，下一轮 tick 会自动恢复。
-        let summoner_result =
-            match tokio::time::timeout(Duration::from_secs(5), Summoner::get_my_summoner()).await {
-                Ok(result) => result,
-                Err(_) => Err("状态检测超时".to_string()),
-            };
-        let phase_result = match tokio::time::timeout(Duration::from_secs(5), get_phase()).await {
-            Ok(result) => result,
-            Err(_) => Err("阶段检测超时".to_string()),
-        };
+        // 单请求包一层短超时：LCU HTTP 客户端超时 5s，探测接口亚秒级返回，
+        // 3s 足够且并发执行，最坏耗时 3s。超时按「未连接（OTHER）」归类，下一轮 tick 会自动恢复。
+        let (summoner_result, phase_result) = tokio::join!(
+            async {
+                match tokio::time::timeout(Duration::from_secs(3), Summoner::get_my_summoner_live()).await {
+                    Ok(result) => result,
+                    Err(_) => Err("状态检测超时".to_string()),
+                }
+            },
+            async {
+                match tokio::time::timeout(Duration::from_secs(3), get_phase()).await {
+                    Ok(result) => result,
+                    Err(_) => Err("阶段检测超时".to_string()),
+                }
+            }
+        );
         // 只要召唤师接口或游戏阶段接口任一成功，即表明 LCU 存活且正常通信；
         // 在游戏加载阶段（ChampSelect -> GameStart/InProgress），LCU 客户端忙于拉起游戏进程，
         // 召唤师接口可能出现短暂延迟或锁定期，以 phase 结果兜底可避免误报断连。

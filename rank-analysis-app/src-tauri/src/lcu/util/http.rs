@@ -18,7 +18,7 @@ static AUTH: OnceLock<Mutex<(String, String)>> = OnceLock::new();
 static LAST_REFRESH_TIME: OnceLock<Mutex<Instant>> = OnceLock::new();
 
 /// 最大并发 LCU GET 请求数
-static LCU_SEMAPHORE: LazyLock<Semaphore> = LazyLock::new(|| Semaphore::new(10));
+static LCU_SEMAPHORE: LazyLock<Semaphore> = LazyLock::new(|| Semaphore::new(20));
 
 /// Singleflight：相同 URI 的并发 GET 请求只发一次，100ms TTL
 static SINGLEFLIGHT: LazyLock<moka::future::Cache<String, String>> = LazyLock::new(|| {
@@ -36,7 +36,7 @@ fn get_client() -> &'static Client {
             // 同类项目 LeagueAkari 对 LCU/RC axios 亦显式 `proxy: false`。
             .no_proxy()
             .danger_accept_invalid_certs(true)
-            .timeout(Duration::from_secs(50))
+            .timeout(Duration::from_secs(5))
             .build()
             .expect("Failed to build reqwest client")
     })
@@ -259,6 +259,12 @@ pub async fn lcu_get<T: DeserializeOwned + 'static>(uri: &str) -> Result<T, Stri
         .map_err(|e| format!("{}", e))?;
 
     // 从 JSON 字符串反序列化为目标类型（空 body 归一成 null，见 deserialize_lcu_body）
+    deserialize_lcu_body::<T>(&raw_json)
+}
+
+/// 发起 LCU GET 请求，反序列化为 `T`，不经过并发限流信号量（供健康检测、阶段查询等探针直达，防止被批量请求阻塞）。
+pub async fn lcu_get_unthrottled<T: DeserializeOwned + 'static>(uri: &str) -> Result<T, String> {
+    let raw_json = lcu_get_raw(uri).await?;
     deserialize_lcu_body::<T>(&raw_json)
 }
 

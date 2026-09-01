@@ -6,7 +6,7 @@
 use std::sync::{LazyLock, Mutex};
 use std::time::Duration;
 
-use crate::lcu::util::http::{auth_fingerprint, lcu_get};
+use crate::lcu::util::http::{auth_fingerprint, lcu_get_unthrottled};
 
 #[derive(Debug, Clone)]
 struct PhaseCache {
@@ -73,9 +73,9 @@ pub async fn get_phase() -> Result<String, String> {
         }
     }
 
-    // 获取新的阶段
+    // 获取新的阶段（使用 unthrottled 保证探针与状态检测不被批量请求限流队列阻塞）
     let uri = "lol-gameflow/v1/gameflow-phase";
-    let phase = lcu_get::<String>(uri).await?;
+    let phase = lcu_get_unthrottled::<String>(uri).await?;
 
     // 更新缓存
     {

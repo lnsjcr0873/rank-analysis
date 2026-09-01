@@ -125,13 +125,19 @@ function handleConnectionRoute(state: GameStateEvent) {
 
   if (!state.connected) {
     // 断连宽限：到点仍未恢复才落地主页（状态卡承接原 Loading 职责）。
-    // 设置页豁免：设置不依赖 LCU 连接，不豁免会把正在改设置的用户反复踢走
+    // 设置页与对局页豁免：设置不依赖 LCU 连接；对局页在选人/加载/对局中自身具有状态机与断线恢复横幅，
+    // 豁免避免游戏加载过渡（ChampSelect -> GameStart/InProgress）瞬时抖动把用户踢回主页
     cancelKick()
     kickTimer = setTimeout(() => {
       kickTimer = null
       if (isConnected.value) return
       const p = router.currentRoute.value.path
-      if (!p.startsWith('/Home') && !p.startsWith('/Settings') && !p.startsWith('/Loading')) {
+      if (
+        !p.startsWith('/Home') &&
+        !p.startsWith('/Settings') &&
+        !p.startsWith('/Loading') &&
+        !p.startsWith('/Gaming')
+      ) {
         router.push({ path: '/Home' })
       }
     }, DISCONNECT_GRACE_MS)
