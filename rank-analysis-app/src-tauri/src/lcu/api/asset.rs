@@ -472,25 +472,25 @@ async fn init_lcu_assets() {
     let cherry_augment_count = cherry_augment_perks.len();
 
     {
-        let mut map = ITEM_CACHE.write().unwrap();
+        let mut map = ITEM_CACHE.write().unwrap_or_else(|e| e.into_inner());
         for item in items {
             map.insert(item.id, item);
         }
     }
     {
-        let mut map = CHAMPION_CACHE.write().unwrap();
+        let mut map = CHAMPION_CACHE.write().unwrap_or_else(|e| e.into_inner());
         for champion in champions {
             map.insert(champion.id, champion);
         }
     }
     {
-        let mut map = SPELL_CACHE.write().unwrap();
+        let mut map = SPELL_CACHE.write().unwrap_or_else(|e| e.into_inner());
         for spell in spells {
             map.insert(spell.id, spell);
         }
     }
     {
-        let mut map = PERK_CACHE.write().unwrap();
+        let mut map = PERK_CACHE.write().unwrap_or_else(|e| e.into_inner());
         for perk in perk_styles_only {
             map.insert(perk.id, perk);
         }
@@ -597,7 +597,7 @@ async fn enrich_augment_descriptions() {
 
     let mut updated = 0usize;
     {
-        let mut cache = PERK_CACHE.write().unwrap();
+        let mut cache = PERK_CACHE.write().unwrap_or_else(|e| e.into_inner());
         for perk in cache.values_mut() {
             let Some(api) = api_name_from_icon(&perk.icon_path) else {
                 continue;
@@ -737,7 +737,7 @@ async fn fetch_binary(url: &str) -> Result<(Vec<u8>, String), String> {
 // 新增：各类型的二进制获取
 async fn get_champion_binary(id: i64) -> Result<(Vec<u8>, String), String> {
     let chapmpion = {
-        let cache = CHAMPION_CACHE.read().unwrap();
+        let cache = CHAMPION_CACHE.read().unwrap_or_else(|e| e.into_inner());
         cache.get(&id).cloned()
     };
     match chapmpion {
@@ -751,7 +751,7 @@ async fn get_champion_binary(id: i64) -> Result<(Vec<u8>, String), String> {
 
 async fn get_item_binary(id: i64) -> Result<(Vec<u8>, String), String> {
     let item = {
-        let cache = ITEM_CACHE.read().unwrap();
+        let cache = ITEM_CACHE.read().unwrap_or_else(|e| e.into_inner());
         cache.get(&id).cloned()
     };
     match item {
@@ -765,7 +765,7 @@ async fn get_item_binary(id: i64) -> Result<(Vec<u8>, String), String> {
 
 async fn get_spell_binary(id: i64) -> Result<(Vec<u8>, String), String> {
     let spell = {
-        let cache = SPELL_CACHE.read().unwrap();
+        let cache = SPELL_CACHE.read().unwrap_or_else(|e| e.into_inner());
         cache.get(&id).cloned()
     };
     match spell {
@@ -779,7 +779,7 @@ async fn get_spell_binary(id: i64) -> Result<(Vec<u8>, String), String> {
 
 async fn get_perk_binary(id: i64) -> Result<(Vec<u8>, String), String> {
     let perk = {
-        let cache = PERK_CACHE.read().unwrap();
+        let cache = PERK_CACHE.read().unwrap_or_else(|e| e.into_inner());
         cache.get(&id).cloned()
     };
     match perk {
@@ -819,7 +819,7 @@ pub fn ensure_offline_assets_loaded() {
                 .as_array()
                 .or_else(|| v.get("data").and_then(|d| d.as_array()));
             if let Some(arr) = list {
-                let mut cache = ITEM_CACHE.write().unwrap();
+                let mut cache = ITEM_CACHE.write().unwrap_or_else(|e| e.into_inner());
                 for it in arr {
                     if let (Some(id), Some(name)) = (it["id"].as_i64(), it["name"].as_str()) {
                         let desc = it["description"].as_str().unwrap_or_default().to_string();
@@ -842,7 +842,7 @@ pub fn ensure_offline_assets_loaded() {
                 .as_array()
                 .or_else(|| v.get("data").and_then(|d| d.as_array()));
             if let Some(arr) = list {
-                let mut cache = SPELL_CACHE.write().unwrap();
+                let mut cache = SPELL_CACHE.write().unwrap_or_else(|e| e.into_inner());
                 for sp in arr {
                     if let (Some(id), Some(name)) = (sp["id"].as_i64(), sp["name"].as_str()) {
                         let desc = sp["description"].as_str().unwrap_or_default().to_string();
@@ -865,7 +865,7 @@ pub fn ensure_offline_assets_loaded() {
                 .as_array()
                 .or_else(|| v.get("data").and_then(|d| d.as_array()));
             if let Some(arr) = list {
-                let mut cache = PERK_CACHE.write().unwrap();
+                let mut cache = PERK_CACHE.write().unwrap_or_else(|e| e.into_inner());
                 for aug in arr {
                     if let (Some(id), Some(name)) = (aug["id"].as_i64(), aug["name"].as_str()) {
                         let desc = aug["description"]
@@ -899,7 +899,7 @@ pub fn ensure_offline_assets_loaded() {
                 .as_array()
                 .or_else(|| v.get("data").and_then(|d| d.as_array()));
             if let Some(arr) = list {
-                let mut cache = CHAMPION_CACHE.write().unwrap();
+                let mut cache = CHAMPION_CACHE.write().unwrap_or_else(|e| e.into_inner());
                 for c in arr {
                     if let (Some(id), Some(title)) = (
                         c["id"].as_i64(),
@@ -925,6 +925,7 @@ pub fn ensure_offline_assets_loaded() {
 pub fn get_asset_details(type_string: String, ids: Vec<i64>) -> Result<Vec<AssetDetails>, String> {
     ensure_offline_assets_loaded();
     match type_string.as_str() {
+        "champion" => Ok(get_champion_details(ids)),
         "item" => Ok(get_item_details(ids)),
         "perk" => Ok(get_perk_details(ids)),
         "spell" => Ok(get_spell_details(ids)),
@@ -932,8 +933,23 @@ pub fn get_asset_details(type_string: String, ids: Vec<i64>) -> Result<Vec<Asset
     }
 }
 
+fn get_champion_details(ids: Vec<i64>) -> Vec<AssetDetails> {
+    let cache = CHAMPION_CACHE.read().unwrap_or_else(|e| e.into_inner());
+    collect_unique_ids(ids)
+        .into_iter()
+        .filter_map(|id| {
+            cache.get(&id).map(|champ| AssetDetails {
+                id,
+                name: champ.name.clone(),
+                description: normalize_asset_text(&champ.description).unwrap_or_default(),
+                rarity: None,
+            })
+        })
+        .collect()
+}
+
 fn get_spell_details(ids: Vec<i64>) -> Vec<AssetDetails> {
-    let cache = SPELL_CACHE.read().unwrap();
+    let cache = SPELL_CACHE.read().unwrap_or_else(|e| e.into_inner());
     collect_unique_ids(ids)
         .into_iter()
         .filter_map(|id| {
@@ -948,7 +964,7 @@ fn get_spell_details(ids: Vec<i64>) -> Vec<AssetDetails> {
 }
 
 fn get_item_details(ids: Vec<i64>) -> Vec<AssetDetails> {
-    let cache = ITEM_CACHE.read().unwrap();
+    let cache = ITEM_CACHE.read().unwrap_or_else(|e| e.into_inner());
     collect_unique_ids(ids)
         .into_iter()
         .filter_map(|id| {
@@ -963,7 +979,7 @@ fn get_item_details(ids: Vec<i64>) -> Vec<AssetDetails> {
 }
 
 fn get_perk_details(ids: Vec<i64>) -> Vec<AssetDetails> {
-    let cache = PERK_CACHE.read().unwrap();
+    let cache = PERK_CACHE.read().unwrap_or_else(|e| e.into_inner());
     collect_unique_ids(ids)
         .into_iter()
         .filter_map(|id| {

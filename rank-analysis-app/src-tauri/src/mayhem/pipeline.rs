@@ -34,7 +34,7 @@ pub struct TickOutcome {
 pub fn detect_from_stats(stats: &[super::capture::BandStat]) -> bool {
     stats
         .iter()
-        .filter(|s| s.stddev >= BAND_ACTIVE_THRESHOLD)
+        .filter(|s| s.stddev.is_finite() && s.stddev >= BAND_ACTIVE_THRESHOLD)
         .count()
         >= ACTIVE_SLOTS_REQUIRED
 }

@@ -202,6 +202,7 @@ fn query_summary_in(conn: &Connection, puuid: &str) -> rusqlite::Result<MeetSumm
         )?;
         let mut rows = stmt.query(params![puuid, RECENT_LIMIT as i64])?;
         while let Some(row) = rows.next()? {
+            let champ_id: i32 = row.get(5)?;
             recent.push(OneGamePlayer {
                 index: 0,
                 puuid: puuid.to_string(),
@@ -210,8 +211,8 @@ fn query_summary_in(conn: &Connection, puuid: &str) -> rusqlite::Result<MeetSumm
                 is_my_team: row.get::<_, i32>(2)? != 0,
                 game_name: row.get(3)?,
                 tag_line: row.get(4)?,
-                champion_id: row.get(5)?,
-                champion_key: String::new(),
+                champion_id: champ_id,
+                champion_key: format!("champion_{}", champ_id),
                 kills: row.get(6)?,
                 deaths: row.get(7)?,
                 assists: row.get(8)?,
