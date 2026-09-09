@@ -286,11 +286,20 @@ pub async fn cloud_pull_config(puuid: String) -> Result<Option<ConfigPayload>, S
 
 /// 把本机云同步口径快照推送到本设备的 appConfig 行。
 ///
-/// 快照在 Rust 侧现取现滤——前端无法传入自定义 payload,杜绝绕过黑名单。
+/// 快照在 Rust 侧现取现滤——前端无法传入自定义 payload，杜绝绕过黑名单。
+/// 针对本地时钟漂移，比对云端最新时间戳取 max，确保 LWW (Last-Write-Wins) 单调递增不被误丢。
 #[tauri::command]
 pub async fn cloud_push_config(puuid: String) -> Result<(), String> {
+    let latest_cloud_ts = cloud_pull_config(puuid.clone())
+        .await
+        .ok()
+        .flatten()
+        .map(|c| c.updated_at)
+        .unwrap_or(0);
+    let local_ts = now_unix() * 1000;
+    let updated_at = std::cmp::max(local_ts, latest_cloud_ts.saturating_add(1000));
     let payload = ConfigPayload {
-        updated_at: now_unix() * 1000,
+        updated_at,
         config: crate::config::config_snapshot(true).await,
     };
     push_payload(

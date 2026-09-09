@@ -230,7 +230,7 @@ import RecordCard from './RecordCard.vue'
 import RecordCardSkeleton from './RecordCardSkeleton.vue'
 import TrendBar from './TrendBar.vue'
 import { ArrowLeft, ArrowRight, Repeat, Download, ChevronDown } from 'lucide-vue-next'
-import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch } from 'vue'
 import { NButton, NIcon, NDropdown, NPopconfirm, useLoadingBar, useMessage } from 'naive-ui'
 import EmptyState from '@renderer/components/ui/EmptyState.vue'
 import { Search, TriangleAlert, Inbox } from 'lucide-vue-next'
@@ -372,9 +372,9 @@ const activeFilter = computed<MatchFilterState>(() => ({
 
 const hasFilter = computed(() => hasActiveFilter(activeFilter.value))
 
-/** 最近 50 场全量（时间降序），列表 / 趋势条 / 英雄池同源 */
-const allGames = ref<Game[]>([])
-const matchHistory = ref<MatchHistory>()
+/** 最近 50 场全量（时间降序），列表 / 趋势条 / 英雄池同源（使用 shallowRef 消除大数组深度响应式 Proxy 开销） */
+const allGames = shallowRef<Game[]>([])
+const matchHistory = shallowRef<MatchHistory>()
 /** 已就地展开详情（多开）的对局 id 集合；切换玩家/筛选时清空 */
 const expandedGameIds = ref<Set<number>>(new Set())
 const loadingBar = useLoadingBar()

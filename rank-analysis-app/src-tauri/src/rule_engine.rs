@@ -9,10 +9,25 @@ use crate::lcu::api::champion_select::{OnePlayer, SelectSession};
 
 /// 从选人会话中找到当前用户，读取其 `assigned_position` 并映射到 `Position`。
 ///
+/// 支持明文 PUUID、混淆 PUUID 还原（排位赛隐私模式）以及本地格子 `cell_id` 兜底。
 /// 大乱斗 / 普通匹配等 `assignedPosition == ""` 的场景返回 `None`，
 /// 此时 `Position` 条件永远不匹配（按设计）。
 pub fn detect_my_position(session: &SelectSession, my_puuid: &str) -> Option<Position> {
-    let me = session.my_team.iter().find(|p| p.puuid == my_puuid)?;
+    let me = session.my_team.iter().find(|p| {
+        if !my_puuid.is_empty() {
+            if !p.puuid.is_empty() && p.puuid.eq_ignore_ascii_case(my_puuid) {
+                return true;
+            }
+            if !p.obfuscated_puuid.is_empty() {
+                if let Ok(real) = crate::lcu::util::uuid::deobfuscate_puuid(&p.obfuscated_puuid) {
+                    if real.eq_ignore_ascii_case(my_puuid) {
+                        return true;
+                    }
+                }
+            }
+        }
+        p.cell_id == session.local_player_cell_id && (p.puuid.is_empty() || my_puuid.is_empty())
+    })?;
     parse_position(&me.assigned_position)
 }
 
@@ -279,5 +294,29 @@ mod tests {
             ids: vec![1, 157, 99],
         };
         assert!(match_condition(&c, &s, None));
+    }
+
+    #[test]
+    fn detect_my_position_matches_cell_id_when_ranked_puuid_empty() {
+        let mut s = make_session(vec![
+            OnePlayer {
+                champion_id: 0,
+                puuid: "".to_string(),
+                obfuscated_puuid: "".to_string(),
+                assigned_position: "top".to_string(),
+                cell_id: 2,
+                champion_pick_intent: 0,
+            },
+            OnePlayer {
+                champion_id: 0,
+                puuid: "".to_string(),
+                obfuscated_puuid: "".to_string(),
+                assigned_position: "bottom".to_string(),
+                cell_id: 3,
+                champion_pick_intent: 0,
+            },
+        ]);
+        s.local_player_cell_id = 2;
+        assert_eq!(detect_my_position(&s, "some-puuid"), Some(Position::Top));
     }
 }

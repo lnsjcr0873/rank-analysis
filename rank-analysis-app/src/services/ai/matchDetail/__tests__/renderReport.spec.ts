@@ -93,4 +93,15 @@ describe('renderAnalysisReport', () => {
     expect(html).toContain('ai-section--blame') // 重点盯防
     expect(html).toContain('ai-section--evidence') // 建议
   })
+
+  it('XSS：阻止 javascript: 等伪协议链接', () => {
+    const html = renderAnalysisReport('[恶意链接](javascript:alert(1))')
+    expect(html).not.toContain('href="javascript:')
+  })
+
+  it('外链自动增加 target="_blank" 与 rel="noopener noreferrer"', () => {
+    const html = renderAnalysisReport('[安全链接](https://example.com)')
+    expect(html).toContain('target="_blank"')
+    expect(html).toContain('rel="noopener noreferrer"')
+  })
 })

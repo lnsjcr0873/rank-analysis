@@ -158,23 +158,12 @@ impl GameStateMonitor {
     /// - 调用 LCU API 获取召唤师信息
     /// - 调用 LCU API 获取游戏阶段
     /// - 可能启动 WebSocket 监听任务
-    async fn check_and_emit(&mut self) {
-        // 单请求包一层短超时：LCU HTTP 客户端超时 5s，探测接口亚秒级返回，
-        // 3s 足够且并发执行，最坏耗时 3s。超时按「未连接（OTHER）」归类，下一轮 tick 会自动恢复。
-        let (summoner_result, phase_result) = tokio::join!(
-            async {
-                match tokio::time::timeout(Duration::from_secs(3), Summoner::get_my_summoner_live()).await {
-                    Ok(result) => result,
-                    Err(_) => Err("状态检测超时".to_string()),
-                }
-            },
-            async {
-                match tokio::time::timeout(Duration::from_secs(3), get_phase()).await {
-                    Ok(result) => result,
-                    Err(_) => Err("阶段检测超时".to_string()),
-                }
-            }
-        );
+    /// 更新状态快照并向前端推送事件（在写锁内运行，微秒级执行完成）。
+    fn update_and_emit(
+        &mut self,
+        summoner_result: Result<Summoner, String>,
+        phase_result: Result<String, String>,
+    ) {
         // 只要召唤师接口或游戏阶段接口任一成功，即表明 LCU 存活且正常通信；
         // 在游戏加载阶段（ChampSelect -> GameStart/InProgress），LCU 客户端忙于拉起游戏进程，
         // 召唤师接口可能出现短暂延迟或锁定期，以 phase 结果兜底可避免误报断连。
@@ -324,6 +313,33 @@ impl GameStateMonitor {
             self.last_push_time = now;
         }
     }
+
+    /// 兼容入口：探测并更新发射
+    #[allow(dead_code)]
+    pub async fn check_and_emit(&mut self) {
+        let (summoner_result, phase_result) = probe_lcu_state().await;
+        self.update_and_emit(summoner_result, phase_result);
+    }
+}
+
+/// 异步探测 LCU 召唤师与游戏阶段（纯 I/O，不持锁执行）。
+async fn probe_lcu_state() -> (Result<Summoner, String>, Result<String, String>) {
+    // 单请求包一层短超时：LCU HTTP 客户端超时 5s，探测接口亚秒级返回，
+    // 3s 足够且并发执行，最坏耗时 3s。超时按「未连接（OTHER）」归类，下一轮 tick 会自动恢复。
+    tokio::join!(
+        async {
+            match tokio::time::timeout(Duration::from_secs(3), Summoner::get_my_summoner_live()).await {
+                Ok(result) => result,
+                Err(_) => Err("状态检测超时".to_string()),
+            }
+        },
+        async {
+            match tokio::time::timeout(Duration::from_secs(3), get_phase()).await {
+                Ok(result) => result,
+                Err(_) => Err("阶段检测超时".to_string()),
+            }
+        }
+    )
 }
 
 /// 初始化并启动游戏状态监听器。
@@ -378,10 +394,12 @@ pub async fn start_game_state_monitor(app_handle: AppHandle, stop: Arc<AtomicBoo
             }
             ticker.tick().await;
 
-            // 写锁只覆盖内存状态更新与事件发射（HTTP 检测在锁内但已限 5s 超时），
-            // 不再出现「持锁等待最长 100s」的窗口。
+            // 探测（HTTP I/O）在锁外执行，不阻塞任何并发读请求
+            let (summoner_result, phase_result) = probe_lcu_state().await;
+
+            // 写锁只覆盖内存状态更新与事件发射，微秒级完成释放
             let mut monitor = monitor.write().await;
-            monitor.check_and_emit().await;
+            monitor.update_and_emit(summoner_result, phase_result);
         }
     });
 

@@ -67,12 +67,17 @@ export function useMatchReplay(game: MaybeRefOrGetter<Game | null>) {
       return
     }
     try {
-      availability.value = await invoke<ReplayAvailability>('get_replay_availability', {
+      const res = await invoke<ReplayAvailability>('get_replay_availability', {
         gameId: current.gameId
       })
+      if (!cancelled) {
+        availability.value = res
+      }
     } catch (e) {
-      // 预判失败不该让按钮消失，退化成"点了才知道"
-      availability.value = { playable: true, reason: null }
+      if (!cancelled) {
+        // 预判失败不该让按钮消失，退化成"点了才知道"
+        availability.value = { playable: true, reason: null }
+      }
       console.error('查询回放可用性失败:', e)
     }
   }
@@ -122,6 +127,7 @@ export function useMatchReplay(game: MaybeRefOrGetter<Game | null>) {
     cancelled = false
     try {
       await invoke('start_replay_download', { gameId })
+      if (cancelled) return
 
       const ready = await waitUntilReady(gameId)
       if (cancelled) return
@@ -131,11 +137,14 @@ export function useMatchReplay(game: MaybeRefOrGetter<Game | null>) {
       }
 
       await invoke('watch_replay', { gameId })
+      if (cancelled) return
       message.success('正在拉起游戏客户端播放回放')
       // 客户端进入回放后 isPlayingReplay 变 true，刷新一次让按钮如实反映
       await refreshAvailability()
     } catch (e) {
-      message.error(typeof e === 'string' ? e : '观看回放失败')
+      if (!cancelled) {
+        message.error(typeof e === 'string' ? e : '观看回放失败')
+      }
     } finally {
       clearPoll()
       busy.value = false

@@ -16,6 +16,15 @@ import { dedupeSectionMentions } from './postprocess'
 // html:false 阻断 AI/外部数据中夹带 raw HTML（XSS 防线，CSP 之外的纵深防御）
 const md = new MarkdownIt({ html: false, breaks: true, linkify: true })
 
+const BAD_PROTO_RE = /^(?:javascript|vbscript|data):/i
+md.validateLink = (url: string): boolean => {
+  const trimmed = url.trim()
+  if (BAD_PROTO_RE.test(trimmed)) {
+    return false
+  }
+  return true
+}
+
 /**
  * 固定章节标题 → section modifier class。
  * 上半部为战绩详情「AI 复盘」5 段，下半部为对局页「AI 分析」5 段；
@@ -59,13 +68,32 @@ export function renderAnalysisReport(markdown: string): string {
   return enhance(md.render(dedupeSectionMentions(markdown)))
 }
 
-/** DOM 走查：名字加粗 + 数字高亮，仅改文本节点。 */
+/** DOM 走查：链接安全净化 + 名字加粗 + 数字高亮，仅改文本节点与合法属性。 */
 function enhance(html: string): string {
   const doc = new DOMParser().parseFromString(html, 'text/html')
   const root = doc.body
+  sanitizeLinks(root)
   boldListItemNames(root, doc)
   highlightNumbers(root, doc)
   return root.innerHTML
+}
+
+/** 净化链接：剔除 javascript: 等伪协议，外链附加 target="_blank" 与 rel="noopener noreferrer"。 */
+function sanitizeLinks(root: HTMLElement): void {
+  root.querySelectorAll('a').forEach(a => {
+    const href = a.getAttribute('href') || ''
+    const trimmed = href.trim().toLowerCase()
+    if (
+      trimmed.startsWith('javascript:') ||
+      trimmed.startsWith('vbscript:') ||
+      trimmed.startsWith('data:')
+    ) {
+      a.removeAttribute('href')
+    } else if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      a.setAttribute('target', '_blank')
+      a.setAttribute('rel', 'noopener noreferrer')
+    }
+  })
 }
 
 /** 给每个 `<li>` 首个「：」前的名字段包 `<strong class="ai-name">`，无「：」则跳过。 */
