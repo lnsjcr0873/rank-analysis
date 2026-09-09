@@ -357,6 +357,7 @@ async fn start_match_automation() {
             Ok(lobby) => lobby,
             Err(e) => {
                 log::error!("Get lobby error: {}", e);
+                last_search_state.clear();
                 continue;
             }
         };
@@ -382,6 +383,7 @@ async fn start_match_automation() {
             }
             Err(e) => {
                 log::error!("Failed to check leader status: {}", e);
+                last_search_state.clear();
                 continue;
             }
         }
@@ -390,6 +392,7 @@ async fn start_match_automation() {
         log::info!("Starting match search");
         if let Err(e) = Lobby::post_match_search().await {
             log::error!("Start match search error: {}", e);
+            last_search_state.clear();
         }
 
         // 等待6秒钟

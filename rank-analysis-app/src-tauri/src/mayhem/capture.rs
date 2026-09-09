@@ -67,7 +67,8 @@ pub fn luma_stddev(rgba: &[u8]) -> f64 {
         sq += l * l;
     }
     let mean = sum / n as f64;
-    ((sq / n as f64) - mean * mean).sqrt()
+    let variance = (sq / n as f64) - mean * mean;
+    variance.max(0.0).sqrt()
 }
 
 /// 抓取并分析三张卡的标题带。
@@ -323,9 +324,12 @@ pub mod gdi {
 
     use winapi::um::wingdi::{
         BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, DeleteDC, DeleteObject, GetDIBits,
-        SelectObject,
+        GetDeviceCaps, SelectObject,
     };
-    use winapi::um::wingdi::{BITMAPINFO, BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS, SRCCOPY};
+    use winapi::um::wingdi::{
+        BITMAPINFO, BITMAPINFOHEADER, BI_RGB, DESKTOPHORZRES, DESKTOPVERTRES, DIB_RGB_COLORS,
+        SRCCOPY,
+    };
     // 注意：winapi 的模块按头文件组织——GDI 函数在 wingdi，窗口函数在 winuser，
     // 不存在 user32/gdi32 模块名。
     use winapi::um::winuser::{GetSystemMetrics, GetWindowDC, ReleaseDC};
@@ -337,9 +341,21 @@ pub mod gdi {
         pub rgba: Vec<u8>,
     }
 
-    /// 主显示器尺寸（SM_CXSCREEN/CYSCREEN）。
+    /// 主显示器物理尺寸（DESKTOPHORZRES/DESKTOPVERTRES）。
+    /// 若仅使用 GetSystemMetrics(0/1)，在高 DPI 缩放下会返回虚拟缩放尺寸导致坐标偏移。
     pub fn primary_screen_size() -> (i32, i32) {
-        unsafe { (GetSystemMetrics(0), GetSystemMetrics(1)) } // SM_CXSCREEN=0, SM_CYSCREEN=1
+        unsafe {
+            let hdc_screen = GetWindowDC(null_mut());
+            if !hdc_screen.is_null() {
+                let w = GetDeviceCaps(hdc_screen, DESKTOPHORZRES);
+                let h = GetDeviceCaps(hdc_screen, DESKTOPVERTRES);
+                ReleaseDC(null_mut(), hdc_screen);
+                if w > 0 && h > 0 {
+                    return (w, h);
+                }
+            }
+            (GetSystemMetrics(0), GetSystemMetrics(1))
+        }
     }
 
     /// 抓取屏幕指定区域并转为 RGBA（自上而下行序）。

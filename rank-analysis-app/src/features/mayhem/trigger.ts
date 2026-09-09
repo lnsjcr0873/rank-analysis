@@ -181,8 +181,9 @@ export function createAssistScheduler(deps: AssistDeps, idleIntervalMs = 1_000):
       // 3. 突发探测态（Burst Detecting）
       if (mode === 'burst_detecting') {
         const stats = await deps.getBandStats()
-        const active = stats ? stats.filter(s => s.stddev >= BAND_ACTIVE_THRESHOLD) : []
-        const maxStddev = stats && stats.length ? Math.max(...stats.map(s => s.stddev)) : null
+        const validStats = stats ? stats.filter(s => Number.isFinite(s.stddev)) : []
+        const active = validStats.filter(s => s.stddev >= BAND_ACTIVE_THRESHOLD)
+        const maxStddev = validStats.length ? Math.max(...validStats.map(s => s.stddev)) : null
 
         if (active.length >= ACTIVE_SLOTS_REQUIRED) {
           // 抓到卡片！
@@ -249,8 +250,9 @@ export function createAssistScheduler(deps: AssistDeps, idleIntervalMs = 1_000):
       // 4. 已推送，等待玩家选卡（Pushed & Waiting Choice）
       if (mode === 'pushed_waiting_choice') {
         const stats = await deps.getBandStats()
-        const active = stats ? stats.filter(s => s.stddev >= BAND_ACTIVE_THRESHOLD) : []
-        const maxStddev = stats && stats.length ? Math.max(...stats.map(s => s.stddev)) : null
+        const validStats = stats ? stats.filter(s => Number.isFinite(s.stddev)) : []
+        const active = validStats.filter(s => s.stddev >= BAND_ACTIVE_THRESHOLD)
+        const maxStddev = validStats.length ? Math.max(...validStats.map(s => s.stddev)) : null
 
         // 卡片已从画面消失，说明玩家完成选卡！
         if (active.length < ACTIVE_SLOTS_REQUIRED || Date.now() - burstStartTime >= burstTimeout) {

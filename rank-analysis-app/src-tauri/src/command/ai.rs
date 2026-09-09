@@ -203,9 +203,10 @@ fn resolve_api_key(
 }
 
 /// 全局复用的 HTTP 客户端（避免每次流式调用重复分配连接池和 TLS 会话）。
+/// 使用建连超时而非全局请求超时，避免长流式响应（如长篇分析）在 60s 被强行切断。
 static HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
     reqwest::Client::builder()
-        .timeout(Duration::from_secs(REQUEST_TIMEOUT_SECS))
+        .connect_timeout(Duration::from_secs(15))
         .build()
         .expect("Failed to create global AI HTTP client")
 });
@@ -232,9 +233,8 @@ fn extract_delta_content(line: &str) -> Option<String> {
     }
 }
 
-/// 总请求超时（含流式全程）。qwen-flash 实测总耗时 ~12s，60s 足够覆盖慢响应，
-/// 又不至于像原来的 120s 那样长时间"假死"。
-const REQUEST_TIMEOUT_SECS: u64 = 60;
+/// 流式分块空闲超时（超过 30s 无新数据视为中断）。
+const CHUNK_IDLE_TIMEOUT_SECS: u64 = 30;
 
 /// 首字看门狗：发起后多久没等到首个响应字节就判这次尝试失败（专治长时间转圈）。
 const FIRST_TOKEN_TIMEOUT_SECS: u64 = 20;
@@ -493,16 +493,31 @@ pub async fn stream_ai_analysis(
     loop {
         let bytes = match pending.take() {
             Some(b) => b,
-            None => match stream.next().await {
-                Some(Ok(b)) => b,
-                Some(Err(e)) => {
+            None => match tokio::time::timeout(
+                Duration::from_secs(CHUNK_IDLE_TIMEOUT_SECS),
+                stream.next(),
+            )
+            .await
+            {
+                Ok(Some(Ok(b))) => b,
+                Ok(Some(Err(e))) => {
                     let _ = on_event.send(AiStreamEvent {
                         event: "error".to_string(),
                         data: Some(format!("Stream error: {}", e)),
                     });
                     return Ok(());
                 }
-                None => break,
+                Ok(None) => break,
+                Err(_) => {
+                    let _ = on_event.send(AiStreamEvent {
+                        event: "error".to_string(),
+                        data: Some(format!(
+                            "流传输中断（超过 {} 秒无新数据）",
+                            CHUNK_IDLE_TIMEOUT_SECS
+                        )),
+                    });
+                    return Ok(());
+                }
             },
         };
         buffer.extend_from_slice(&bytes);
@@ -619,6 +634,7 @@ pub async fn test_ai_provider_connection(
         .post(&resolved.endpoint)
         .headers(headers)
         .json(&build_connection_test_body(&resolved.model))
+        .timeout(Duration::from_secs(15))
         .send()
         .await
         .map_err(|e| format!("连接失败：{}", e))?;

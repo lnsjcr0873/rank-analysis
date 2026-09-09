@@ -90,7 +90,9 @@ export function collectBuildEvents(frames: SgpFrame[] | null | undefined): Build
       const ts = ev.timestamp ?? 0
 
       if (ev.type === 'SKILL_LEVEL_UP') {
-        const slot = ev.skillSlot ?? 0
+        let slot = ev.skillSlot ?? 0
+        // 部分 SGP 网关将 Q 技能记为 slot 0（0 索引），归一化为 1（Q 槽位）
+        if (slot === 0) slot = 1
         if (slot < 1 || slot > 4) continue
         const list = (skills[pid] ??= [])
         const prev = list[list.length - 1]

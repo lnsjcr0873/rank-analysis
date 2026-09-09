@@ -112,16 +112,23 @@ useZoom()
 // 多窗口快捷键（Ctrl+W 关子窗 / Ctrl+Tab 切窗）：主窗与战绩子窗共用
 useWindowShortcuts()
 
+import { isMainWindow } from '@renderer/utils/windows'
+
 // AI 搭子桥（C2）：应用级单例，对局中周期拉取事件 → 台词 → 浮窗气泡。
-// 桥内部自带阶段过滤与非对局静默，常驻开销可忽略。
+// 仅在主窗口执行轮询，避免每个子窗口重复发起 Live Client 请求与浮窗气泡
 import { startLiveBridge } from '@renderer/companion/bridge'
-const liveBridge = startLiveBridge()
+const isMain = isMainWindow()
+const liveBridge = isMain ? startLiveBridge() : null
 onMounted(() => {
-  liveBridge.start()
+  if (isMain) {
+    liveBridge?.start()
+  }
   window.addEventListener('keydown', onGlobalKey)
 })
 onUnmounted(() => {
-  liveBridge.stop()
+  if (isMain) {
+    liveBridge?.stop()
+  }
   window.removeEventListener('keydown', onGlobalKey)
 })
 

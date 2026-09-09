@@ -30,7 +30,7 @@ describe('computeReviewAxes', () => {
     expect(r.axes.every(a => a.self === 0 && a.avg === 0)).toBe(true)
   })
 
-  it('归一化：max(self,avg)=1，均值玩家低于强势者', () => {
+  it('归一化：全场最高为 1，非最高玩家根据相对值正确缩放', () => {
     const { axes, found } = computeReviewAxes(players, 'b')
     expect(found).toBe(true)
     const dmg = axes.find(a => a.label === '伤害')!
@@ -39,8 +39,8 @@ describe('computeReviewAxes', () => {
 
     const { axes: axesA } = computeReviewAxes(players, 'a')
     const dmgA = axesA.find(a => a.label === '伤害')!
-    expect(dmgA.self).toBeCloseTo(0.667, 2)
-    expect(dmgA.avg).toBe(1) // 均值成为该轴峰值
+    expect(dmgA.self).toBeCloseTo(0.5, 2) // a 为 20000 / 峰值 40000 = 0.5
+    expect(dmgA.avg).toBeCloseTo(0.75, 2) // 均值 30000 / 峰值 40000 = 0.75
   })
 
   it('恒等指标（两人相同值）双方都到顶 1', () => {

@@ -38,6 +38,11 @@ export function buildRuleDraft(args: {
     conditions.push({ type: 'EnemyChampionsContains', ids: [keyEnemy] })
   }
 
+  // 若无法提取任何有效条件（无分路且无对位敌方），拒绝生成全分路通配规则
+  if (conditions.length === 0) {
+    return null
+  }
+
   const name = buildName(myPosition, keyEnemy, target.champion_id, championName)
   const base = { id: uuid(), name, enabled: true, conditions }
 

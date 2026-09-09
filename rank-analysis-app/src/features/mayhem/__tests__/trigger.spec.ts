@@ -134,4 +134,30 @@ describe('AssistScheduler - Smart Level-Driven Augment State Machine', () => {
     expect(tickEnd.currentRound).toBe(1)
     expect(tickEnd.note).toContain('非对局中')
   })
+
+  it('safely filters out NaN / non-finite stddev without crashing or false triggering', async () => {
+    const bandStatsWithNaN: BandStatsDto[] = [
+      { slot: 0, rect: { x: 0, y: 0, w: 100, h: 20 }, stddev: Number.NaN },
+      { slot: 1, rect: { x: 100, y: 0, w: 100, h: 20 }, stddev: 25 },
+      { slot: 2, rect: { x: 200, y: 0, w: 100, h: 20 }, stddev: Number.POSITIVE_INFINITY }
+    ]
+    const getBandStats = vi.fn().mockResolvedValue(bandStatsWithNaN)
+    const getPhase = vi.fn().mockResolvedValue('InProgress')
+    const getLivePlayer = vi
+      .fn()
+      .mockResolvedValue({ inGame: true, level: 3 } as LivePlayerStateDto)
+
+    const scheduler = createAssistScheduler({
+      getPhase,
+      getLivePlayer,
+      getBandStats
+    })
+
+    const tick = await scheduler.tick()
+    // Only 1 slot is valid and >= 18, so ACTIVE_SLOTS_REQUIRED (2) is not met
+    expect(tick.detected).toBe(false)
+    expect(tick.activeSlots).toBe(1)
+    expect(tick.maxStddev).toBe(25)
+  })
 })
+

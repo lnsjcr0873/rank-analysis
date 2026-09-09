@@ -1,8 +1,8 @@
 /**
  * A7/C4 赛后评审计算：雷达轴 + 多边形坐标（纯函数，供 ReviewTab 与单测）。
  *
- * 归一化口径：每根轴取 max(self, avg) 为分母——两张多边形同尺度可比，
- * avg 恒 ≤1、self 反映相对全场均值的高低。
+ * 归一化口径：每根轴取全场最大值 max(...players.map(value)) 为分母——两张多边形同尺度可比，
+ * avg 与 self 均 ≤1、真实反映全场相对表现。
  */
 
 import type { JudgePlayer } from './judges'
@@ -55,13 +55,14 @@ export function computeReviewAxes(
   ]
 
   const axes = metrics.map(({ label, value }) => {
+    const allValues = players.map(value)
+    const maxRaw = Math.max(...allValues, EPS)
     const avgRaw = total(value) / players.length
     const selfRaw = value(me)
-    const denom = Math.max(selfRaw, avgRaw, EPS)
     return {
       label,
-      self: Number((selfRaw / denom).toFixed(3)),
-      avg: Number((avgRaw / denom).toFixed(3))
+      self: Number((selfRaw / maxRaw).toFixed(3)),
+      avg: Number((avgRaw / maxRaw).toFixed(3))
     }
   })
   return { axes, found: true }

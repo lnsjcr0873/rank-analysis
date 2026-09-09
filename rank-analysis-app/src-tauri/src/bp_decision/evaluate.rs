@@ -80,13 +80,14 @@ pub fn unavailable_map(session: &SelectSession) -> HashMap<i32, Unavailable> {
 
 /// 用户接管检测。
 ///
-/// 记住我们最后一次 hover 的英雄 ID；若我方 pick/ban action 的 championId
-/// 既非 0 又不等于该值，判定用户已接管。我们从未 hover 过时永不判定——
-/// 否则刚开启自动化就会把用户已有的 hover 误判成接管。
+/// 记住我们最后一次 hover 的英雄 ID：
+/// - 若此前尚未主动 hover（`last_hovered` 为 None），但当前会话中已有选定英雄（`current_hover != 0`），
+///   说明用户在自动化介入前已自主预选，判定为接管，尊重用户意图不予覆盖；
+/// - 若已有记录（`Some(ours)`），当且仅当非 0 且不等于我们记录的值时判定接管。
 pub fn detect_override(current_hover: i32, last_hovered: Option<i32>) -> bool {
     match last_hovered {
         Some(ours) => current_hover != 0 && current_hover != ours,
-        None => false,
+        None => current_hover != 0,
     }
 }
 
@@ -939,14 +940,15 @@ mod tests {
     }
 
     #[test]
-    fn detect_override_only_when_we_hovered_and_user_changed_it() {
+    fn detect_override_respects_user_choice() {
         assert!(
             detect_override(157, Some(64)),
             "我们 hover 盲僧、变成亚索 → 接管"
         );
         assert!(!detect_override(64, Some(64)), "没变 → 不接管");
         assert!(!detect_override(0, Some(64)), "撤回成 0 → 不接管");
-        assert!(!detect_override(157, None), "我们从未 hover 过 → 不判定");
+        assert!(detect_override(157, None), "进入前已有预选 → 尊重用户接管");
+        assert!(!detect_override(0, None), "尚未有预选 → 未接管");
     }
 
     #[test]

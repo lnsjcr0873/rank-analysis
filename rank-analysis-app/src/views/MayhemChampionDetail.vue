@@ -467,7 +467,7 @@
  * 数据：champion-shards 单英雄条目（推荐强化/TOP组合/多流派出装/召唤师技能/加点/延伸件）。
  * 图标走本地资产协议；名称用 get_asset_details 预载，失败回退远端 CDN / id 占位。
  */
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   Activity,
@@ -878,6 +878,15 @@ async function load() {
     loading.value = false
   }
 }
+
+watch(
+  () => route.params.id,
+  () => {
+    activeBuildIndex.value = 0
+    activeRarity.value = 'all'
+    void load()
+  }
+)
 
 onMounted(load)
 </script>

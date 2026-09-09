@@ -7,7 +7,7 @@
  * 绝不把错误数字喂给模型。
  */
 
-import { ref, toValue, watch, type MaybeRefOrGetter, type Ref } from 'vue'
+import { onScopeDispose, ref, toValue, watch, type MaybeRefOrGetter, type Ref } from 'vue'
 import {
   computeLineupScore,
   computeMatchupHints,
@@ -252,6 +252,20 @@ export function useLineupScore(
     },
     { immediate: true, deep: true }
   )
+
+  const cleanup = () => {
+    if (timer) {
+      clearTimeout(timer)
+      timer = undefined
+    }
+    requestSeq++
+  }
+
+  try {
+    onScopeDispose(cleanup)
+  } catch {
+    /* 允许在非 effect scope 环境被单测直接调用 */
+  }
 
   return {
     scores,

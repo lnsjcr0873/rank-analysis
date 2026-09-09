@@ -59,15 +59,31 @@ describe('buildRuleDraft', () => {
     expect(r.name).toBe('打野 · 仅位置')
   })
 
-  it('无分路（ARAM）时条件为空但仍可保存', () => {
+  it('无分路（ARAM）且无对位敌方时返回 null 避免通配规则', () => {
     const r = buildRuleDraft({
       decision: decision(),
       myPosition: null,
       championName
+    })
+
+    expect(r).toBeNull()
+  })
+
+  it('无分路但有敌方克制目标时正常生成 EnemyChampionsContains 规则', () => {
+    const r = buildRuleDraft({
+      decision: decision({
+        target: {
+          champion_id: 64,
+          lock: true,
+          origin: { type: 'Fallback', pool_size: 3 },
+          evidence: { win_rate: 0.447, against_champion_id: 60 }
+        }
+      }),
+      myPosition: null,
+      championName
     }) as PickRule
 
-    expect(r.conditions).toEqual([])
-    expect(r.name).toBe('盲僧 · 无条件')
+    expect(r.conditions).toEqual([{ type: 'EnemyChampionsContains', ids: [60] }])
   })
 
   it('ban 决策生成 BanRule，action 不含 lock', () => {

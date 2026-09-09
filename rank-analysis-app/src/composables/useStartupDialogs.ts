@@ -29,6 +29,7 @@ import { computed, onMounted, ref, watch, type ComputedRef } from 'vue'
 import { getConfigByIpc, putConfigByIpc } from '@renderer/services/ipc'
 import { CONFIG_KEYS } from '@renderer/services/configKeys'
 import { lcuConnected } from '@renderer/composables/useGameState'
+import { isMainWindow } from '@renderer/utils/windows'
 
 /** 队列里的弹窗标识 */
 export type StartupDialogKey = 'errorReportingConsent'
@@ -50,6 +51,13 @@ export function useStartupDialogs(): {
   active: ComputedRef<StartupDialogKey | null>
   resolveErrorReportingConsent: (enabled: boolean) => Promise<void>
 } {
+  if (!isMainWindow()) {
+    return {
+      active: computed(() => null),
+      resolveErrorReportingConsent: async () => {}
+    }
+  }
+
   /** 首屏就绪闸门；未开时 active 恒为 null */
   const gateOpen = ref(false)
   /** 开闸只调度一次（gateOpen 要等 500ms 才翻，不能拿它当去重条件） */

@@ -64,6 +64,24 @@ pub async fn fetch_aram_balance_data(
     )
     .map_err(|e| format!("Lua 环境初始化失败: {e}"))?;
 
+    // 限制最大执行指令数，防止第三方 wiki 恶意或异常死循环耗尽 CPU
+    let instruction_count = std::sync::atomic::AtomicU32::new(0);
+    const MAX_INSTRUCTIONS: u32 = 2_000_000;
+    lua.set_hook(
+        mlua::HookTriggers::every_nth_instruction(10_000),
+        move |_lua, _debug| {
+            if instruction_count.fetch_add(10_000, std::sync::atomic::Ordering::Relaxed)
+                >= MAX_INSTRUCTIONS
+            {
+                Err(mlua::Error::RuntimeError(
+                    "Lua execution instruction limit exceeded".to_string(),
+                ))
+            } else {
+                Ok(())
+            }
+        },
+    );
+
     // The script is typically: return { ... }
     // We can eval it directly.
     let table: LuaTable = lua.load(&lua_script).eval()?;

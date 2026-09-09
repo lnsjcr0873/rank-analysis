@@ -32,16 +32,18 @@ describe('collectBuildEvents 技能加点', () => {
     ])
   })
 
-  it('非法 skillSlot（<1 或 >4）与无效 participantId 跳过', () => {
+  it('兼容 skillSlot 0 归一化为 1，非法 skillSlot（<0 或 >4）与无效 participantId 跳过', () => {
     const frames = [
       frame([
-        { type: 'SKILL_LEVEL_UP', participantId: 1, skillSlot: 0 },
+        { type: 'SKILL_LEVEL_UP', participantId: 1, skillSlot: 0, levelUpType: 'NORMAL' },
         { type: 'SKILL_LEVEL_UP', participantId: 1, skillSlot: 9 },
         { type: 'SKILL_LEVEL_UP', participantId: -1, skillSlot: 1 },
         { type: 'SKILL_LEVEL_UP', participantId: 0, skillSlot: 1 }
       ])
     ]
-    expect(collectBuildEvents(frames).skills).toEqual({})
+    expect(collectBuildEvents(frames).skills).toEqual({
+      1: [{ slot: 1, levelUpType: 'NORMAL', displayLevel: 1, timestamp: 0 }]
+    })
   })
 
   it('空帧/null 返回空聚合', () => {
