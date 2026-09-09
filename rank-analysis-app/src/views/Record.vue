@@ -119,7 +119,7 @@
       <!-- 回到顶部 FAB：内容区滚动超过阈值后显示，点击平滑回顶 -->
       <Transition name="fab">
         <n-button
-          v-if="showBackTop && !focusMode"
+          v-if="showBackTop"
           circle
           class="record-back-top"
           title="回到顶部"
@@ -402,12 +402,13 @@ const activeChampion = ref(0)
 
 /* v3 宽屏右侧详情栏：独立滚动 + 切角容器视觉 */
 .record-dpane {
-  width: 400px;
+  width: 440px;
+  max-width: 45%;
   flex-shrink: 0;
   overflow-y: auto;
   border-left: 1px solid var(--border-subtle);
   padding-left: var(--space-12);
-  scrollbar-width: none;
+  scrollbar-width: thin;
 }
 .record-dpane__nav {
   display: flex;
@@ -422,24 +423,14 @@ const activeChampion = ref(0)
   color: var(--text-tertiary);
 }
 .record-dpane::-webkit-scrollbar {
-  display: none;
-}
-
-/* 聚焦模式：宽屏详情展开时隐藏左栏与列表，整页只留详情（收回即恢复） */
-.record-main--focus .record-side,
-.record-main--focus .record-content {
-  display: none;
-}
-.record-main--focus .record-dpane {
-  flex: 1;
-  width: auto;
-  max-width: 1080px;
-  margin: 0 auto;
-  border-left: none;
-  padding-left: var(--space-8);
-}
-.record-main--focus .record-dpane::-webkit-scrollbar {
   width: 6px;
+}
+.record-dpane::-webkit-scrollbar-thumb {
+  border-radius: var(--radius-xs);
+  background: color-mix(in srgb, var(--text-tertiary) 35%, transparent);
+}
+.record-dpane::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--text-tertiary) 55%, transparent);
 }
 
 /* 战绩列表滚动条细化：6px 圆角细条替代系统默认宽条（与详情页一致） */

@@ -14,6 +14,12 @@ export interface HabitTag {
   dimension: string
   /** 平均相对同局同位置对手的差值（负 = 持续低于对手） */
   avgVsPeer: number
+  /**
+   * R15 相对落后比（avgVsPeer / peer 均值绝对值，越小越严重）。
+   * 后端已按此升序返回；前端二次排序必须用它而非 avgVsPeer（量纲不同不可比）。
+   * 老数据缺该字段时按 0 处理。
+   */
+  relGap?: number
   /** 连续低于对手的局数（近因） */
   streak: number
   firstSeen: string

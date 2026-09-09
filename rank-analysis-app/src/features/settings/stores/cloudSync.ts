@@ -90,11 +90,14 @@ export const useCloudSyncStore = defineStore('cloudSync', () => {
     await putConfigByIpc(CONFIG_KEYS.configLastSyncAt, Date.now())
   }
 
-  /** 应用云端配置（确认覆盖/静默 LWW 共用）：写入期间抑制 dirty 标记，完成后重载主题 */
+  /**
+   * 应用云端配置（确认覆盖/静默 LWW 共用）：写入期间抑制 dirty 标记，完成后重载主题。
+   * R01:云端口径(fromCloud=true)拒绝 ai.provider/ai.baseUrl,端点变更只能来自本机显式设置。
+   */
   async function applyCloudConfig(cloud: CloudConfig): Promise<void> {
     applyingConfig = true
     try {
-      await invoke('apply_config_snapshot', { snapshot: cloud.config })
+      await invoke('apply_config_snapshot', { snapshot: cloud.config, fromCloud: true })
     } finally {
       applyingConfig = false
     }

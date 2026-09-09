@@ -37,8 +37,11 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 /// 主动断开进入重连循环。
 const READ_IDLE_TIMEOUT: Duration = Duration::from_secs(60);
 
-/// 同一来源事件的会话刷新最小间隔（防抖窗口提升至 1500ms，避免密集事件重复触发全量会话拉取）。
-const SESSION_REFRESH_DEBOUNCE: Duration = Duration::from_millis(1500);
+/// 尾沿防抖静默窗口：事件爆发流平息后 300ms 执行最终状态刷新。
+const DEBOUNCE_QUIET_WINDOW: Duration = Duration::from_millis(300);
+
+/// 尾沿防抖最大等待时长：连续高频事件下最多等待 1000ms 强制触发一次，避免饥饿。
+const DEBOUNCE_MAX_WAIT: Duration = Duration::from_millis(1000);
 
 pub struct LcuListener {
     app_handle: AppHandle,
@@ -53,12 +56,53 @@ impl LcuListener {
     pub async fn start(&self) {
         let my_generation = LISTENER_GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
 
+        // 会话刷新尾沿防抖通道：将密集事件合成为尾沿触发，确保最终锁定等事件必被执行
+        let (debounce_tx, mut debounce_rx) = tokio::sync::mpsc::channel::<String>(64);
+        let app_handle_for_debounce = self.app_handle.clone();
+        let debounce_handle = tokio::spawn(async move {
+            while let Some(first_uri) = debounce_rx.recv().await {
+                let first_trigger = Instant::now();
+                let mut last_uri = first_uri;
+
+                loop {
+                    let max_remaining = DEBOUNCE_MAX_WAIT.saturating_sub(first_trigger.elapsed());
+                    if max_remaining.is_zero() {
+                        break;
+                    }
+                    let wait_time = DEBOUNCE_QUIET_WINDOW.min(max_remaining);
+                    tokio::select! {
+                        _ = tokio::time::sleep(wait_time) => {
+                            break;
+                        }
+                        next = debounce_rx.recv() => {
+                            match next {
+                                Some(u) => {
+                                    last_uri = u;
+                                }
+                                None => return,
+                            }
+                        }
+                    }
+                }
+
+                log::info!("通过 WebSocket 尾沿防抖事件 [{}] 触发 Session 刷新", last_uri);
+                if let Err(e) =
+                    crate::command::session::get_session_data(app_handle_for_debounce.clone()).await
+                {
+                    log::error!("通过 WebSocket 更新 Session 数据失败: {}", e);
+                } else {
+                    log::info!("通过 WebSocket 事件 [{}] 更新了 Session 数据", last_uri);
+                }
+            }
+        });
+
         // 重连循环
         loop {
             // 代际检查点：已有更新的监听器接管，本实例立即退出，
             // 不再对已失效的端口制造每 2 秒一次的失败连接。
             if LISTENER_GENERATION.load(Ordering::SeqCst) != my_generation {
                 log::info!("LCU WebSocket 监听器已被新实例取代，当前实例退出");
+                debounce_handle.abort();
                 return;
             }
 
@@ -90,9 +134,6 @@ impl LcuListener {
                 "Basic {}",
                 general_purpose::STANDARD.encode(format!("riot:{}", token))
             );
-
-            // 会话刷新防抖时间戳（跨重连保留在本方法栈上）
-            let mut last_refresh = Instant::now() - SESSION_REFRESH_DEBOUNCE;
 
             // 握手整体包一层 CONNECT_TIMEOUT：TLS/WS 阶段卡死时也能收敛进重连循环
             match tokio::time::timeout(CONNECT_TIMEOUT, self.connect_once(port, &auth_header)).await
@@ -144,7 +185,7 @@ impl LcuListener {
                                                 && array[1] == "OnJsonApiEvent"
                                             {
                                                 let event_data = &array[2];
-                                                self.handle_event(event_data, &mut last_refresh)
+                                                self.handle_event(event_data, &debounce_tx)
                                                     .await;
                                             }
                                         }
@@ -225,7 +266,7 @@ impl LcuListener {
             .map_err(|e| format!("WebSocket 握手失败: {}", e))
     }
 
-    async fn handle_event(&self, event: &Value, last_refresh: &mut Instant) {
+    async fn handle_event(&self, event: &Value, debounce_tx: &tokio::sync::mpsc::Sender<String>) {
         if let Some(uri) = event.get("uri").and_then(|v| v.as_str()) {
             // 检查是否也是 data 字段，有些事件结构不一样
             let data = event.get("data");
@@ -244,23 +285,7 @@ impl LcuListener {
                 || uri == "/lol-lobby/v2/lobby"
                 || uri == "/lol-gameflow/v1/session"
             {
-                // 防抖：选人期同一 URI 每秒可触发数次，500ms 窗口内的后续事件
-                // 直接丢弃（下一次事件仍会兜底刷新），避免大量白跑的会话任务。
-                if last_refresh.elapsed() < SESSION_REFRESH_DEBOUNCE {
-                    return;
-                }
-                *last_refresh = Instant::now();
-
-                log::info!("收到 LCU 事件: {}", uri);
-
-                // 触发后端的会话数据刷新逻辑
-                if let Err(e) =
-                    crate::command::session::get_session_data(self.app_handle.clone()).await
-                {
-                    log::error!("通过 WebSocket 更新 Session 数据失败: {}", e);
-                } else {
-                    log::info!("通过 WebSocket 事件 [{}] 更新了 Session 数据", uri);
-                }
+                let _ = debounce_tx.try_send(uri.to_string());
             }
         }
     }

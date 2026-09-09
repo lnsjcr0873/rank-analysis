@@ -306,15 +306,22 @@ static AUTH_HEADER_RE: LazyLock<Regex> = LazyLock::new(|| {
         .expect("valid auth-header regex")
 });
 
+/// URL 嵌入认证凭据：`https://user:password@host` / `http://...`（如 reqwest 打印错误 URL 时的 `https://riot:bZ8lkkL3wtVEMaXOaBGTxA@127.0.0.1:53970/...`）。
+static URL_CREDENTIALS_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"(https?://[^:\s/@]+:)[^@\s/]+@"#)
+        .expect("valid url-credentials regex")
+});
+
 /// 对单个字符串做 PII 脱敏。
 ///
-/// 依次替换：按字段名（query / JSON / Debug）→ 标准 UUID → 超长 token。纯函数，便于单测。
+/// 依次替换：URL 嵌入凭据 → Authorization 头 → 按字段名（query / JSON / Debug）→ 标准 UUID → 超长 token。纯函数，便于单测。
 ///
 /// 局限：无字段名上下文、直接拼进自由文本的名字（如 `format!("{} not found", name)`）
 /// 无法识别——根本防线是默认关闭 + 不在日志里拼接玩家名。
 pub fn redact_pii(input: &str) -> String {
-    // 先洗 Authorization 头（值含空格，需整体脱敏）再走按字段名脱敏，避免后者把值截断。
-    let step0 = AUTH_HEADER_RE.replace_all(input, "${1}<redacted>");
+    // 先脱敏 URL 嵌入凭据与 Authorization 头，避免后者被后续截断
+    let step_url = URL_CREDENTIALS_RE.replace_all(input, "${1}<redacted>@");
+    let step0 = AUTH_HEADER_RE.replace_all(&step_url, "${1}<redacted>");
     let step1 = PII_PARAM_RE.replace_all(&step0, "${1}<redacted>");
     let step2 = UUID_RE.replace_all(&step1, "<redacted-uuid>");
     let step3 = LONG_TOKEN_RE.replace_all(&step2, "<redacted-id>");
@@ -348,6 +355,14 @@ mod tests {
         let out = redact_pii(&format!("puuid path /{}", token));
         assert!(!out.contains(&token));
         assert!(out.contains("<redacted-id>"));
+    }
+
+    #[test]
+    fn should_redact_url_embedded_credentials() {
+        let input = "error sending request for url (https://riot:bZ8lkkL3wtVEMaXOaBGTxA@127.0.0.1:53970/lol-champ-select/v1/session): connection closed";
+        let out = redact_pii(input);
+        assert!(!out.contains("bZ8lkkL3wtVEMaXOaBGTxA"));
+        assert!(out.contains("https://riot:<redacted>@127.0.0.1:53970/"));
     }
 
     #[test]

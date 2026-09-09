@@ -100,6 +100,13 @@ export interface MayhemAugmentsPayload {
   candidates: MayhemAugmentCandidate[]
   /** 重随剩余次数（打分引擎的 reroll 维度输入） */
   rerollsLeft?: number
+  /**
+   * R09 打分口径：'champion' = 按当前英雄分片打分；'global' = 未能确定英雄的
+   * 纯全局建议（浮窗明确标注，不冒充英雄专属推荐）。预览命令不带该字段。
+   */
+  championScope?: 'champion' | 'global'
+  /** championScope=champion 时的英雄 id */
+  championId?: number
 }
 
 /** 类型守卫：判断未知 payload 是否为三选一负载 */

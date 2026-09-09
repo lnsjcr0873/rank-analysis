@@ -645,17 +645,54 @@ where
     run_init().await;
 }
 
+/// 资源初始化重试冷却时间：LCU 未连接时，避免每个头像请求串行尝试 LCU 超时卡顿。
+const ASSET_INIT_RETRY_COOLDOWN: std::time::Duration = std::time::Duration::from_secs(10);
+static LAST_ASSET_INIT_ATTEMPT: LazyLock<std::sync::Mutex<Option<std::time::Instant>>> =
+    LazyLock::new(|| std::sync::Mutex::new(None));
+
 /// 资源缓存自愈：启动竞态下缓存还空时，确保 [`init`] 至少跑过一次再继续，
 /// 避免协议处理器在缓存就绪前对 champion/item/perk 图标直接返回 404（首屏图裂、
 /// 且因 no-store 不缓存失败、又无前端重试，会一直裂到手动刷新）。
 ///
-/// **只能在异步协议处理器里 await**（见 main.rs 的 `register_asynchronous_uri_scheme_protocol`）：
-/// init 会发多次 LCU 请求、耗时较长，绝不可在同步处理器里 `block_on`，否则会占满
-/// webview 资源加载线程导致 UI 卡死。
+/// 当 LCU 客户端未运行时，通过 10s 冷却限制重试频率，杜绝每个资产请求排队重跑 LCU 并超时。
 async fn ensure_caches_ready() {
     static ASSET_INIT_LOCK: LazyLock<tokio::sync::Mutex<()>> =
         LazyLock::new(|| tokio::sync::Mutex::new(()));
-    run_once_if_empty(champion_cache_is_empty, &ASSET_INIT_LOCK, init_once).await;
+
+    if !champion_cache_is_empty() {
+        return;
+    }
+
+    // 快速路径：若最近刚尝试初始化过且依然为空（LCU 未运行），则在冷却期内直接跳过，避免引发多图串行风暴
+    {
+        let guard = LAST_ASSET_INIT_ATTEMPT
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        if let Some(last) = *guard {
+            if last.elapsed() < ASSET_INIT_RETRY_COOLDOWN {
+                return;
+            }
+        }
+    }
+
+    let _guard = ASSET_INIT_LOCK.lock().await;
+    if !champion_cache_is_empty() {
+        return;
+    }
+
+    {
+        let mut guard = LAST_ASSET_INIT_ATTEMPT
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        if let Some(last) = *guard {
+            if last.elapsed() < ASSET_INIT_RETRY_COOLDOWN {
+                return;
+            }
+        }
+        *guard = Some(std::time::Instant::now());
+    }
+
+    init_once().await;
 }
 
 // 新增：返回二进制与 content-type，便于通过 HTTP 下发

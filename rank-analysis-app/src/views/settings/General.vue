@@ -106,11 +106,12 @@
             v-model:value="dashscopeKey"
             type="password"
             show-password-on="click"
-            placeholder="留空使用内置 Key"
+            placeholder="填入你自己的 DashScope API Key"
             @blur="handleDashscopeKeyUpdate"
           />
           <n-text :depth="3" style="font-size: var(--font-size-sm)">
-            填入你自己的 DashScope (通义千问) API Key 则走你的额度；留空使用内置 Key。
+            填入你自己的 DashScope (通义千问) API Key；新版本发布包不再内置共享 Key，未填时 AI
+            分析会提示配置密钥（旧版本内置 Key 仍可用，但建议换成自己的）。
           </n-text>
         </n-space>
       </n-form-item>
@@ -391,7 +392,7 @@ const matchPageModeOptions = [
 ]
 
 const providerOptions = [
-  { label: 'DashScope（通义千问，内置 Key 可用）', value: 'dashscope' },
+  { label: 'DashScope（通义千问，需自填 Key）', value: 'dashscope' },
   { label: 'OpenAI 兼容（DeepSeek / 自建网关）', value: 'openai' },
   { label: 'Ollama（本地模型，免密钥）', value: 'ollama' }
 ]
@@ -403,7 +404,7 @@ const providerHelp = computed(() => {
     case 'ollama':
       return '本地模型（免密钥）。需先安装 Ollama 并拉取模型，地址默认 http://127.0.0.1:11434。'
     default:
-      return '通义千问官方服务。不填 Key 时自动使用内置 Key（见下方「自定义 AI Key」）。'
+      return '通义千问官方服务。请在下方「自定义 AI Key」填入自己的 Key（新版本不再内置共享 Key）。'
   }
 })
 

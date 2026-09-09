@@ -31,7 +31,22 @@ fn open_db() -> rusqlite::Result<Connection> {
     let _ = ensure_parent_dir(&path);
     let conn = Connection::open(&path)?;
     init_schema(&conn)?;
+    migrate_schema(&conn)?;
     Ok(conn)
+}
+
+/// R15 迁移：老库 habit_tags 无 rel_gap 列时补列（默认 0），幂等。
+fn migrate_schema(conn: &Connection) -> rusqlite::Result<()> {
+    let has_col: bool = conn
+        .prepare("SELECT sql FROM sqlite_master WHERE name='habit_tags'")?
+        .query_row([], |row| {
+            let sql: Option<String> = row.get(0)?;
+            Ok(sql.is_some_and(|s| s.contains("rel_gap")))
+        })?;
+    if !has_col {
+        conn.execute("ALTER TABLE habit_tags ADD COLUMN rel_gap REAL NOT NULL DEFAULT 0", [])?;
+    }
+    Ok(())
 }
 
 /// 建表（独立成函数让测试用内存连接复用同一份 DDL）。
@@ -42,6 +57,7 @@ fn init_schema(conn: &Connection) -> rusqlite::Result<()> {
          CREATE TABLE IF NOT EXISTS habit_tags (
              dimension    TEXT    PRIMARY KEY,
              avg_vs_peer  REAL    NOT NULL,
+             rel_gap      REAL    NOT NULL DEFAULT 0,
              streak       INTEGER NOT NULL,
              first_seen   TEXT    NOT NULL,
              last_seen    TEXT    NOT NULL
@@ -79,6 +95,9 @@ pub struct HabitTag {
     pub dimension: String,
     /// 平均相对同局同位置对手的差值（负 = 持续低于 peer）。
     pub avg_vs_peer: f64,
+    /// R15 相对落后比 = avg_vs_peer / peer 均值绝对值（消除量纲差，越小越严重；
+    /// 老数据迁移默认 0）。排序键，前端展示仍用 avg_vs_peer 绝对差。
+    pub rel_gap: f64,
     /// 连续低于 peer 的局数（streak，体现"最近还在犯"）。
     pub streak: u32,
     /// 首次检出该短板的局时间（ISO）。
@@ -102,16 +121,18 @@ pub fn upsert_habit_tags(tags: &[HabitTag]) {
     let _ = with_db(|conn| {
         for t in tags {
             conn.execute(
-                "INSERT INTO habit_tags (dimension, avg_vs_peer, streak, first_seen, last_seen)
-                 VALUES (?1,?2,?3,?4,?5)
+                "INSERT INTO habit_tags (dimension, avg_vs_peer, rel_gap, streak, first_seen, last_seen)
+                 VALUES (?1,?2,?3,?4,?5,?6)
                  ON CONFLICT(dimension)
                  DO UPDATE SET avg_vs_peer=excluded.avg_vs_peer,
+                     rel_gap=excluded.rel_gap,
                      streak=excluded.streak,
                      first_seen=excluded.first_seen,
                      last_seen=excluded.last_seen",
                 params![
                     t.dimension,
                     t.avg_vs_peer,
+                    t.rel_gap,
                     t.streak,
                     t.first_seen,
                     t.last_seen
@@ -122,20 +143,21 @@ pub fn upsert_habit_tags(tags: &[HabitTag]) {
     });
 }
 
-/// 读全部习惯标签（按 avg_vs_peer 升序 = 短板最明显在前）。
+/// 读全部习惯标签（R15：按 rel_gap 升序 = 相对落后最严重在前，消除量纲差）。
 pub fn query_habit_tags() -> Vec<HabitTag> {
     with_db(|conn| {
         let mut stmt = conn.prepare(
-            "SELECT dimension, avg_vs_peer, streak, first_seen, last_seen
-             FROM habit_tags ORDER BY avg_vs_peer ASC",
+            "SELECT dimension, avg_vs_peer, rel_gap, streak, first_seen, last_seen
+             FROM habit_tags ORDER BY rel_gap ASC",
         )?;
         let rows = stmt.query_map([], |row| {
             Ok(HabitTag {
                 dimension: row.get(0)?,
                 avg_vs_peer: row.get(1)?,
-                streak: row.get::<_, i64>(2)? as u32,
-                first_seen: row.get(3)?,
-                last_seen: row.get(4)?,
+                rel_gap: row.get(2)?,
+                streak: row.get::<_, i64>(3)? as u32,
+                first_seen: row.get(4)?,
+                last_seen: row.get(5)?,
             })
         })?;
         rows.collect::<Result<Vec<_>, _>>()
@@ -232,16 +254,18 @@ mod tests {
     fn upsert_tags_in(conn: &Connection, tags: &[HabitTag]) {
         for t in tags {
             conn.execute(
-                "INSERT INTO habit_tags (dimension, avg_vs_peer, streak, first_seen, last_seen)
-                 VALUES (?1,?2,?3,?4,?5)
+                "INSERT INTO habit_tags (dimension, avg_vs_peer, rel_gap, streak, first_seen, last_seen)
+                 VALUES (?1,?2,?3,?4,?5,?6)
                  ON CONFLICT(dimension)
                  DO UPDATE SET avg_vs_peer=excluded.avg_vs_peer,
+                     rel_gap=excluded.rel_gap,
                      streak=excluded.streak,
                      first_seen=excluded.first_seen,
                      last_seen=excluded.last_seen",
                 params![
                     t.dimension,
                     t.avg_vs_peer,
+                    t.rel_gap,
                     t.streak,
                     t.first_seen,
                     t.last_seen
@@ -254,17 +278,18 @@ mod tests {
     fn query_tags_in(conn: &Connection) -> Vec<HabitTag> {
         let mut stmt = conn
             .prepare(
-                "SELECT dimension, avg_vs_peer, streak, first_seen, last_seen
-                 FROM habit_tags ORDER BY avg_vs_peer ASC",
+                "SELECT dimension, avg_vs_peer, rel_gap, streak, first_seen, last_seen
+                 FROM habit_tags ORDER BY rel_gap ASC",
             )
             .unwrap();
         stmt.query_map([], |row| {
             Ok(HabitTag {
                 dimension: row.get(0)?,
                 avg_vs_peer: row.get(1)?,
-                streak: row.get::<_, i64>(2)? as u32,
-                first_seen: row.get(3)?,
-                last_seen: row.get(4)?,
+                rel_gap: row.get(2)?,
+                streak: row.get::<_, i64>(3)? as u32,
+                first_seen: row.get(4)?,
+                last_seen: row.get(5)?,
             })
         })
         .unwrap()
@@ -311,9 +336,59 @@ mod tests {
         HabitTag {
             dimension: dimension.to_string(),
             avg_vs_peer: avg,
+            rel_gap: 0.0,
             streak,
             first_seen: "2026-08-01T00:00:00Z".to_string(),
             last_seen: "2026-08-18T00:00:00Z".to_string(),
         }
+    }
+
+    #[test]
+    fn migration_adds_rel_gap_to_legacy_table() {
+        // 老库无 rel_gap 列：migrate_schema 补列后读写正常
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE habit_tags (
+                dimension TEXT PRIMARY KEY, avg_vs_peer REAL NOT NULL,
+                streak INTEGER NOT NULL, first_seen TEXT NOT NULL, last_seen TEXT NOT NULL);
+             INSERT INTO habit_tags VALUES ('vision', -1.5, 3, 'a', 'b');",
+        )
+        .unwrap();
+        migrate_schema(&conn).unwrap();
+        // 幂等：再跑一次不报错
+        migrate_schema(&conn).unwrap();
+        let all = query_tags_in(&conn);
+        assert_eq!(all.len(), 1);
+        assert_eq!(all[0].rel_gap, 0.0);
+    }
+
+    #[test]
+    fn query_orders_by_rel_gap_not_raw_delta() {
+        // R15：伤害差绝对值大但相对落后小，应排在相对落后大的死亡差之后
+        let conn = memory_conn();
+        upsert_tags_in(
+            &conn,
+            &[
+                HabitTag {
+                    dimension: "damage".to_string(),
+                    avg_vs_peer: -3000.0,
+                    rel_gap: -0.1,
+                    streak: 5,
+                    first_seen: "a".to_string(),
+                    last_seen: "b".to_string(),
+                },
+                HabitTag {
+                    dimension: "deaths".to_string(),
+                    avg_vs_peer: -2.0,
+                    rel_gap: -0.5,
+                    streak: 5,
+                    first_seen: "a".to_string(),
+                    last_seen: "b".to_string(),
+                },
+            ],
+        );
+        let all = query_tags_in(&conn);
+        assert_eq!(all[0].dimension, "deaths");
+        assert_eq!(all[1].dimension, "damage");
     }
 }

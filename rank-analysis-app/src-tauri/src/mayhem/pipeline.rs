@@ -42,23 +42,45 @@ pub fn detect_from_stats(stats: &[super::capture::BandStat]) -> bool {
 /// 对三个卡位的文本跑「词表匹配 → 打分」并组装面板负载。
 ///
 /// OCR 引擎产出文本候选后调这里；手动调试可直接喂样例文本。
+///
+/// R09：`champion_id` 为 None 时走纯全局口径（不混入任何英雄分片），并在
+/// payload 顶层标注 `championScope: "global"`；有值时标注 `"champion"`。
+/// 调用方不得用样例英雄 id（如 67）填充未知英雄——那会把错误英雄的分片
+/// 胜率混入打分。
 pub fn run_augment_round(
     texts: [Option<String>; 3],
-    champion_id: i64,
+    champion_id: Option<i64>,
     rerolls_left: Option<u8>,
 ) -> Result<Value, String> {
     let augments = super::store::read_local_json("augments.json")?;
     let lexicon = super::ocr::build_lexicon(&augments);
     let metas = super::score::CandidateMeta::map_from_augments(&augments);
-    let tables = super::score::load_tables(champion_id)?;
+    let tables = super::score::load_tables_opt(champion_id)?;
 
     let hits = super::ocr::match_slots(&texts, &lexicon, 2);
-    Ok(super::score::score_round(
+    let mut payload = super::score::score_round(
         [hits[0].as_ref(), hits[1].as_ref(), hits[2].as_ref()],
         &metas,
         &tables,
         rerolls_left,
-    ))
+    );
+    if let Some(obj) = payload.as_object_mut() {
+        obj.insert(
+            "championScope".to_string(),
+            Value::String(
+                if champion_id.is_some() {
+                    "champion"
+                } else {
+                    "global"
+                }
+                .to_string(),
+            ),
+        );
+        if let Some(id) = champion_id {
+            obj.insert("championId".to_string(), Value::from(id));
+        }
+    }
+    Ok(payload)
 }
 
 #[cfg(test)]

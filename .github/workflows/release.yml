@@ -93,12 +93,16 @@ jobs:
 
       # macos-latest runner 本身即 Apple Silicon，原生构建就是 aarch64，无需 --target
       # （指定 --target 会把产物路径改成 target/<triple>/release/，反而要多改一处路径）。
-      - name: 🔨 Build Tauri App (dmg, ad-hoc signed)
-        run: npm run tauri build -- --bundles dmg
+      # R06:app bundle 产出 updater 可解包的 .app.tar.gz(+.sig);dmg 保留给人工下载安装。
+      # updater 在 macOS 上只认 tar.gz,latest.json 的 darwin 条目必须指向它而非 dmg。
+      - name: 🔨 Build Tauri App (app+dmg, ad-hoc signed)
+        run: npm run tauri build -- --bundles app,dmg
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_KEY_PASSWORD }}
-          DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
+          # R02:不再向发布包编译注入共享 DashScope key（客户端无法可靠隐藏共享
+          # 凭据）。用户自填 Key 或配 DASHSCOPE_API_KEY 环境变量；无 key 时 AI
+          # 命令返回可读错误而非静默失败。
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           # 选人期混淆 puuid 还原 key；未配置时该功能自动关闭（见 lcu/util/uuid.rs）
           PUUID_KEY: ${{ secrets.PUUID_KEY }}
@@ -122,7 +126,11 @@ jobs:
           mv "$SRC" "$DEST"
           # dmg 目录不会自动产出 updater 用的 minisign .sig，显式签一次
           npx tauri signer sign "$DEST"
-          ls -la "$DMG_DIR"
+          # R06:app bundle 的 .app.tar.gz(+.sig)在 bundle/macos 下,同样归集到 DMG_DIR 便于上传
+          MACOS_DIR="src-tauri/target/release/bundle/macos"
+          find "$MACOS_DIR" -maxdepth 1 -name '*.app.tar.gz' -exec cp {} "$DMG_DIR/" \;
+          find "$MACOS_DIR" -maxdepth 1 -name '*.app.tar.gz.sig' -exec cp {} "$DMG_DIR/" \;
+          ls -la "$DMG_DIR" "$MACOS_DIR"
 
       - name: ⬆️ Upload macOS artifacts
         uses: actions/upload-artifact@v4
@@ -131,6 +139,8 @@ jobs:
           path: |
             rank-analysis-app/src-tauri/target/release/bundle/dmg/*.dmg
             rank-analysis-app/src-tauri/target/release/bundle/dmg/*.sig
+            rank-analysis-app/src-tauri/target/release/bundle/dmg/*.app.tar.gz
+            rank-analysis-app/src-tauri/target/release/bundle/dmg/*.app.tar.gz.sig
           if-no-files-found: error
           retention-days: 7
 
@@ -222,9 +232,8 @@ jobs:
           TAURI_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_KEY_PASSWORD }}
           TAURI_SIGNING_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_KEY_PASSWORD }}
           TAURI_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_KEY_PASSWORD }} # 兼容旧版
-          # 编译期注入 DashScope 密钥：Rust 侧 option_env!("DASHSCOPE_API_KEY") 在
-          # cargo build 时读取并烤进二进制（线上 key）。需在仓库 Secrets 配置。
-          DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
+          # R02:不再编译注入共享 DashScope key（见 macOS 构建注释）。Rust 侧
+          # option_env! 回退链保留作兼容：无 baked key 时返回可读错误，提示自填。
           # 同款套路注入 Sentry DSN：observability.rs 的 option_env!("SENTRY_DSN") 烤进二进制。
           # 不再硬编码进源码，fork 不带此 secret 即不上报。需在仓库 Secrets 配置。
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
@@ -428,27 +437,30 @@ jobs:
                 console.warn("WARNING: Signature file missing or empty.");
             }
             
-            // macOS 条目：仅当 build-macos 成功且产物齐全（dmg + 同名 .sig）时才写入。
-            // 缺任一则整个 darwin 条目省略——宁可 mac 端暂不推送更新，也不能写出
-            // 签名为空的条目（updater 会因验签失败而彻底卡住，比没有条目更糟）。
+            // R06:macOS 条目必须指向 updater 可解包的 .app.tar.gz(+.sig),不能指向 dmg。
+            // 仅当产物齐全时才写入;缺任一则整个 darwin 条目省略——宁可 mac 端暂不
+            // 推送更新,也不能写出签名为空的条目(updater 会因验签失败而彻底卡住,
+            // 比没有条目更糟)。
             const macDir = "macos-dist";
             let macPlatform = {};
             try {
                 if (fs.existsSync(macDir)) {
                     const files = fs.readdirSync(macDir);
-                    const dmg = files.find(f => f.endsWith(".dmg"));
-                    const sig = dmg && files.find(f => f === `${dmg}.sig`);
-                    if (dmg && sig) {
+                    const tgz = files.find(f => f.endsWith(".app.tar.gz"));
+                    const sig = tgz && files.find(f => f === `${tgz}.sig`);
+                    if (tgz && sig) {
                         const macSignature = fs.readFileSync(path.join(macDir, sig), "utf8").trim();
                         if (macSignature) {
                             macPlatform = {
                                 "darwin-aarch64": {
                                     signature: macSignature,
-                                    url: `https://github.com/wnzzer/rank-analysis/releases/download/${version}/${dmg}`
+                                    url: `https://github.com/wnzzer/rank-analysis/releases/download/${version}/${tgz}`
                                 }
                             };
-                            console.log(`macOS entry added: ${dmg}`);
+                            console.log(`macOS entry added: ${tgz}`);
                         }
+                    } else {
+                        console.warn("WARNING: .app.tar.gz(+.sig) missing; darwin entry skipped (dmg is not updater-compatible).");
                     }
                 }
                 if (!Object.keys(macPlatform).length) {
@@ -491,6 +503,8 @@ jobs:
             ${{ steps.prepare_assets.outputs.setup_path }}
             ${{ steps.prepare_assets.outputs.portable_path }}
             rank-analysis-app/macos-dist/*.dmg
+            rank-analysis-app/macos-dist/*.app.tar.gz
+            rank-analysis-app/macos-dist/*.app.tar.gz.sig
             rank-analysis-app/latest.json
           draft: false
           prerelease: false

@@ -49,8 +49,9 @@ fn my_participant<'a>(game: &'a Game, my_puuid: &str) -> Option<&'a Participant>
         .or_else(|| game.game_detail.participants.get(idx))
 }
 
-/// 单局六维差值（负 = 落后 peer）；本机缺失或局内无同位置 peer → None（整局跳过）。
-fn game_deltas(game: &Game, my_puuid: &str) -> Option<[f64; 6]> {
+/// 单局六维差值（负 = 落后 peer）与 peer 均值；本机缺失或局内无同位置
+/// peer → None（整局跳过）。peer 均值供 R15 相对落后比排序（消除量纲差）。
+fn game_deltas(game: &Game, my_puuid: &str) -> Option<([f64; 6], [f64; 6])> {
     let my = my_participant(game, my_puuid)?;
     let (lane, role) = match &my.timeline {
         Some(t) => (t.lane.as_str(), t.role.as_str()),
@@ -73,6 +74,7 @@ fn game_deltas(game: &Game, my_puuid: &str) -> Option<[f64; 6]> {
         return None;
     }
     let mut deltas = [0.0f64; 6];
+    let mut peer_means = [0.0f64; 6];
     for (i, dim) in DIMENSIONS.iter().enumerate() {
         let my_v = dim_value(&my.stats, dim)? as f64;
         let peer_mean = peers
@@ -80,13 +82,14 @@ fn game_deltas(game: &Game, my_puuid: &str) -> Option<[f64; 6]> {
             .map(|p| dim_value(&p.stats, dim).unwrap_or_default() as f64)
             .sum::<f64>()
             / peers.len() as f64;
+        peer_means[i] = peer_mean;
         deltas[i] = if *dim == "deaths" {
             peer_mean - my_v
         } else {
             my_v - peer_mean
         };
     }
-    Some(deltas)
+    Some((deltas, peer_means))
 }
 
 /// 聚合产出习惯标签：不足 MIN_GAMES 或无落后维度 → 空。
@@ -99,14 +102,15 @@ pub fn aggregate_habit_tags(games: &[Game], my_puuid: &str) -> Vec<HabitTag> {
     let mut sorted: Vec<&Game> = games.iter().collect();
     sorted.sort_by(|a, b| a.game_creation_date.cmp(&b.game_creation_date));
 
-    let mut samples: Vec<Vec<(f64, String)>> = vec![Vec::new(); DIMENSIONS.len()];
+    // (delta, peer_mean, stamp)：peer 均值供 R15 相对落后比排序
+    let mut samples: Vec<Vec<(f64, f64, String)>> = vec![Vec::new(); DIMENSIONS.len()];
     for game in sorted {
-        let Some(deltas) = game_deltas(game, my_puuid) else {
+        let Some((deltas, peer_means)) = game_deltas(game, my_puuid) else {
             continue;
         };
         let stamp = game.game_creation_date.clone();
         for (i, bucket) in samples.iter_mut().enumerate() {
-            bucket.push((deltas[i], stamp.clone()));
+            bucket.push((deltas[i], peer_means[i], stamp.clone()));
         }
     }
     DIMENSIONS
@@ -117,17 +121,27 @@ pub fn aggregate_habit_tags(games: &[Game], my_puuid: &str) -> Vec<HabitTag> {
             if bucket.len() < MIN_GAMES {
                 return None;
             }
-            let avg = bucket.iter().map(|(d, _)| d).sum::<f64>() / bucket.len() as f64;
+            let avg = bucket.iter().map(|(d, _, _)| d).sum::<f64>() / bucket.len() as f64;
             if avg >= 0.0 {
                 return None;
             }
-            let streak = bucket.iter().rev().take_while(|(d, _)| *d < 0.0).count() as u32;
+            // R15：相对落后比 = 平均差值 / peer 均值绝对值（消除伤害数千 vs 死亡数个的量纲差，
+            // 越小越严重）；peer 均值为 0 时回退 0（不参与排序区分）。
+            let peer_abs =
+                bucket.iter().map(|(_, m, _)| m).sum::<f64>() / bucket.len() as f64;
+            let rel_gap = if peer_abs.abs() < f64::EPSILON {
+                0.0
+            } else {
+                (avg / peer_abs.abs() * 100.0).round() / 100.0
+            };
+            let streak = bucket.iter().rev().take_while(|(d, _, _)| *d < 0.0).count() as u32;
             Some(HabitTag {
                 dimension: dim.to_string(),
                 avg_vs_peer: (avg * 100.0).round() / 100.0,
+                rel_gap,
                 streak,
-                first_seen: bucket.first().map(|(_, s)| s.clone()).unwrap_or_default(),
-                last_seen: bucket.last().map(|(_, s)| s.clone()).unwrap_or_default(),
+                first_seen: bucket.first().map(|(_, _, s)| s.clone()).unwrap_or_default(),
+                last_seen: bucket.last().map(|(_, _, s)| s.clone()).unwrap_or_default(),
             })
         })
         .collect()
@@ -221,6 +235,7 @@ mod tests {
         let v = vision.unwrap();
         assert!(v.avg_vs_peer < 0.0);
         assert_eq!(v.avg_vs_peer, -13.33, "(20*5+60)/6 - 40 = -13.33");
+        assert_eq!(v.rel_gap, -0.33, "R15：相对落后比 -13.33/40");
         assert_eq!(v.streak, 0, "最近一局已回正，连续落后中断");
         assert_eq!(v.first_seen, "2026-08-01T00:00:00Z");
         assert_eq!(v.last_seen, "2026-08-06T00:00:00Z");

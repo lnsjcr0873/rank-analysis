@@ -256,6 +256,60 @@ describe('useGamingAIAnalysis', () => {
     champSelect.unmount()
   })
 
+  it('R08:连续两局选人——B 局不再展示 A 局报告，而是重新发起', async () => {
+    const sessionData = reactive({ phase: 'ChampSelect' }) as SessionData
+    const opggMode = ref('ranked' as const)
+    const { result, unmount } = withSetup(() => useGamingAIAnalysis(sessionData, opggMode))
+
+    // A 局选人完成报告
+    result.openPanel()
+    await nextTick()
+    expect(mockChampSelect).toHaveBeenCalledTimes(1)
+    captured.champSelect!.onChunk('game-A-report')
+    captured.champSelect!.onDone()
+    await nextTick()
+    expect(result.result.value).toContain('game-A-report')
+
+    // A 局结束 → Lobby → B 局选人
+    sessionData.phase = 'Lobby'
+    await nextTick()
+    sessionData.phase = 'ChampSelect'
+    await nextTick()
+
+    // 旧报告已清空，再开面板重新发起（请求总数 2，展示的不再是 A 局内容）
+    expect(result.kindState.champSelect.result.value).toBe('')
+    result.openPanel()
+    await nextTick()
+    expect(mockChampSelect).toHaveBeenCalledTimes(2)
+    unmount()
+  })
+
+  it('R08:A 局请求晚返回——B 局开始后到达的旧回调被丢弃', async () => {
+    const sessionData = reactive({ phase: 'ChampSelect' }) as SessionData
+    const opggMode = ref('ranked' as const)
+    const { result, unmount } = withSetup(() => useGamingAIAnalysis(sessionData, opggMode))
+
+    result.openPanel()
+    await nextTick()
+    const stale = captured.champSelect!
+    expect(mockChampSelect).toHaveBeenCalledTimes(1)
+
+    // 请求还在跑时进入 B 局选人
+    sessionData.phase = 'Lobby'
+    await nextTick()
+    sessionData.phase = 'ChampSelect'
+    await nextTick()
+
+    // 旧请求的 chunk/done 到达：不得写入新局状态
+    stale.onChunk('stale-A-chunk')
+    stale.onDone()
+    await nextTick()
+    expect(result.kindState.champSelect.result.value).toBe('')
+    expect(result.kindState.champSelect.loading.value).toBe(false)
+    expect(mockChampSelect).toHaveBeenCalledTimes(1)
+    unmount()
+  })
+
   it('rerunKind：指定 kind 重跑，不碰另一个 kind 的进度（三 tab 化的重跑分发）', async () => {
     const sessionData = reactive({ phase: 'InProgress' }) as SessionData
     const opggMode = ref('ranked' as const)

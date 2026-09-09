@@ -43,6 +43,12 @@ function scoreText(c: MayhemAugmentCandidate | null): string {
   <div class="m3p">
     <div class="m3p__head">
       海克斯三选一<span
+        v-if="isMayhemAugmentsPayload(payload) && payload.championScope === 'global'"
+        class="m3p__scope"
+        title="未能确定当前英雄，按全局胜率给出通用建议"
+      >
+        全局建议
+      </span><span
         v-if="isMayhemAugmentsPayload(payload) && payload.rerollsLeft != null"
         class="m3p__reroll"
       >
@@ -109,6 +115,11 @@ function scoreText(c: MayhemAugmentCandidate | null): string {
 .m3p__reroll {
   margin-left: auto;
   color: var(--text-tertiary);
+}
+.m3p__scope {
+  padding: 0 4px;
+  border: 1px solid var(--border-strong);
+  color: var(--text-secondary);
 }
 .m3p__cards {
   display: grid;

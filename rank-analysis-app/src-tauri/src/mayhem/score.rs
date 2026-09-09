@@ -148,6 +148,12 @@ pub fn grade_of(score01: f64) -> String {
 
 /// 组装查表数据（从本地激活版本读取；未同步返回 Err）。
 pub fn load_tables(champion_id: i64) -> Result<ScoreTables, String> {
+    load_tables_opt(Some(champion_id))
+}
+
+/// R09：`champion_id` 为 None 时只装全局表（明确标注的全局建议口径），
+/// 不回落任何样例英雄——错误英雄的分片胜率会带偏打分。
+pub fn load_tables_opt(champion_id: Option<i64>) -> Result<ScoreTables, String> {
     let aug_json = read_local_json("augments.json")?;
     let mut global = HashMap::new();
     if let Some(items) = aug_json["data"].as_array() {
@@ -169,8 +175,12 @@ pub fn load_tables(champion_id: i64) -> Result<ScoreTables, String> {
         ..Default::default()
     };
 
-    // 英雄历史与组合：shard 缺失时静默降级为纯全局口径
-    if let Ok(Some(detail)) = super::store::champion_detail(champion_id) {
+    // 英雄历史与组合：None 或 shard 缺失时降级为纯全局口径
+    let detail = match champion_id {
+        Some(id) => super::store::champion_detail(id).ok().flatten(),
+        None => None,
+    };
+    if let Some(detail) = detail {
         for a in detail["augments"].as_array().into_iter().flatten() {
             let Some(id) = a["id"].as_i64() else { continue };
             if let (Some(wr), Some(games)) =

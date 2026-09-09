@@ -27,6 +27,9 @@ use crate::lcu::api::summoner::Summoner;
 /// 对账窗口：开赛前 ≤ 15 分钟内的赛前建议才与该局关联。
 const RECONCILE_WINDOW_MS: i64 = 15 * 60 * 1000;
 
+/// 时钟偏差容忍度（本地时钟快于 Riot 服务器时钟时，允许赛前建议时间戳略大于开赛时间，最多容忍 3 分钟）。
+const CLOCK_SKEW_TOLERANCE_MS: i64 = 3 * 60 * 1000;
+
 /// 回测对账结果（对账数据沉淀 + 回测结果一体返回）。
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 #[serde(rename_all = "camelCase")]
@@ -46,6 +49,21 @@ pub struct DecisionBacktest {
     pub result_win: Option<bool>,
     /// 回测结果（样本不足时 insufficient_data=true 且 delta=0）。
     pub backtest: Option<BacktestResult>,
+}
+
+/// 解析对局时间为 epoch 毫秒：支持 ISO8601 字符串与纯数字时间戳字符串（毫秒/秒）。
+fn parse_game_time_to_epoch_ms(s: &str) -> Option<i64> {
+    let trimmed = s.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    if let Ok(num) = trimmed.parse::<i64>() {
+        if num > 0 {
+            // < 1000 亿视为秒，转毫秒；否则视为毫秒
+            return Some(if num < 100_000_000_000 { num * 1000 } else { num });
+        }
+    }
+    iso_to_epoch_ms(trimmed)
 }
 
 /// ISO8601 UTC（如 `2021-01-01T00:00:00.000Z`）→ epoch 毫秒。
@@ -222,15 +240,16 @@ pub async fn get_decision_backtest(game_id: i64) -> Result<DecisionBacktest, Str
             ..Default::default()
         });
     };
-    let Some(created_ms) = iso_to_epoch_ms(&game.game_creation_date) else {
+    let Some(created_ms) = parse_game_time_to_epoch_ms(&game.game_creation_date) else {
         return Ok(DecisionBacktest {
             aligned: false,
             reason: "parse_game_time_failed".to_string(),
             ..Default::default()
         });
     };
-    // 最近未对账的赛前建议（开赛前 ≤15min 窗口）
-    let Some(pending) = store::latest_pending_before(created_ms) else {
+    // 最近未对账的赛前建议（开赛前 ≤15min 窗口，允许最多 3min 本地时钟快于服务器的时钟偏差）
+    let cutoff_ms = created_ms + CLOCK_SKEW_TOLERANCE_MS;
+    let Some(pending) = store::latest_pending_before(cutoff_ms) else {
         return Ok(DecisionBacktest {
             aligned: false,
             reason: "no_pending_suggestion".to_string(),
@@ -357,6 +376,24 @@ mod tests {
         assert_eq!(iso_to_epoch_ms("2021-13-01T00:00:00.000Z"), None);
         assert_eq!(iso_to_epoch_ms("2021-01-01T00:00:00"), None, "缺时区后缀");
         assert_eq!(iso_to_epoch_ms("garbage"), None);
+    }
+
+    #[test]
+    fn parse_game_time_handles_numeric_strings_and_iso() {
+        assert_eq!(
+            parse_game_time_to_epoch_ms("1755200000000"),
+            Some(1_755_200_000_000)
+        );
+        assert_eq!(
+            parse_game_time_to_epoch_ms("1609459200"),
+            Some(1_609_459_200_000)
+        );
+        assert_eq!(
+            parse_game_time_to_epoch_ms("2021-01-01T00:00:00.000Z"),
+            Some(1_609_459_200_000)
+        );
+        assert_eq!(parse_game_time_to_epoch_ms(""), None);
+        assert_eq!(parse_game_time_to_epoch_ms("invalid"), None);
     }
 
     #[test]

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 战绩清单导出（纯本地）：CSV（基础/完整字段）与 JSON 全量两种格式。
  * 文本经 Rust 侧系统保存对话框落盘（webview 不持有裸路径）。
  */
@@ -45,21 +45,21 @@ interface DetailParticipant {
 /** 找对位敌人：
  *  1) 优先按 teamPosition 匹配；
  *  2) 缺失时按标准 10 人局 participantId ±5 约定配对（100 队 1-5 ↔ 200 队 6-10）；
- *  3) 非 10 人局或 id 布局不符 → 返回空串（不编造） */
-function findOpponentChampion(game: Game, me: Game['participants'][number]): string {
+ *  3) 非 10 人局或 id 布局不符 → 返回 null（不编造） */
+function findOpponentChampion(game: Game, me: Game['participants'][number]): number | null {
   const pos = (me as DetailParticipant).teamPosition
   const enemies = game.participants.filter(p => p.teamId !== me.teamId) as DetailParticipant[]
   if (pos && pos !== 'UNKNOWN') {
     const opp = enemies.find(e => e.teamPosition === pos)
-    if (opp) return String(opp.championId)
+    if (opp && opp.championId > 0) return opp.championId
   }
   // 回退：标准 5v5 的 id 镜像配对
   if (game.participants.length === 10 && alliesOf(game, me.teamId) === 5) {
     const oppId = me.participantId > 5 ? me.participantId - 5 : me.participantId + 5
     const opp = enemies.find(e => e.participantId === oppId)
-    if (opp) return String(opp.championId)
+    if (opp && opp.championId > 0) return opp.championId
   }
-  return ''
+  return null
 }
 
 function alliesOf(game: Game, teamId: number): number {
@@ -74,6 +74,7 @@ function gameRow(
   const p = g.participants[0]
   const st = p.stats
   const kda = st.deaths === 0 ? 'Perfect' : ((st.kills + st.assists) / st.deaths).toFixed(2)
+  const oppChampId = findOpponentChampion(g, p)
   const base = [
     g.gameCreationDate,
     g.queueName || g.gameMode,
@@ -85,7 +86,7 @@ function gameRow(
     st.assists,
     kda,
     formatDuration(g.gameDuration),
-    findOpponentChampion(g, p)
+    oppChampId ? champLabel(oppChampId) : ''
   ]
   if (!extended) return base
   return [...base, st.totalMinionsKilled ?? '', st.goldEarned ?? '', st.visionScore ?? '']

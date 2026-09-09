@@ -42,7 +42,7 @@
         <template #action><button class="btn gho sm" @click="refreshAll">重试</button></template>
       </EmptyState>
 
-      <!-- 短板卡：avgVsPeer 升序，最明显在前 -->
+      <!-- 短板卡：后端按相对落后比（relGap）升序，相对最严重的在前；卡片展示绝对差值与口径说明 -->
       <template v-else-if="tags.length">
         <div class="growth-grid">
           <CornerCard
@@ -54,7 +54,7 @@
           >
             <template #extra>
               <span class="statc"
-                ><span class="l">vs 同段位</span
+                ><span class="l" title="与同局同位置玩家的场均差值，非全段位基准">vs 同局同位置</span
                 ><span class="v num" :class="deltaClass(t.avgVsPeer)">{{
                   formatDelta(t.avgVsPeer)
                 }}</span></span

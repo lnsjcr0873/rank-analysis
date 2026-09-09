@@ -19,7 +19,7 @@
         v-if="championPool.length > 0"
         v-model:collapsed="sec.pool"
         title="英雄池"
-        :subtitle="`近${championPool.length}场`"
+        :subtitle="championPoolSubtitle"
       >
         <div class="hero-pool-list">
           <div
@@ -151,6 +151,16 @@ const emit = defineEmits<{
   /** 好友/宿敌弹窗内点击对局：上抛 gameId，由战绩列表定位并就地展开 */
   'open-game': [gameId: number]
 }>()
+
+const totalPoolGames = computed(() =>
+  props.championPool.reduce((sum, entry) => sum + entry.count, 0)
+)
+const championPoolSubtitle = computed(() => {
+  if (totalPoolGames.value > 0) {
+    return `近${totalPoolGames.value}场 · ${props.championPool.length}位英雄`
+  }
+  return `${props.championPool.length}位英雄`
+})
 
 /* ---------- 折叠状态（localStorage 记忆） ---------- */
 type SectionKey = 'rank' | 'pool' | 'stats' | 'relations' | 'growth'

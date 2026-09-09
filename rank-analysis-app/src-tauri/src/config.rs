@@ -472,7 +472,16 @@ pub const BACKUP_BLACKLIST: &[&str] = &[
 
 /// 仅云端额外排除的键:云端按 puuid 寻址、任何人可读,API key 放上去等于公开;
 /// 文件备份由用户自己保管,保留。
-pub const CLOUD_ONLY_BLACKLIST: &[&str] = &["dashscopeApiKey", "ai.apiKey"];
+///
+/// R01:除凭据外,`ai.provider` / `ai.baseUrl` 也不同步——云端脏配置若能改走
+/// 服务商与端点,会把本机保留 Key 的下一次 AI 请求发往攻击者地址;端点变更
+/// 只能来自本机显式设置操作。
+pub const CLOUD_ONLY_BLACKLIST: &[&str] = &[
+    "dashscopeApiKey",
+    "ai.apiKey",
+    "ai.provider",
+    "ai.baseUrl",
+];
 
 /// 该键是否允许进入文件备份
 pub fn allowed_in_backup(key: &str) -> bool {
@@ -504,14 +513,30 @@ pub async fn config_snapshot(for_cloud: bool) -> HashMap<String, Value> {
         .collect()
 }
 
+/// 外来快照写入本地时额外拒绝的键(R01):云同步口径下不允许上云的
+/// AI 端点身份(`ai.provider` / `ai.baseUrl`)即使出现在快照里(云端脏数据
+/// 或手改备份文件)也不得覆盖本机——端点变更只能来自本机显式设置操作。
+/// 文件备份恢复不走此口径(见 [`apply_config_snapshot_map`]),保持用户自有
+/// 备份可完整恢复。
+const CLOUD_APPLY_DENYLIST: &[&str] = &["ai.provider", "ai.baseUrl"];
+
 /// 从外来快照中筛出允许写入本地的键值对(纯函数,供 apply 与单测共用)。
 ///
 /// 拆出纯函数是为了可测性:apply 本体经 put_config 落盘,单测直接调用会
 /// 重写真实 config.yaml,故只对过滤逻辑做单元覆盖。
-fn filter_snapshot_for_apply(snapshot: HashMap<String, Value>) -> Vec<(String, Value)> {
+///
+/// - `from_cloud = true`:云端快照口径,额外拒绝 [`CLOUD_APPLY_DENYLIST`];
+/// - `from_cloud = false`:备份文件口径,仅过滤设备级黑名单(完整恢复)。
+fn filter_snapshot_for_apply(
+    snapshot: HashMap<String, Value>,
+    from_cloud: bool,
+) -> Vec<(String, Value)> {
     snapshot
         .into_iter()
-        .filter(|(key, _)| allowed_in_backup(key))
+        .filter(|(key, _)| {
+            allowed_in_backup(key)
+                && (!from_cloud || !CLOUD_APPLY_DENYLIST.contains(&key.as_str()))
+        })
         .collect()
 }
 
@@ -521,8 +546,15 @@ fn filter_snapshot_for_apply(snapshot: HashMap<String, Value>) -> Vec<(String, V
 /// 写入走 [`put_config_batch`] 批量落盘一次,自然触发变更回调(自动化模块热更新、
 /// config-changed 事件),值按原样写入——快照里的值已是 `{value:...}` 存储形状,
 /// 不重复包装。
-pub async fn apply_config_snapshot_map(snapshot: HashMap<String, Value>) -> Result<(), String> {
-    put_config_batch(filter_snapshot_for_apply(snapshot)).await
+///
+/// - `from_cloud = true`:云端快照口径,叠加拒绝 AI 端点身份键(R01),
+///   切换云配置不能改变已有 Key 的网络目的地;
+/// - `from_cloud = false`:备份文件口径,用户自有备份可完整恢复。
+pub async fn apply_config_snapshot_map(
+    snapshot: HashMap<String, Value>,
+    from_cloud: bool,
+) -> Result<(), String> {
+    put_config_batch(filter_snapshot_for_apply(snapshot, from_cloud)).await
 }
 
 /// 从缓存获取配置值。
@@ -819,6 +851,13 @@ mod tests {
         assert!(!allowed_in_cloud("dashscopeApiKey"));
         assert!(allowed_in_backup("ai.apiKey"));
         assert!(!allowed_in_cloud("ai.apiKey"));
+        // R01:AI 端点身份(服务商/地址)不同步——云端脏配置不能改变本机 Key 的发送目标
+        for key in ["ai.provider", "ai.baseUrl"] {
+            assert!(allowed_in_backup(key), "{key} 备份恢复不受影响");
+            assert!(!allowed_in_cloud(key), "{key} 不应上云");
+        }
+        // ai.model 是纯模型名(不决定网络目的地),仍允许同步
+        assert!(allowed_in_cloud("ai.model"));
         // 普通键:两边都进
         assert!(allowed_in_backup("theme"));
         assert!(allowed_in_cloud("theme"));
@@ -870,13 +909,38 @@ mod tests {
         snap.insert("cloudSyncSession".to_string(), Value::String("evil".into()));
         snap.insert("dashscopeApiKey".to_string(), Value::String("sk".into()));
         snap.insert("ai.apiKey".to_string(), Value::String("sk-ai".into()));
-        let kept = filter_snapshot_for_apply(snap);
+        // 备份文件口径:允许恢复 API key(黑名单只挡设备级键)
+        let kept = filter_snapshot_for_apply(snap.clone(), false);
         let keys: Vec<&str> = kept.iter().map(|(k, _)| k.as_str()).collect();
         assert!(keys.contains(&"theme"));
-        // 备份文件允许恢复 API key(黑名单只挡设备级键)
         assert!(keys.contains(&"dashscopeApiKey"));
         assert!(keys.contains(&"ai.apiKey"));
         assert!(!keys.contains(&"cloudSyncSession"));
+    }
+
+    #[test]
+    fn cloud_apply_should_reject_endpoint_identity_but_backup_restores_it() {
+        // R01 验收:切换云配置不能改变已有 Key 的网络目的地
+        let mut snap = HashMap::new();
+        snap.insert("theme".to_string(), Value::String("dark".into()));
+        snap.insert("ai.provider".to_string(), Value::String("openai".into()));
+        snap.insert(
+            "ai.baseUrl".to_string(),
+            Value::String("https://evil.example/v1".into()),
+        );
+        snap.insert("ai.model".to_string(), Value::String("deepseek-chat".into()));
+        // 云端口径:端点身份被拒绝,纯模型名保留
+        let cloud_kept = filter_snapshot_for_apply(snap.clone(), true);
+        let cloud_keys: Vec<&str> = cloud_kept.iter().map(|(k, _)| k.as_str()).collect();
+        assert!(cloud_keys.contains(&"theme"));
+        assert!(!cloud_keys.contains(&"ai.provider"));
+        assert!(!cloud_keys.contains(&"ai.baseUrl"));
+        assert!(cloud_keys.contains(&"ai.model"));
+        // 备份口径:用户自有备份完整恢复
+        let backup_kept = filter_snapshot_for_apply(snap, false);
+        let backup_keys: Vec<&str> = backup_kept.iter().map(|(k, _)| k.as_str()).collect();
+        assert!(backup_keys.contains(&"ai.provider"));
+        assert!(backup_keys.contains(&"ai.baseUrl"));
     }
 
     /// 回归测试：macOS 上「配置存不下来」的直接成因就是写入时父目录不存在

@@ -112,8 +112,12 @@ export async function requestAIContentStream(
   try {
     // D-P4：服务商配置（provider/baseUrl/模型/密钥）来自设置页；键缺失时用后端默认
     const cfg = await getAiProviderConfig()
-    // 设置页配置的模型优先，其次调用方参数
-    const finalModel = cfg.model || model
+    // R07:设置页模型优先；调用方默认值 DEFAULT_MODEL 仅在 dashscope 下有意义——
+    // openai/ollama 用户留空模型时透传 undefined,由后端按 provider 兜底
+    // (deepseek-chat/llama3.1),避免把 qwen-flash 发往 DeepSeek/Ollama 报模型不存在。
+    // 调用方显式传了非默认模型时仍优先使用。
+    const callerModel = model === DEFAULT_MODEL ? undefined : model
+    const finalModel = cfg.model || callerModel
 
     // 终态回调（onDone/onError）经 settle 包裹，保证恰好触发一次；分发统一走
     // mapStreamEvent，避免 done/error 逻辑与兜底文案在两处重复。
@@ -130,7 +134,7 @@ export async function requestAIContentStream(
       request: {
         prompt,
         systemPrompt,
-        model: finalModel,
+        model: finalModel || undefined,
         // dashscope 无自定义端点概念，不发 baseUrl；密钥按服务商已归一到 cfg.apiKey
         provider: cfg.provider === 'dashscope' ? undefined : cfg.provider,
         baseUrl: cfg.baseUrl || undefined,
@@ -149,6 +153,27 @@ export async function requestAIContentStream(
 /**
  * 带 sessionStorage 缓存的非流式请求（内部实际仍用流式 API 聚合）
  */
+/**
+ * 安全读缓存：存储不可用（隐私模式/禁用）按 miss 处理，不抛错。
+ * R12：缓存可用性不能成为网络成功的前提。
+ */
+function readCacheSafe(key: string): string | null {
+  try {
+    return sessionStorage.getItem(key)
+  } catch {
+    return null
+  }
+}
+
+/** 安全写缓存：QuotaExceeded 等写入失败不得阻断成功响应。 */
+function writeCacheSafe(key: string, content: string): void {
+  try {
+    sessionStorage.setItem(key, content)
+  } catch {
+    // 忽略：无缓存只是下次重算，不能让本次成功变挂起
+  }
+}
+
 export async function requestAIContent(
   prompt: string,
   cacheKey: string,
@@ -156,7 +181,7 @@ export async function requestAIContent(
   model: string = DEFAULT_MODEL,
   opts: AiRequestOptions = {}
 ): Promise<AIAnalysisResult> {
-  const cached = sessionStorage.getItem(cacheKey)
+  const cached = readCacheSafe(cacheKey)
   if (cached) {
     return { success: true, content: cached }
   }
@@ -171,7 +196,7 @@ export async function requestAIContent(
         },
         onDone: () => {
           if (fullContent) {
-            sessionStorage.setItem(cacheKey, fullContent)
+            writeCacheSafe(cacheKey, fullContent)
           }
           resolve({ success: true, content: fullContent })
         },

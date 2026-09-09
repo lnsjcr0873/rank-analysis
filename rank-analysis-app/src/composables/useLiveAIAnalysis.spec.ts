@@ -199,6 +199,36 @@ describe('useLiveAIAnalysis', () => {
     unmount()
   })
 
+  it('R08:新一局进入对局——旧局报告清空，不再展示', async () => {
+    const sessionData = reactive(JSON.parse(JSON.stringify(SESSION))) as SessionData
+    const { result, unmount } = withSetup(() =>
+      useLiveAIAnalysis(sessionData, { mySummoner: ref(ME) })
+    )
+    await flushPromises()
+
+    // 上一局完成报告
+    result.ensureStarted()
+    await flushPromises()
+    captured!.onChunk('game-A-report')
+    captured!.onDone()
+    await flushPromises()
+    expect(result.result.value).toContain('game-A-report')
+
+    // 对局结束 → 新一局开始
+    sessionData.phase = 'EndOfGame'
+    await flushPromises()
+    sessionData.phase = 'InProgress'
+    await flushPromises()
+
+    expect(result.result.value).toBe('')
+    expect(result.loading.value).toBe(false)
+    // 新局 ensureStarted 会重新发起（调用数 +1），而不是直接返回旧报告
+    result.ensureStarted()
+    await flushPromises()
+    expect(mockStream).toHaveBeenCalledTimes(2)
+    unmount()
+  })
+
   it('ensureStarted：发起分析并带上我方名与推荐出装', async () => {
     const { result, unmount } = setup()
     await flushPromises()

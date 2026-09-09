@@ -121,6 +121,21 @@ Var LegacyStrLen
       ClearErrors
       CopyFiles /SILENT "$LegacyInstallLocationUnquoted\device_id" "$INSTDIR\device_id"
     ${EndIf}
+    ${If} ${FileExists} "$LegacyInstallLocationUnquoted\meet.db"
+    ${AndIfNot} ${FileExists} "$INSTDIR\meet.db"
+      ClearErrors
+      CopyFiles /SILENT "$LegacyInstallLocationUnquoted\meet.db" "$INSTDIR\meet.db"
+    ${EndIf}
+    ${If} ${FileExists} "$LegacyInstallLocationUnquoted\backtest.db"
+    ${AndIfNot} ${FileExists} "$INSTDIR\backtest.db"
+      ClearErrors
+      CopyFiles /SILENT "$LegacyInstallLocationUnquoted\backtest.db" "$INSTDIR\backtest.db"
+    ${EndIf}
+    ${If} ${FileExists} "$LegacyInstallLocationUnquoted\insight.db"
+    ${AndIfNot} ${FileExists} "$INSTDIR\insight.db"
+      ClearErrors
+      CopyFiles /SILENT "$LegacyInstallLocationUnquoted\insight.db" "$INSTDIR\insight.db"
+    ${EndIf}
 
     ; ---- 第 3 步：静默同步卸载旧版 ----
     ; $LegacyUninstallString 已经是形如 "C:\...\uninstall.exe" 的带引号

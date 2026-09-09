@@ -356,6 +356,9 @@ export function getSharedAssistScheduler(): AssistScheduler {
         const { invoke } = await import('@tauri-apps/api/core')
         const { setOverlayLayout, pushOverlayPanel } =
           await import('@renderer/features/overlay/panels')
+        // R09:传 null 由后端从局内实时状态反查真实英雄（反查不到走标注的全局口径，
+        // 不再回落样例英雄）。前端 LivePlayerStateDto 只有 championName 无数字 id，
+        // 故不在此侧解析。
         const outcome = (await invoke('mayhem_assist_tick', { championId: null })) as {
           pushed?: boolean
           payload?: unknown

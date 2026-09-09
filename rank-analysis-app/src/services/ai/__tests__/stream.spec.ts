@@ -4,6 +4,7 @@ import {
   DEFAULT_SYSTEM_PROMPT,
   getAiProviderConfig,
   mapStreamEvent,
+  requestAIContent,
   requestAIContentStream
 } from '../stream'
 import type { StreamCallbacks } from '../types'
@@ -218,6 +219,59 @@ describe('getAiProviderConfig（D-P4 服务商配置归一）', () => {
   })
 })
 
+describe('requestAIContent 缓存容错（R12）', () => {
+  const mockGet = vi.mocked(getConfigByIpc)
+
+  beforeEach(async () => {
+    mockGet.mockReset()
+    mockGet.mockResolvedValue(undefined)
+    sessionStorage.clear()
+    const { invoke } = await import('@tauri-apps/api/core')
+    ;(invoke as unknown as ReturnType<typeof vi.fn>).mockReset()
+  })
+
+  /** 让 stream_ai_analysis 的 channel 走一遍 chunk+done 成功流 */
+  async function driveSuccess(): Promise<void> {
+    const { invoke } = await import('@tauri-apps/api/core')
+    ;(invoke as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      async (cmd: string, args: { onEvent: { onmessage: ((e: AiStreamEvent) => void) | null } }) => {
+        if (cmd === 'stream_ai_analysis') {
+          queueMicrotask(() => {
+            args.onEvent.onmessage?.({ event: 'chunk', data: 'hello' })
+            args.onEvent.onmessage?.({ event: 'done' })
+          })
+        }
+      }
+    )
+  }
+
+  it('setItem 抛错（QuotaExceeded）仍 resolve 成功，不挂起', async () => {
+    await driveSuccess()
+    const spy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('QuotaExceededError')
+    })
+    try {
+      const ret = await requestAIContent('p', 'r12-key')
+      expect(ret).toEqual({ success: true, content: 'hello' })
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it('getItem 抛错按 miss 处理，照常走网络', async () => {
+    await driveSuccess()
+    const spy = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('denied')
+    })
+    try {
+      const ret = await requestAIContent('p', 'r12-key2')
+      expect(ret).toEqual({ success: true, content: 'hello' })
+    } finally {
+      spy.mockRestore()
+    }
+  })
+})
+
 describe('requestAIContentStream 透传服务商配置（D-P4）', () => {
   const mockGet = vi.mocked(getConfigByIpc)
 
@@ -256,7 +310,7 @@ describe('requestAIContentStream 透传服务商配置（D-P4）', () => {
     })
   })
 
-  it('dashscope 不发 provider/baseUrl；模型回退调用方参数', async () => {
+  it('dashscope 不发 provider/baseUrl；默认模型透传 undefined 由后端兜底', async () => {
     mockGet.mockImplementation(async () => undefined)
     const { invoke } = await import('@tauri-apps/api/core')
     ;(invoke as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(undefined)
@@ -269,8 +323,39 @@ describe('requestAIContentStream 透传服务商配置（D-P4）', () => {
     expect(req.provider).toBeUndefined()
     expect(req.baseUrl).toBeUndefined()
     expect(req.apiKey).toBeUndefined()
-    expect(req.model).toBe('qwen-flash')
+    // R07:DEFAULT_MODEL 视为未指定,后端按 provider 兜底(dashscope 同为 qwen-flash)
+    expect(req.model).toBeUndefined()
     expect(req.systemPrompt).toBe('sys')
+  })
+
+  it('调用方显式传非默认模型时优先使用', async () => {
+    mockGet.mockImplementation(async (key: string) => {
+      if (key === 'ai.provider') return 'ollama'
+      return undefined
+    })
+    const { invoke } = await import('@tauri-apps/api/core')
+    ;(invoke as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(undefined)
+
+    await requestAIContentStream('p', makeCallbacks(), 'sys', 'qwen3:8b')
+    const calls = (invoke as unknown as ReturnType<typeof vi.fn>).mock.calls.filter(
+      c => c[0] === 'stream_ai_analysis'
+    )
+    expect(calls[0][1].request.model).toBe('qwen3:8b')
+  })
+
+  it('openai 留空模型时不发 qwen-flash,由后端兜底 deepseek-chat', async () => {
+    mockGet.mockImplementation(async (key: string) => {
+      if (key === 'ai.provider') return 'openai'
+      return undefined
+    })
+    const { invoke } = await import('@tauri-apps/api/core')
+    ;(invoke as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(undefined)
+
+    await requestAIContentStream('p', makeCallbacks())
+    const calls = (invoke as unknown as ReturnType<typeof vi.fn>).mock.calls.filter(
+      c => c[0] === 'stream_ai_analysis'
+    )
+    expect(calls[0][1].request.model).toBeUndefined()
   })
 
   it('ollama 不发 apiKey（免密钥），baseUrl 透传', async () => {

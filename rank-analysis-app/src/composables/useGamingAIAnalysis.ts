@@ -99,29 +99,50 @@ export function useGamingAIAnalysis(
   // 放实例内而不是模块级——限流只约束本面板的自动触发，不该跨实例/跨测试单元共享。
   const lastAutoRunAt: Record<AiAnalysisKind, number> = { champSelect: 0, game: 0 }
 
+  // R08 请求代次：新一局选人开始时递增，旧请求的晚回调一律丢弃（防串局）。
+  let generation = 0
+  // 是否曾经离开过选人期：ChampSelect→其他→ChampSelect 视为新一局（A 局选人完成
+  // →Lobby→B 局选人）。game kind 的旧报告保留（赛后复盘是合法场景），只清 champSelect。
+  let leftChampSelect = false
+
   // 新一局/新阶段来临（phase 变化）重置限流台账——同一阶段内的限流不该跨阶段生效
   watch(
     () => sessionData.phase,
-    () => {
+    phase => {
       lastAutoRunAt.champSelect = 0
       lastAutoRunAt.game = 0
+      if (phase === 'ChampSelect') {
+        if (leftChampSelect) {
+          // 新一局选人：旧选人报告失效，旧请求晚返回也不得写入
+          leftChampSelect = false
+          generation++
+          kindState.champSelect.loading.value = false
+          kindState.champSelect.result.value = ''
+        }
+      } else {
+        leftChampSelect = true
+      }
     }
   )
 
   async function run(kind: AiAnalysisKind): Promise<void> {
     const state = kindState[kind]
+    const gen = generation
     state.loading.value = true
     state.result.value = ''
 
     try {
       const callbacks: StreamCallbacks = {
         onChunk: chunk => {
+          if (gen !== generation) return
           state.result.value += chunk
         },
         onDone: () => {
+          if (gen !== generation) return
           state.loading.value = false
         },
         onError: error => {
+          if (gen !== generation) return
           message.error('AI 分析出错: ' + error)
           state.loading.value = false
         }
@@ -135,6 +156,7 @@ export function useGamingAIAnalysis(
         })
       }
     } catch (e) {
+      if (gen !== generation) return
       message.error('AI 分析出错: ' + ((e instanceof Error && e.message) || '未知错误'))
       state.loading.value = false
     }

@@ -185,7 +185,7 @@ describe('对手英雄列回退配对', () => {
   it('无 teamPosition 时按 participantId ±5 镜像配对', () => {
     const g = makeFullGame(false)
     const csv = gamesToCsv([g], label)
-    expect(csv).toContain('英雄101,蓝,胜,8,2,6,7.00,25:30,106')
+    expect(csv).toContain('英雄101,蓝,胜,8,2,6,7.00,25:30,英雄106')
   })
 
   it('非 10 人局不启用回退（留空不编造）', () => {
@@ -198,6 +198,6 @@ describe('对手英雄列回退配对', () => {
   it('有 teamPosition 时优先按位置匹配', () => {
     const g = makeFullGame(true)
     const csv = gamesToCsv([g], label)
-    expect(csv.trim().endsWith(',106')).toBe(true)
+    expect(csv.trim().endsWith(',英雄106')).toBe(true)
   })
 })

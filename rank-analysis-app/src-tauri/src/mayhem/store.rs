@@ -24,7 +24,9 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use super::client::{fetch_manifest, fetch_remote_config, is_safe_rel_path, SyncReport};
+use super::client::{
+    fetch_manifest, fetch_remote_config, is_safe_rel_path, is_safe_version, SyncReport,
+};
 
 /// 版本变动日志文件名（根目录下，保留最近 [`CHANGE_LOG_KEEP`] 条）。
 const CHANGE_LOG_FILE: &str = "changes.json";
@@ -226,6 +228,34 @@ pub fn champion_detail(champion_id: i64) -> Result<Option<serde_json::Value>, St
     champion_detail_in(&root_dir(), champion_id)
 }
 
+/// 按 liveclientdata 的英文显示名（alias，如 "Vayne"/"MonkeyKing"）反查数字英雄 id。
+///
+/// R09：assist_tick 未带 champion_id 时以后端实时解析代替前端写死的样例默认值。
+/// 大小写不敏感；`champions.json` 数组/`{data:[...]}` 两种形状都兼容（见
+/// `lcu::api::asset` 的离线加载）；数据未同步或无命中返回 None（调用方走全局口径）。
+pub fn champion_id_by_alias_in(root: &Path, alias: &str) -> Option<i64> {
+    let json = read_local_json_in(root, "champions.json").ok()?;
+    let list = json
+        .as_array()
+        .or_else(|| json.get("data").and_then(|d| d.as_array()))?;
+    list.iter().find_map(|c| {
+        let hit = c
+            .get("alias")
+            .and_then(|a| a.as_str())
+            .is_some_and(|a| a.eq_ignore_ascii_case(alias));
+        if hit {
+            c.get("id").and_then(|id| id.as_i64())
+        } else {
+            None
+        }
+    })
+}
+
+/// 全局根目录版 [`champion_id_by_alias_in`]。
+pub fn champion_id_by_alias(alias: &str) -> Option<i64> {
+    champion_id_by_alias_in(&root_dir(), alias)
+}
+
 // ---------------------------------------------------------------------------
 // 版本变动监控（A9）
 // ---------------------------------------------------------------------------
@@ -403,6 +433,14 @@ pub async fn sync(force: bool) -> Result<Option<SyncReport>, String> {
     if config.data_version.is_empty() || config.manifest.is_empty() {
         return Err("remote config missing dataVersion/manifest".to_string());
     }
+    // R03:首次路径拼接前校验——版本号必须是单一路径组件，否则后续
+    // staging/final 的拼接、remove_dir_all 与 rename 会作用到 versions/ 之外。
+    if !is_safe_version(&config.data_version) {
+        return Err(format!(
+            "unsafe dataVersion in remote config: {:?}",
+            config.data_version
+        ));
+    }
 
     if !force {
         if let Some(ptr) = read_pointer() {
@@ -424,6 +462,14 @@ pub async fn sync(force: bool) -> Result<Option<SyncReport>, String> {
         return Err(format!(
             "manifest version {} != config version {}",
             manifest.data_version, config.data_version
+        ));
+    }
+    // manifest 自带的 dataVersion 同样不可信：非空即校验，防止交叉校验
+    // 通过后某个非法值继续参与路径拼接。
+    if !manifest.data_version.is_empty() && !is_safe_version(&manifest.data_version) {
+        return Err(format!(
+            "unsafe dataVersion in manifest: {:?}",
+            manifest.data_version
         ));
     }
 
@@ -650,6 +696,36 @@ mod tests {
         assert_eq!(detail["champion"]["alias"], "Vayne");
         // 索引存在但没有该英雄 → None
         assert!(champion_detail_in(&root, 999).unwrap().is_none());
+    }
+
+    #[test]
+    fn champion_id_by_alias_should_resolve_case_insensitively() {
+        // R09:后端实时反查真实英雄 id 的数据源
+        let root = temp_root("alias");
+        write_version(
+            &root,
+            "16.16.3",
+            "champions.json",
+            r#"[{"id":67,"name":"薇恩","alias":"Vayne"},{"id":103,"name":"阿狸","alias":"Ahri"}]"#,
+        );
+        write_pointer_atomic_in(
+            &root,
+            &ActivePointer {
+                data_version: "16.16.3".into(),
+                synced_at: 0,
+            },
+        )
+        .unwrap();
+
+        assert_eq!(champion_id_by_alias_in(&root, "Vayne"), Some(67));
+        assert_eq!(champion_id_by_alias_in(&root, "vayne"), Some(67));
+        assert_eq!(champion_id_by_alias_in(&root, "AHRI"), Some(103));
+        assert_eq!(champion_id_by_alias_in(&root, "NoSuchChamp"), None);
+        // 未同步的根目录：无数据可查 → None（调用方走全局口径）
+        assert_eq!(
+            champion_id_by_alias_in(&temp_root("alias-empty"), "Vayne"),
+            None
+        );
     }
 
     #[test]

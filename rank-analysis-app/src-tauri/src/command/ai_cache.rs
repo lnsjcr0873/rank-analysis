@@ -63,7 +63,7 @@ fn load_entries(path: &Path) -> Vec<AiCacheEntry> {
     }
 }
 
-/// 整表写回（父目录不存在则先创建）。
+/// 整表写回（父目录不存在则先创建，写入临时文件后原子替换，防止中断损坏）。
 fn save_entries(path: &Path, entries: &[AiCacheEntry]) -> Result<(), String> {
     let json = serde_json::to_string(entries).map_err(|e| e.to_string())?;
     if let Some(dir) = path.parent() {
@@ -71,7 +71,14 @@ fn save_entries(path: &Path, entries: &[AiCacheEntry]) -> Result<(), String> {
             std::fs::create_dir_all(dir).map_err(|e| format!("mkdir {}: {}", dir.display(), e))?;
         }
     }
-    std::fs::write(path, json).map_err(|e| format!("write {}: {}", path.display(), e))
+    let mut tmp_path = path.as_os_str().to_os_string();
+    tmp_path.push(".tmp");
+    let tmp_path = PathBuf::from(tmp_path);
+    std::fs::write(&tmp_path, json.as_bytes()).map_err(|e| format!("write {}: {}", tmp_path.display(), e))?;
+    if path.exists() {
+        let _ = std::fs::remove_file(path);
+    }
+    std::fs::rename(&tmp_path, path).map_err(|e| format!("rename {}: {}", path.display(), e))
 }
 
 /// 互斥锁：读改写整段串行化，防止并发写互相覆盖。

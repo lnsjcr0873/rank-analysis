@@ -151,9 +151,14 @@ export const useMayhemStore = defineStore('mayhem', () => {
 
   /**
    * 执行数据同步。
+   *
+   * R16:返回明确结果，调用方必须据实反馈——此前内部吞错返回 void，
+   * 诊断台在断网/下载失败后仍显示"校验完成"。
    */
-  async function sync(force = false): Promise<void> {
-    if (syncing.value) return
+  async function sync(
+    force = false
+  ): Promise<{ ok: boolean; busy?: boolean; error?: string }> {
+    if (syncing.value) return { ok: false, busy: true }
     syncing.value = true
     error.value = ''
     try {
@@ -163,8 +168,10 @@ export const useMayhemStore = defineStore('mayhem', () => {
       }
       await Promise.all([loadChampions(true), loadAugments(true)])
       status.value = await getMayhemStatus()
+      return { ok: true }
     } catch (e) {
       error.value = `同步失败：${String(e)}`
+      return { ok: false, error: error.value }
     } finally {
       syncing.value = false
     }

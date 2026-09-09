@@ -9,8 +9,10 @@ use tauri::Emitter;
 ///
 /// 创建/显示透明置顶 overlay 窗口，设置鼠标穿透。
 /// 场景：phase 转 InProgress 时调用。
+/// 必须使用异步命令：Windows 上在同步 IPC 命令内创建 WebView 会与主线程
+/// 互相等待，导致页面资源加载、后续 IPC 和窗口关闭一起失去响应。
 #[tauri::command]
-pub fn show_overlay_window(app: tauri::AppHandle) -> Result<(), String> {
+pub async fn show_overlay_window(app: tauri::AppHandle) -> Result<(), String> {
     crate::overlay::show(&app);
     Ok(())
 }
@@ -93,7 +95,8 @@ pub fn set_overlay_click_through(enabled: bool) -> Result<(), String> {
 }
 
 /// 显示/隐藏浮窗（全局热键 Alt+A 后端入口）。返回切换后的可见状态。
+/// 窗口不存在时会创建 WebView，与 show_overlay_window 一样必须离开同步 IPC 线程。
 #[tauri::command]
-pub fn overlay_toggle(app: tauri::AppHandle) -> Result<bool, String> {
+pub async fn overlay_toggle(app: tauri::AppHandle) -> Result<bool, String> {
     crate::overlay::toggle(&app)
 }

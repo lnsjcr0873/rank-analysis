@@ -206,7 +206,8 @@ async function handleImport(): Promise<void> {
     `备注新增 ${stats.added},更新 ${stats.replaced},保留本地 ${stats.kept}` +
     (stats.invalid ? `,跳过损坏 ${stats.invalid}` : '')
   try {
-    await invoke('apply_config_snapshot', { snapshot: parsed.appConfig })
+    // R01:备份文件是用户自有完整恢复(fromCloud=false),云同步另走云端口径
+    await invoke('apply_config_snapshot', { snapshot: parsed.appConfig, fromCloud: false })
     await settingsStore.initTheme()
     message.success(`导入完成:配置已恢复;${notesSummary}`)
   } catch (e) {

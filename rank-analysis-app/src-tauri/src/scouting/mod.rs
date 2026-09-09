@@ -287,22 +287,33 @@ fn assess_single_threat(style: &PlayerStyle, encounter_count: u32) -> ThreatRati
     }
 }
 
-/// 对全体敌方玩家进行威胁评级。
-///
-/// # 参数
-/// - `_my_puuid`: 本机玩家 PUUID（保留参数，未来扩展）
-/// - `enemies`: 敌方玩家信息列表（puuid + 位置）
-///
-/// # 返回
-/// 敌方玩家威胁评级结果列表，按威胁等级降序排列。
+/// 对全体敌方玩家进行威胁评级（兼容纯 PUUID 入参，历史对局自愈 fallback）。
 pub fn assess_team_threats(_my_puuid: &str, enemies: &[PlayerInfo]) -> Vec<ThreatRating> {
+    let enemies_with_games: Vec<(PlayerInfo, Vec<Game>)> = enemies
+        .iter()
+        .map(|e| (e.clone(), all_games_for_player(&e.puuid)))
+        .collect();
+    assess_team_threats_with_games(_my_puuid, &enemies_with_games)
+}
+
+/// 对全体敌方玩家进行威胁评级（支持由调用方传入实时拉取的对局）。
+pub fn assess_team_threats_with_games(
+    _my_puuid: &str,
+    enemies_with_games: &[(PlayerInfo, Vec<Game>)],
+) -> Vec<ThreatRating> {
     let mut results = Vec::new();
 
-    for enemy in enemies {
+    for (enemy, passed_games) in enemies_with_games {
         let mut style = PlayerStyle::new();
 
-        for game in all_games_for_player(&enemy.puuid) {
-            if let Some(p) = find_participant(&game, &enemy.puuid) {
+        let games = if !passed_games.is_empty() {
+            passed_games.clone()
+        } else {
+            all_games_for_player(&enemy.puuid)
+        };
+
+        for game in &games {
+            if let Some(p) = find_participant(game, &enemy.puuid) {
                 let input = participant_to_score_input(p, game.game_detail.game_duration);
                 let scores = score_participants(&[input]);
                 let score = scores.first().map(|s| s.total).unwrap_or(0.0);
@@ -310,7 +321,19 @@ pub fn assess_team_threats(_my_puuid: &str, enemies: &[PlayerInfo]) -> Vec<Threa
             }
         }
 
-        let encounter_count = get_encounter_count(&enemy.puuid);
+        let encounter_summary = crate::meet_db::query_summary(&enemy.puuid);
+        let encounter_count = encounter_summary.as_ref().map(|s| s.total as u32).unwrap_or(0);
+
+        // 若全量对局不足，但存在相遇记录（meet_matches），消费相遇记录补齐样本
+        if style.total < MIN_GAMES_FOR_RATING as u32 {
+            if let Some(summary) = encounter_summary {
+                for g in &summary.recent {
+                    // 仅补足未在 games 中出现的记录
+                    style.add_encounter_game(g);
+                }
+            }
+        }
+
         let mut rating = assess_single_threat(&style, encounter_count);
         rating.puuid = enemy.puuid.clone();
         rating.position = enemy.position.clone();
@@ -324,6 +347,41 @@ pub fn assess_team_threats(_my_puuid: &str, enemies: &[PlayerInfo]) -> Vec<Threa
     });
 
     results
+}
+
+impl PlayerStyle {
+    fn add_encounter_game(&mut self, g: &crate::command::user_tag::OneGamePlayer) {
+        self.kills.push(g.kills);
+        self.deaths.push(g.deaths);
+        self.assists.push(g.assists);
+        self.damages.push(10000);
+        self.visions.push(15);
+        self.cs.push(120);
+        let kda = if g.deaths == 0 {
+            (g.kills + g.assists) as f64
+        } else {
+            (g.kills + g.assists) as f64 / g.deaths as f64
+        };
+        let score = (6.0 + kda * 1.5).min(17.0);
+        self.scores.push(score);
+        if g.win {
+            self.wins += 1;
+        }
+        self.total += 1;
+        if let Some((_, games, wins)) = self
+            .champion_counts
+            .iter_mut()
+            .find(|(cid, _, _)| *cid == g.champion_id)
+        {
+            *games += 1;
+            if g.win {
+                *wins += 1;
+            }
+        } else {
+            self.champion_counts
+                .push((g.champion_id, 1, u32::from(g.win)));
+        }
+    }
 }
 
 fn threat_level_ord(level: ThreatLevel) -> i32 {

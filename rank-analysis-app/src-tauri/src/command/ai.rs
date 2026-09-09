@@ -25,6 +25,7 @@
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use std::sync::LazyLock;
 use std::time::Duration;
 use tauri::ipc::Channel;
 
@@ -77,14 +78,26 @@ impl AiProviderKind {
 /// 解析 provider 对应的 chat 端点。纯函数，便于单测。
 ///
 /// - `dashscope`: 固定官方端点，忽略 base_url
-/// - `openai`: base_url 非空时原样使用（兼容 /v1 前缀差异），否则 `DEFAULT_OPENAI_URL`
+/// - `openai`: 完整 endpoint 原样用；服务基址/`/v1` 结尾自动补齐（R07），缺省 `DEFAULT_OPENAI_URL`
 /// - `ollama`: `{base_url}/v1/chat/completions`，base_url 缺省用 `DEFAULT_OLLAMA_BASE_URL`
 fn provider_endpoint(kind: AiProviderKind, base_url: Option<&str>) -> String {
     match kind {
         AiProviderKind::DashScope => DASHSCOPE_URL.to_string(),
         AiProviderKind::OpenAICompatible => {
             let base = base_url.map(str::trim).filter(|s| !s.is_empty());
-            base.unwrap_or(DEFAULT_OPENAI_URL).to_string()
+            match base {
+                None => DEFAULT_OPENAI_URL.to_string(),
+                Some(b) => {
+                    let trimmed = b.trim_end_matches('/');
+                    if trimmed.ends_with("/chat/completions") {
+                        trimmed.to_string()
+                    } else if trimmed.ends_with("/v1") {
+                        format!("{trimmed}/chat/completions")
+                    } else {
+                        format!("{trimmed}/v1/chat/completions")
+                    }
+                }
+            }
         }
         AiProviderKind::Ollama => {
             let base = base_url
@@ -189,11 +202,19 @@ fn resolve_api_key(
     Err("未配置 API 密钥（设置环境变量或在设置中填入）".to_string())
 }
 
-/// 从一行 SSE 文本提取增量 token。接受带或不带 `data: ` 前缀的行；
+/// 全局复用的 HTTP 客户端（避免每次流式调用重复分配连接池和 TLS 会话）。
+static HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
+    reqwest::Client::builder()
+        .timeout(Duration::from_secs(REQUEST_TIMEOUT_SECS))
+        .build()
+        .expect("Failed to create global AI HTTP client")
+});
+
+/// 从一行 SSE 文本提取增量 token。接受带或不带 `data:` 前缀（有无空格均可）的行；
 /// `[DONE]`、坏 JSON、缺 `choices[0].delta.content` 均返回 `None`。
 fn extract_delta_content(line: &str) -> Option<String> {
     let data = line.trim();
-    let data = data.strip_prefix("data: ").unwrap_or(data).trim();
+    let data = data.strip_prefix("data:").unwrap_or(data).trim();
     if data.is_empty() || data == "[DONE]" {
         return None;
     }
@@ -254,7 +275,7 @@ fn build_request_body(
 /// `[DONE]` / 坏 JSON 均返回 `None`。
 fn extract_usage(line: &str) -> Option<serde_json::Value> {
     let data = line.trim();
-    let data = data.strip_prefix("data: ").unwrap_or(data).trim();
+    let data = data.strip_prefix("data:").unwrap_or(data).trim();
     if data.is_empty() || data == "[DONE]" {
         return None;
     }
@@ -385,11 +406,8 @@ pub async fn stream_ai_analysis(
         request.response_format.as_deref(),
     );
 
-    // 创建 HTTP 客户端（总超时收紧到 REQUEST_TIMEOUT_SECS）
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(REQUEST_TIMEOUT_SECS))
-        .build()
-        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+    // 使用全局共享 HTTP 客户端（连接池复用）
+    let client = &*HTTP_CLIENT;
 
     use futures::StreamExt;
 
@@ -595,10 +613,7 @@ pub async fn test_ai_provider_connection(
     }
     headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
 
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(REQUEST_TIMEOUT_SECS))
-        .build()
-        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+    let client = &*HTTP_CLIENT;
 
     let response = client
         .post(&resolved.endpoint)
@@ -664,11 +679,14 @@ mod tests {
     fn extract_pulls_delta_content() {
         let line = r#"data: {"choices":[{"delta":{"content":"你好"}}]}"#;
         assert_eq!(extract_delta_content(line), Some("你好".to_string()));
+        let compact = r#"data:{"choices":[{"delta":{"content":"世界"}}]}"#;
+        assert_eq!(extract_delta_content(compact), Some("世界".to_string()));
     }
 
     #[test]
     fn extract_handles_done_and_garbage() {
         assert_eq!(extract_delta_content("data: [DONE]"), None);
+        assert_eq!(extract_delta_content("data:[DONE]"), None);
         assert_eq!(extract_delta_content("data: {not json"), None);
         assert_eq!(extract_delta_content(""), None);
         // 有结构但无 content 字段（如仅 role 的首包）
@@ -707,6 +725,10 @@ mod tests {
         assert_eq!(usage["promptTokens"], 42);
         assert_eq!(usage["completionTokens"], 17);
         assert_eq!(usage["totalTokens"], 59);
+
+        let compact = r#"data:{"choices":[{"delta":{"content":""}}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}}"#;
+        let usage_compact = extract_usage(compact).expect("应提取紧凑 usage");
+        assert_eq!(usage_compact["totalTokens"], 15);
     }
 
     #[test]
@@ -797,10 +819,31 @@ mod tests {
     }
 
     #[test]
-    fn endpoint_openai_uses_base_url_when_given_else_default() {
+    fn endpoint_openai_normalizes_base_url_to_chat_completions() {
+        // R07:UI 示例填服务基址/尾斜杠时自动补齐,不再 404
         assert_eq!(
             provider_endpoint(AiProviderKind::OpenAICompatible, Some(" https://x.dev/v1 ")),
-            "https://x.dev/v1"
+            "https://x.dev/v1/chat/completions"
+        );
+        assert_eq!(
+            provider_endpoint(
+                AiProviderKind::OpenAICompatible,
+                Some("https://api.deepseek.com/v1/")
+            ),
+            "https://api.deepseek.com/v1/chat/completions"
+        );
+        // 完整 endpoint 原样使用
+        assert_eq!(
+            provider_endpoint(
+                AiProviderKind::OpenAICompatible,
+                Some("https://x.dev/v1/chat/completions")
+            ),
+            "https://x.dev/v1/chat/completions"
+        );
+        // 裸 host 补全默认路径
+        assert_eq!(
+            provider_endpoint(AiProviderKind::OpenAICompatible, Some("https://x.dev")),
+            "https://x.dev/v1/chat/completions"
         );
         // 空白 base_url 视为未配置
         assert_eq!(

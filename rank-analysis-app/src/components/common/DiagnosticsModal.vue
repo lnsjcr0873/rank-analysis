@@ -49,7 +49,7 @@ const logs = ref<Array<{ time: string; type: 'info' | 'warn' | 'error'; msg: str
   {
     time: new Date().toLocaleTimeString(),
     type: 'info',
-    msg: '系统诊断控制台就绪，运行环境良好'
+    msg: '系统诊断控制台就绪（尚未检测，请使用上方各卡片操作验证）'
   }
 ])
 
@@ -75,13 +75,21 @@ async function onForceCloseOverlay() {
   }
 }
 
-/** 触发大乱斗数据自愈同步 */
+/** 触发大乱斗数据自愈同步（R16：据 sync 返回结果如实反馈，不存在失败报成功路径） */
 async function onReSyncMayhem() {
   syncMsg.value = '正在校验…'
   try {
-    await mayhemStore.sync(false)
-    addLog('info', '大乱斗本地数据已校验并对齐')
-    syncMsg.value = '校验完成'
+    const res = await mayhemStore.sync(false)
+    if (res.ok) {
+      addLog('info', '大乱斗本地数据已校验并对齐')
+      syncMsg.value = '校验完成'
+    } else if (res.busy) {
+      addLog('warn', '已有同步任务在进行，本次跳过')
+      syncMsg.value = '同步忙碌中'
+    } else {
+      addLog('error', `校验大乱斗数据失败: ${res.error ?? '未知错误'}`)
+      syncMsg.value = '校验失败'
+    }
     setTimeout(() => (syncMsg.value = ''), 2000)
   } catch (e) {
     addLog('error', `校验大乱斗数据失败: ${String(e)}`)
@@ -196,10 +204,10 @@ function onClose() {
             <div class="dcard-row">
               <span class="lbl">就绪状态</span>
               <span class="val" :class="{ ok: mayhemStore.status?.ready }">
-                {{ mayhemStore.status?.ready ? '已就绪 (本地 0ms 秒开)' : '准备中' }}
+                {{ mayhemStore.status?.ready ? '已就绪' : '准备中' }}
               </span>
               <span class="lbl" style="margin-left: 16px">当前版本</span>
-              <span class="val">{{ mayhemStore.status?.activeVersion || '16.17.1' }}</span>
+              <span class="val">{{ mayhemStore.status?.activeVersion || '未知' }}</span>
               <button class="diag-mini-btn" @click="onReSyncMayhem">
                 <RefreshCw class="btn-ic" />
                 <span>{{ syncMsg || '校验数据' }}</span>
@@ -212,7 +220,7 @@ function onClose() {
       <!-- 实时日志面板 -->
       <div class="diag-logs-section">
         <div class="dlogs-head">
-          <span>实时状态日志</span>
+          <span>诊断操作记录（本窗口内的操作与结果）</span>
           <button
             class="dlogs-btn-copy"
             :class="{ ok: copySuccess }"

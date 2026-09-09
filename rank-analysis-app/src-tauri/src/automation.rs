@@ -854,22 +854,37 @@ async fn apply_rune_page_if_needed() -> Result<(), String> {
     Ok(())
 }
 
-/// 我方已锁定英雄：本地玩家格子的已完成 pick 动作。
+/// 我方已锁定英雄：本地玩家格子的已完成 pick 动作（排位/征召），
+/// 或在极大乱斗/海克斯大乱斗等模式下直接从 my_team 获取当前分配英雄。
 ///
 /// 与执行侧（`find_my_pending_action`）关注点不同：符文只看「已确定」，不关心
-/// 是否轮到手动补刀（LCU 里锁定即生效）。无锁定（在选/未轮到我）返回 None。
+/// 是否轮到手动补刀（LCU 里锁定即生效）。无锁定（在选/未轮到我且未分配）返回 None。
 fn my_locked_champion(session: &crate::lcu::api::champion_select::SelectSession) -> Option<i32> {
-    session.actions.iter().flatten().find_map(|a| {
-        if a.actor_cell_id == session.local_player_cell_id
-            && a.action_type == "pick"
-            && a.completed
-            && a.champion_id > 0
-        {
-            Some(a.champion_id)
-        } else {
-            None
-        }
-    })
+    session
+        .actions
+        .iter()
+        .flatten()
+        .find_map(|a| {
+            if a.actor_cell_id == session.local_player_cell_id
+                && a.action_type == "pick"
+                && a.completed
+                && a.champion_id > 0
+            {
+                Some(a.champion_id)
+            } else {
+                None
+            }
+        })
+        .or_else(|| {
+            // 大乱斗 / Mayhem 等模式下 LCU 不下发 pick action，英雄直接分配至 my_team
+            session.my_team.iter().find_map(|p| {
+                if p.cell_id == session.local_player_cell_id && p.champion_id > 0 {
+                    Some(p.champion_id)
+                } else {
+                    None
+                }
+            })
+        })
 }
 
 /// 根据分路信息推断该用哪份 OP.GG 数据。
@@ -1165,17 +1180,7 @@ async fn apply_bp_decision(
     // 注意必须放在 find_my_pending_action 之前：锁定后 pending action 已 completed，
     // 函数中部对 pending 的依赖会让本段永远不可达。
     if decision.action_type == BpActionType::Pick && should_act(decision) {
-        let locked = session
-            .actions
-            .iter()
-            .flatten()
-            .find(|a| {
-                a.actor_cell_id == session.local_player_cell_id
-                    && a.action_type == "pick"
-                    && a.completed
-                    && a.champion_id > 0
-            })
-            .map(|a| a.champion_id);
+        let locked = my_locked_champion(session);
         if let Some(locked_id) = locked {
             if let Some(target) = decision.target.as_ref() {
                 if target.champion_id != locked_id
@@ -1777,6 +1782,31 @@ mod tests {
     fn locked_champion_is_none_without_local_actions() {
         let s = session_with(vec![action(3, 429, true, "pick")]);
         assert_eq!(my_locked_champion(&s), None);
+    }
+
+    #[test]
+    fn locked_champion_fallbacks_to_my_team_in_aram_or_mayhem() {
+        let mut s = session_with(vec![]);
+        s.local_player_cell_id = 2;
+        s.my_team = vec![
+            crate::lcu::api::champion_select::OnePlayer {
+                champion_id: 157,
+                puuid: "p1".into(),
+                obfuscated_puuid: "".into(),
+                assigned_position: "".into(),
+                cell_id: 2,
+                champion_pick_intent: 0,
+            },
+            crate::lcu::api::champion_select::OnePlayer {
+                champion_id: 99,
+                puuid: "p2".into(),
+                obfuscated_puuid: "".into(),
+                assigned_position: "".into(),
+                cell_id: 3,
+                champion_pick_intent: 0,
+            },
+        ];
+        assert_eq!(my_locked_champion(&s), Some(157));
     }
 }
 

@@ -308,12 +308,17 @@ pub async fn get_cloud_config_snapshot(
     Ok(crate::config::config_snapshot(true).await)
 }
 
-/// 应用一份外来配置快照(云端拉取确认后 / 备份文件导入确认后)
+/// 应用一份外来配置快照。
+///
+/// - `from_cloud = true`:云端拉取确认后,R01 口径拒绝 AI 端点身份键,
+///   切换云配置不能改变已有 Key 的网络目的地;
+/// - `from_cloud = false`:备份文件导入确认后,用户自有备份完整恢复。
 #[tauri::command]
 pub async fn apply_config_snapshot(
     snapshot: std::collections::HashMap<String, crate::config::Value>,
+    from_cloud: bool,
 ) -> Result<(), String> {
-    crate::config::apply_config_snapshot_map(snapshot).await
+    crate::config::apply_config_snapshot_map(snapshot, from_cloud).await
 }
 
 /// 导出 v2 全量备份文件:{version, type, exportedAt, playerNotes, appConfig}。
@@ -559,14 +564,25 @@ mod tests {
     #[test]
     fn pick_latest_should_filter_cloud_blacklist_keys() {
         // 云端行任何人可写:payload 里混入黑名单键必须在解析时剔除
+        // R01:ai.provider/ai.baseUrl 也不从云端取——防脏配置改走 Key 发送目标
         let rows = vec![serde_json::json!({
             "updatedAt": 1,
-            "config": { "theme": "dark", "cloudSyncSession": "evil", "dashscopeApiKey": "sk" }
+            "config": {
+                "theme": "dark",
+                "cloudSyncSession": "evil",
+                "dashscopeApiKey": "sk",
+                "ai.provider": "openai",
+                "ai.baseUrl": "https://evil.example/v1",
+                "ai.model": "deepseek-chat"
+            }
         })];
         let latest = pick_latest_config(rows).unwrap();
         assert!(latest.config.contains_key("theme"));
         assert!(!latest.config.contains_key("cloudSyncSession"));
         assert!(!latest.config.contains_key("dashscopeApiKey"));
+        assert!(!latest.config.contains_key("ai.provider"));
+        assert!(!latest.config.contains_key("ai.baseUrl"));
+        assert!(latest.config.contains_key("ai.model"));
     }
 
     #[test]

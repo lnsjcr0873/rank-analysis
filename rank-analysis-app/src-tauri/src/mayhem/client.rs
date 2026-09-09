@@ -111,6 +111,27 @@ pub fn is_safe_rel_path(path: &str) -> bool {
         .all(|seg| !seg.is_empty() && seg != "." && seg != "..")
 }
 
+/// 校验远端版本号作为单一版本目录名的安全性（R03：防 `dataVersion`
+/// 被控制导致目录写入/移动/删除越界到 `versions/` 之外）。
+///
+/// 版本号必须是单一路径组件：非空、长度 ≤64、仅 ASCII 字母数字/`-`/`_`/`/` 外的
+/// `.` 分隔符；拒绝一切路径分隔符（`/` `\`）、盘符与冒号（`C:`/ADS/UNC）、
+/// `.`/`..` 自引用、空串与超长输入。校验通过前调用方不得拼接、删除或移动目录。
+pub fn is_safe_version(version: &str) -> bool {
+    if version.is_empty() || version.len() > 64 {
+        return false;
+    }
+    if version == "." || version == ".." {
+        return false;
+    }
+    if version.contains(['/', '\\', ':', '\0']) {
+        return false;
+    }
+    version
+        .bytes()
+        .all(|b| b.is_ascii_alphanumeric() || b == b'.' || b == b'-' || b == b'_')
+}
+
 /// 从 `"sha256-<hex>"` 提取 hex 部分；格式不符返回 None。
 pub fn parse_sha256_hex(hash: Option<&str>) -> Option<String> {
     let raw = hash?.strip_prefix("sha256-")?;
@@ -251,6 +272,26 @@ mod tests {
         assert!(!is_safe_rel_path("a\\b.json"));
         assert!(!is_safe_rel_path("ads:b.json"));
         assert!(!is_safe_rel_path("dir//x.json"));
+    }
+
+    #[test]
+    fn is_safe_version_should_accept_single_component_only() {
+        // 真实版本形态
+        assert!(is_safe_version("16.16.3"));
+        assert!(is_safe_version("16.16.3-beta_1"));
+        // 越界向量一律拒绝：父目录、正反斜杠、盘符、UNC、ADS 冒号、空串、超长
+        assert!(!is_safe_version(""));
+        assert!(!is_safe_version("."));
+        assert!(!is_safe_version(".."));
+        assert!(!is_safe_version("../../outside"));
+        assert!(!is_safe_version("a/b"));
+        assert!(!is_safe_version("a\\b"));
+        assert!(!is_safe_version("C:evil"));
+        assert!(!is_safe_version("\\\\server\\share"));
+        assert!(!is_safe_version("v:1"));
+        assert!(!is_safe_version("16.16.3.staging/evil"));
+        assert!(!is_safe_version(&"v".repeat(65)));
+        assert!(!is_safe_version("版本16"));
     }
 
     #[test]

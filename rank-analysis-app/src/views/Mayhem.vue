@@ -14,13 +14,12 @@
         <button
           class="btn gho sm"
           :class="{ 'btn--on': assistRunning }"
-          :title="
-            assistRunning ? '对局监听已开启（游戏内出现三选一时自动弹出）' : '点击启动对局监听'
-          "
+          :title="assistTitle"
+          :disabled="autoAssistSupported === false"
           @click="toggleAssist"
         >
           <Radio class="btn-ico" />
-          {{ assistRunning ? '监听已开启' : '启动对局监听' }}
+          {{ assistBtnText }}
         </button>
         <button class="btn gho sm" :disabled="previewing" @click="onPreviewPanel">
           <Eye class="btn-ico" />
@@ -360,12 +359,7 @@ import {
 import { assetPrefix } from '../services/http'
 import {
   bestStage,
-  extractMayhemChampions,
-  getMayhemAugments,
-  getMayhemChampions,
   getMayhemVersionChanges,
-  getMyAugmentStats,
-  getMyChampionStats,
   importMayhemRecent,
   stripRichText,
   type MayhemAugment,
@@ -374,6 +368,7 @@ import {
   type MyAugmentStat,
   type MyChampionStat
 } from '../features/mayhem/services/mayhemData'
+// 自采管道聚合方法（如 getMyChampionStats / getMyAugmentStats）由 mayhemStore.loadMine 统一管理调用
 import { useMayhemStore } from '../features/mayhem/stores/mayhemStore'
 import { assistManual, previewAugmentOverlay } from '../features/overlay/panels'
 import { applyOverlayHotkey } from '../features/overlay/hotkeys'
@@ -462,6 +457,22 @@ const mineLoadedOnce = ref(false)
 const versionChanges = ref<MayhemVersionChange[]>([])
 const previewing = ref(false)
 const assistRunning = computed(() => mayhemStore.assistRunning)
+/**
+ * R10：后端能力查询结果。null = 尚未查到（按钮保持可用，待确认）；
+ * false = 当前构建/平台不支持自动识别，只提供手动三选一。
+ */
+const autoAssistSupported = ref<boolean | null>(null)
+const assistBtnText = computed(() => {
+  if (assistRunning.value) return '监听已开启'
+  if (autoAssistSupported.value === false) return '自动监听不可用'
+  return '启动对局监听'
+})
+const assistTitle = computed(() => {
+  if (assistRunning.value) return '对局监听已开启（游戏内出现三选一时自动弹出）'
+  if (autoAssistSupported.value === false)
+    return '当前版本不支持自动识别（需 OCR 构建），请用「手动三选一」'
+  return '点击启动对局监听'
+})
 const lastTick = computed(() => mayhemStore.lastAssistTick)
 const manualOpen = ref(false)
 const manualTexts = ref<string[]>(['', '', ''])
@@ -610,14 +621,10 @@ function plainDesc(a: MayhemAugment): string {
 }
 
 async function loadData() {
-  const res = await getMayhemChampions()
-  champions.value = extractMayhemChampions(res)
   await mayhemStore.loadChampions(true)
 }
 
 async function loadAugments() {
-  const res = await getMayhemAugments()
-  if (res.data) augments.value = res.data
   await mayhemStore.loadAugments(true)
 }
 
@@ -628,9 +635,6 @@ async function onSync(force: boolean) {
 
 async function loadMine() {
   mineLoadedOnce.value = true
-  const [c, a] = await Promise.all([getMyChampionStats(), getMyAugmentStats()])
-  myChamps.value = c
-  myAugs.value = a
   await mayhemStore.loadMine(true)
 }
 
@@ -727,6 +731,15 @@ function toggleAssist() {
 
 onMounted(async () => {
   await mayhemStore.init()
+
+  // R10：确认 OCR 可用后才承诺自动监听；不可用时按钮置灰并引导手动三选一
+  try {
+    const caps = (await invoke('mayhem_capabilities')) as { autoAssistSupported?: boolean }
+    autoAssistSupported.value = caps.autoAssistSupported !== false
+    if (autoAssistSupported.value === false) manualOpen.value = true
+  } catch {
+    autoAssistSupported.value = null
+  }
 
   // 全局热键幂等应用（进入大乱斗页即确保 Alt+A 可用；失败仅告警）
   void applyOverlayHotkey(loadOverlayPrefs().hotkeyEnabled).catch(e =>

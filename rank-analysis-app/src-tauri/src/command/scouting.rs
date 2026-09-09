@@ -53,7 +53,26 @@ pub async fn get_threat_ratings() -> Result<Vec<ThreatRating>, String> {
         return Ok(Vec::new());
     }
 
-    let ratings = assess_team_threats(&my.puuid, &enemies);
+    let mut enemies_with_games = Vec::new();
+    for enemy in enemies {
+        // 尝试从 LCU 实时拉取敌方最近对局（近 20 场）
+        let games = match crate::lcu::api::match_history::MatchHistory::get_match_history_by_puuid(
+            &enemy.puuid,
+            0,
+            19,
+        )
+        .await
+        {
+            Ok(mut mh) => {
+                let _ = mh.enrich_game_detail().await;
+                mh.games.games
+            }
+            Err(_) => Vec::new(),
+        };
+        enemies_with_games.push((enemy, games));
+    }
+
+    let ratings = crate::scouting::assess_team_threats_with_games(&my.puuid, &enemies_with_games);
     Ok(ratings)
 }
 

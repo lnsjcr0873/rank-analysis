@@ -376,6 +376,22 @@ pub async fn mayhem_draft_context() -> Result<Option<Value>, String> {
 /// 这是 OCR 引擎就位前的可用兜底（对标 aramgg_client 的 F1 手动流程）：
 /// 截屏识别失败时用户把三张卡名称敲进来，同样得到带分数的推荐面板。
 /// 超过 3 个的文本忽略；不足 3 个按空槽处理。
+/// R09:champion_id 为 None 时从局内实时状态反查真实英雄；反查不到则走
+/// 纯全局口径（payload 标注 championScope global），绝不回落样例英雄 id。
+async fn resolve_assist_champion_id(champion_id: Option<i64>) -> Option<i64> {
+    if champion_id.is_some() {
+        return champion_id;
+    }
+    let name = crate::lcu::api::live_game::get_live_active_player()
+        .await
+        .champion_name
+        .unwrap_or_default();
+    if name.is_empty() {
+        return None;
+    }
+    crate::mayhem::store::champion_id_by_alias(&name)
+}
+
 #[tauri::command]
 pub async fn mayhem_assist_manual(
     texts: Vec<String>,
@@ -389,7 +405,8 @@ pub async fn mayhem_assist_manual(
             slots[i] = Some(t.to_string());
         }
     }
-    crate::mayhem::pipeline::run_augment_round(slots, champion_id.unwrap_or(67), rerolls_left)
+    let champion_id = resolve_assist_champion_id(champion_id).await;
+    crate::mayhem::pipeline::run_augment_round(slots, champion_id, rerolls_left)
 }
 
 /// 校准截图（A3.1）：抓取三张卡标题带并导出 BMP（base64）。
@@ -434,6 +451,33 @@ pub fn mayhem_capture_band_dump() -> Result<Vec<BandDump>, String> {
 #[tauri::command]
 pub async fn mayhem_gameflow_phase() -> Result<String, String> {
     crate::lcu::api::phase::get_phase().await
+}
+
+/// R10：助手能力查询——前端据此决定展示"自动监听"还是仅"手动三选一"，
+/// 不再对无 OCR 的构建承诺"游戏内出现三选一时自动弹出"。
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MayhemCapabilities {
+    /// 操作系统（windows/macos/linux 等）
+    pub platform: String,
+    /// 是否编译了 OCR 引擎（ocr-win feature）
+    pub ocr_built_in: bool,
+    /// 屏幕捕获是否可用（当前仅 Windows）
+    pub capture_supported: bool,
+    /// 自动监听三选一是否可用（ocr + 捕获缺一不可）
+    pub auto_assist_supported: bool,
+}
+
+#[tauri::command]
+pub fn mayhem_capabilities() -> MayhemCapabilities {
+    let ocr_built_in = cfg!(all(windows, feature = "ocr-win"));
+    let capture_supported = cfg!(windows);
+    MayhemCapabilities {
+        platform: std::env::consts::OS.to_string(),
+        ocr_built_in,
+        capture_supported,
+        auto_assist_supported: ocr_built_in && capture_supported,
+    }
 }
 
 /// 大乱斗助手单次 tick（A3 触发→识别→打分→推送 的编排入口）。
@@ -490,9 +534,11 @@ pub async fn mayhem_assist_tick(
             }));
         }
 
+        // R09:优先用调用方传入的真实英雄；未传时以后端实时反查代替样例回落
+        let champion_id = resolve_assist_champion_id(champion_id).await;
         let payload = crate::mayhem::pipeline::run_augment_round(
             texts,
-            champion_id.unwrap_or(67),
+            champion_id,
             rerolls_left,
         )?;
         Ok(serde_json::json!({

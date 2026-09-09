@@ -428,6 +428,7 @@ async function relaunchAsAdmin() {
 interface HabitTagLike {
   dimension: string
   avgVsPeer: number
+  relGap?: number
   streak: number
 }
 const tagsLoading = ref(true)
@@ -437,7 +438,8 @@ onMounted(async () => {
   window.addEventListener('pointermove', onStagePointer, { passive: true })
   try {
     const tags: HabitTag[] = await getHabitTags()
-    topTags.value = [...tags].sort((a, b) => a.avgVsPeer - b.avgVsPeer).slice(0, 3)
+    // R15:按相对落后比排序（不同维度绝对差量纲不可比）；后端已排，前端保底再排一次
+    topTags.value = [...tags].sort((a, b) => (a.relGap ?? 0) - (b.relGap ?? 0)).slice(0, 3)
   } catch {
     topTags.value = []
   } finally {

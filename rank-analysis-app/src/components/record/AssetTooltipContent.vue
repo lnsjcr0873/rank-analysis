@@ -38,24 +38,77 @@ const rarityMeta: Record<string, { label: string; cls: string }> = {
 const rarityClass = computed(() => (props.rarity ? (rarityMeta[props.rarity]?.cls ?? '') : ''))
 const rarityLabel = computed(() => (props.rarity ? (rarityMeta[props.rarity]?.label ?? '') : ''))
 
-/**
- * 净化描述文本，只保留颜色相关的 HTML 标签
- * 英雄联盟的符文/物品描述使用 <font color="..."> 标签来显示颜色
- */
-const sanitizedDescription = computed(() => {
-  if (!props.description) return ''
+/** 允许的颜色值：hex / rgb() / 已知颜色关键字，拒绝 url(/expression 等向量 */
+const SAFE_COLOR_RE = /^(#[0-9a-f]{3,8}|rgba?\([^()]*\)|hsla?\([^()]*\)|[a-z]+)$/i
 
-  // 只保留 font 标签的 color 属性，其他标签都移除
-  let sanitized = props.description
-    // 保留 font 标签及其 color 属性
-    .replace(/<font\s+color=["']([^"']*)["']\s*>/gi, '<span style="color:$1">')
+/**
+ * 净化描述文本，使用 DOMParser 构建白名单 DOM 节点（只保留安全 <span> 颜色与 <br>）
+ * 彻底消除基于正则清洗的 XSS 绕过隐患
+ */
+function sanitizeTooltipHtml(rawHtml: string): string {
+  if (!rawHtml) return ''
+
+  // 将旧式 <font color="..."> 预转为带 style="color:..." 的 span 标签
+  const preprocessed = rawHtml
+    .replace(
+      /<font\b[^>]*\bcolor\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))[^>]*>/gi,
+      (_match, c1, c2, c3) => {
+        const color = (c1 ?? c2 ?? c3 ?? '').trim()
+        return SAFE_COLOR_RE.test(color) ? `<span data-safe-color="${color}">` : '<span>'
+      }
+    )
     .replace(/<\/font>/gi, '</span>')
-    // 移除其他所有 HTML 标签，但保留内容
-    .replace(/<(?!\/?span\b)[^>]+>/gi, '')
-    // 处理换行
     .replace(/\n/g, '<br>')
 
-  return sanitized
+  if (typeof DOMParser === 'undefined' || typeof document === 'undefined') {
+    return preprocessed.replace(/<[^>]+>/g, '')
+  }
+
+  const parser = new DOMParser()
+  const doc = parser.parseFromString(preprocessed, 'text/html')
+
+  function sanitizeNode(node: Node): string {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const div = document.createElement('div')
+      div.textContent = node.textContent ?? ''
+      return div.innerHTML
+    }
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      const el = node as HTMLElement
+      const tagName = el.tagName.toUpperCase()
+      if (tagName === 'BR') {
+        return '<br>'
+      }
+      let inner = ''
+      for (const child of Array.from(el.childNodes)) {
+        inner += sanitizeNode(child)
+      }
+      if (tagName === 'SPAN' || tagName === 'FONT') {
+        let color = el.getAttribute('data-safe-color') || el.getAttribute('color')
+        if (!color && el.getAttribute('style')) {
+          const styleMatch = el.getAttribute('style')?.match(/(?:^|;)\s*color\s*:\s*([^;]+)/i)
+          if (styleMatch) color = styleMatch[1].trim()
+        }
+        if (color && SAFE_COLOR_RE.test(color)) {
+          return `<span style="color:${color}">${inner}</span>`
+        }
+        return inner ? `<span>${inner}</span>` : ''
+      }
+      // 其他未知或不安全标签剥离外壳，仅保留其内部子节点内容
+      return inner
+    }
+    return ''
+  }
+
+  let result = ''
+  for (const child of Array.from(doc.body.childNodes)) {
+    result += sanitizeNode(child)
+  }
+  return result
+}
+
+const sanitizedDescription = computed(() => {
+  return sanitizeTooltipHtml(props.description)
 })
 </script>
 

@@ -238,14 +238,21 @@ function skillSummary(keys: string[]): string {
   return `主${main}${second ? `·副${second}` : ''}`
 }
 
+// R11 请求代次：快速切换英雄时，较早响应的晚回调不得覆盖当前选中英雄的详情
+let detailRequestSeq = 0
 async function loadDetail(championId: number) {
   if (!championId) {
     championDetail.value = null
     return
   }
+  const seq = ++detailRequestSeq
+  // 切换即清空旧英雄详情（不等新响应），避免短暂错显
+  championDetail.value = null
   detailLoading.value = true
   try {
     const d = await getMayhemChampionDetail(championId)
+    // 乱序/切换后到达的旧响应直接丢弃；loading 只由最新请求复位
+    if (seq !== detailRequestSeq) return
     championDetail.value = d
     if (d) {
       const itemIds = new Set<number>()
@@ -266,9 +273,10 @@ async function loadDetail(championId: number) {
       ])
     }
   } catch {
+    if (seq !== detailRequestSeq) return
     championDetail.value = null
   } finally {
-    detailLoading.value = false
+    if (seq === detailRequestSeq) detailLoading.value = false
   }
 }
 

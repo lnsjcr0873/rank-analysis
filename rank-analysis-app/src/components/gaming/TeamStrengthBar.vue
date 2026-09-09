@@ -20,18 +20,17 @@ const props = defineProps<{
 
 const visible = computed(() => props.mine.score !== null && props.enemy.score !== null)
 
-/** 双方分数区间展示（40~60 是常态区间，超出后微调刻度避免对比条撑死） */
-const SCORE_FLOOR = 40
-const SCORE_CEIL = 60
+/** 对比条两侧归一化比例（总和恒为 100%） */
+const minePct = computed(() => {
+  const m = props.mine.score
+  const e = props.enemy.score
+  if (m === null || e === null) return 50
+  const total = m + e
+  if (total <= 0) return 50
+  return Math.min(100, Math.max(0, (m / total) * 100))
+})
 
-/** 对比条两侧填充比例：分数落在 [40,60] 内按比例，越界收敛到边界 */
-function fillOf(score: number): number {
-  const clamped = Math.min(SCORE_CEIL, Math.max(SCORE_FLOOR, score))
-  return (clamped - SCORE_FLOOR) / (SCORE_CEIL - SCORE_FLOOR)
-}
-
-const mineFill = computed(() => (props.mine.score === null ? 0 : fillOf(props.mine.score)))
-const enemyFill = computed(() => (props.enemy.score === null ? 0 : fillOf(props.enemy.score)))
+const enemyPct = computed(() => 100 - minePct.value)
 
 const delta = computed(() => {
   const m = props.mine.score
@@ -84,8 +83,8 @@ function detailHasChange(d: LineupHeroDetail): boolean {
     </div>
 
     <div class="ls-bar">
-      <div class="ls-bar-segment ls-bar-mine" :style="{ width: `${mineFill * 100}%` }"></div>
-      <div class="ls-bar-segment ls-bar-enemy" :style="{ width: `${enemyFill * 100}%` }"></div>
+      <div class="ls-bar-segment ls-bar-mine" :style="{ width: `${minePct}%` }"></div>
+      <div class="ls-bar-segment ls-bar-enemy" :style="{ width: `${enemyPct}%` }"></div>
     </div>
 
     <div class="ls-detail">

@@ -87,6 +87,8 @@ export function useLiveAIAnalysis(
 
   let pollTimer: ReturnType<typeof setInterval> | null = null
   let lastAutoRunAt = 0
+  // R08 请求代次：每次进入对局递增，旧局请求的晚回调一律丢弃（防串局）
+  let generation = 0
 
   async function pollOnce(): Promise<void> {
     const data = await getLiveGameData()
@@ -110,12 +112,17 @@ export function useLiveAIAnalysis(
     lastPollAt.value = null
   }
 
-  // 进入对局开始轮询；离开对局停轮询并复位限流（新一局该重新计数）
+  // 进入对局开始轮询；离开对局停轮询并复位限流（新一局该重新计数）。
+  // R08:每次进入对局都清空旧局残留结果并递增代次——ensureStarted 见 result
+  // 直接返回，残留会导致新局展示旧局报告。
   watch(
     () => sessionData.phase,
     phase => {
       if (phase === 'InProgress') {
         lastAutoRunAt = 0
+        generation++
+        loading.value = false
+        result.value = ''
         startPolling()
       } else {
         stopPolling()
@@ -132,6 +139,7 @@ export function useLiveAIAnalysis(
       message.warning('暂无对局实时数据，稍后再试')
       return
     }
+    const gen = generation
     loading.value = true
     result.value = ''
 
@@ -154,12 +162,15 @@ export function useLiveAIAnalysis(
 
       const callbacks: StreamCallbacks = {
         onChunk: chunk => {
+          if (gen !== generation) return
           result.value += chunk
         },
         onDone: () => {
+          if (gen !== generation) return
           loading.value = false
         },
         onError: error => {
+          if (gen !== generation) return
           message.error('对局中分析出错: ' + error)
           loading.value = false
         }
@@ -169,6 +180,7 @@ export function useLiveAIAnalysis(
         recommendedItems: recommended ?? undefined
       })
     } catch (e) {
+      if (gen !== generation) return
       message.error('对局中分析出错: ' + ((e instanceof Error && e.message) || '未知错误'))
       loading.value = false
     }

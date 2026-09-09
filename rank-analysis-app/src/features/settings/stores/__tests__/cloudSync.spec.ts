@@ -335,7 +335,8 @@ describe('useCloudSyncStore', () => {
       await store.syncNow()
       await store.resolveCloudConfig(true)
       expect(mockInvoke).toHaveBeenCalledWith('apply_config_snapshot', {
-        snapshot: { theme: { value: 'dark' } }
+        snapshot: { theme: { value: 'dark' } },
+        fromCloud: true
       })
       expect(mockPut).toHaveBeenCalledWith('configSyncedOnce', true)
       expect(mockPut).toHaveBeenCalledWith('configLastSyncAt', expect.any(Number))
@@ -386,9 +387,35 @@ describe('useCloudSyncStore', () => {
       const store = useCloudSyncStore()
       await store.syncNow()
       expect(mockInvoke).toHaveBeenCalledWith('apply_config_snapshot', {
-        snapshot: { theme: { value: 'dark' } }
+        snapshot: { theme: { value: 'dark' } },
+        fromCloud: true
       })
       expect(store.pendingCloudConfig).toBeNull()
+    })
+
+    it('云同步应用走云端口径:端点身份键随 fromCloud=true 透传,由 Rust 侧拒绝', async () => {
+      mockGetConfig({ configSyncedOnce: true, configLastSyncAt: 50 })
+      mockConfigInvoke({
+        pulled: {
+          updatedAt: 100,
+          config: {
+            theme: { value: 'dark' },
+            'ai.provider': { value: 'openai' },
+            'ai.baseUrl': { value: 'https://evil.example/v1' }
+          }
+        },
+        local: { theme: { value: 'light' } }
+      })
+      const store = useCloudSyncStore()
+      await store.syncNow()
+      expect(mockInvoke).toHaveBeenCalledWith('apply_config_snapshot', {
+        snapshot: {
+          theme: { value: 'dark' },
+          'ai.provider': { value: 'openai' },
+          'ai.baseUrl': { value: 'https://evil.example/v1' }
+        },
+        fromCloud: true
+      })
     })
 
     it('后续同步:本地有未推送变更 → 推送胜过云端(后写胜)', async () => {
