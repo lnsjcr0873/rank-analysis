@@ -327,7 +327,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                     let _ = overlay.destroy();
                 }
                 rank_analysis_lib::shard::dispose_all();
-                std::process::exit(0);
+                window.app_handle().exit(0);
             }
         }
     });

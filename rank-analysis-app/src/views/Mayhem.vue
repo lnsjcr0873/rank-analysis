@@ -741,8 +741,9 @@ onMounted(async () => {
     autoAssistSupported.value = null
   }
 
-  // 全局热键幂等应用（进入大乱斗页即确保 Alt+A 可用；失败仅告警）
-  void applyOverlayHotkey(loadOverlayPrefs().hotkeyEnabled).catch(e =>
+  // 全局热键幂等应用（进入大乱斗页即确保 Alt+A 或自定义热键可用；失败仅告警）
+  const overlayPrefs = loadOverlayPrefs()
+  void applyOverlayHotkey(overlayPrefs.hotkeyEnabled, overlayPrefs.hotkeyKey).catch(e =>
     console.warn('热键注册失败:', e)
   )
   void getMayhemVersionChanges()

@@ -5,6 +5,7 @@ const DEFAULTS = {
   maxItems: 3,
   opacity: 0.9,
   hotkeyEnabled: true,
+  hotkeyKey: 'Alt+A',
   anchor: 'top-center' as const
 }
 
@@ -18,11 +19,12 @@ describe('overlayPrefs', () => {
   })
 
   it('round-trips saved prefs', () => {
-    saveOverlayPrefs({ maxItems: 5, opacity: 0.7, hotkeyEnabled: false, anchor: 'top-left' })
+    saveOverlayPrefs({ maxItems: 5, opacity: 0.7, hotkeyEnabled: false, hotkeyKey: 'Alt+Z', anchor: 'top-left' })
     expect(loadOverlayPrefs()).toEqual({
       maxItems: 5,
       opacity: 0.7,
       hotkeyEnabled: false,
+      hotkeyKey: 'Alt+Z',
       anchor: 'top-left'
     })
   })
@@ -36,6 +38,7 @@ describe('overlayPrefs', () => {
       maxItems: 6,
       opacity: 0.5,
       hotkeyEnabled: true,
+      hotkeyKey: 'Alt+A',
       anchor: 'top-right'
     })
   })
@@ -64,6 +67,7 @@ describe('overlayPrefs', () => {
       maxItems: 6,
       opacity: 1,
       hotkeyEnabled: true,
+      hotkeyKey: 'Alt+A',
       anchor: 'top-center'
     })
   })

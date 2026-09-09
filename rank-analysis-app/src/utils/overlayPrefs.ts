@@ -10,8 +10,10 @@ export interface OverlayPrefs {
   maxItems: number
   /** 卡片不透明度 0.5~1 */
   opacity: number
-  /** 全局热键 Alt+A 开关浮窗（B1） */
+  /** 全局热键开关浮窗（B1） */
   hotkeyEnabled: boolean
+  /** 自定义全局热键（如 Alt+A / Alt+Z / F9 等，默认 Alt+A） */
+  hotkeyKey?: string
   /** 浮窗锚点 */
   anchor: 'top-left' | 'top-center' | 'top-right'
 }
@@ -23,6 +25,7 @@ const DEFAULTS: OverlayPrefs = {
   maxItems: 3,
   opacity: 0.9,
   hotkeyEnabled: true,
+  hotkeyKey: 'Alt+A',
   anchor: 'top-center'
 }
 
@@ -40,6 +43,10 @@ export function loadOverlayPrefs(): OverlayPrefs {
       opacity: clamp(Number(p.opacity ?? DEFAULTS.opacity), 0.5, 1),
       hotkeyEnabled:
         typeof p.hotkeyEnabled === 'boolean' ? p.hotkeyEnabled : DEFAULTS.hotkeyEnabled,
+      hotkeyKey:
+        typeof p.hotkeyKey === 'string' && p.hotkeyKey.trim()
+          ? p.hotkeyKey.trim()
+          : DEFAULTS.hotkeyKey,
       anchor: ANCHORS.includes(p.anchor as (typeof ANCHORS)[number])
         ? (p.anchor as OverlayPrefs['anchor'])
         : DEFAULTS.anchor
@@ -57,6 +64,7 @@ export function saveOverlayPrefs(prefs: OverlayPrefs): void {
         maxItems: clamp(Math.round(prefs.maxItems), 1, 6),
         opacity: clamp(prefs.opacity, 0.5, 1),
         hotkeyEnabled: prefs.hotkeyEnabled,
+        hotkeyKey: prefs.hotkeyKey?.trim() || DEFAULTS.hotkeyKey,
         anchor: ANCHORS.includes(prefs.anchor) ? prefs.anchor : DEFAULTS.anchor
       })
     )

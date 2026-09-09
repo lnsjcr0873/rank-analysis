@@ -27,6 +27,10 @@ import {
 
 const CONFIG_KEY = 'settings.opgg.tier'
 
+/** 模块级共享状态（单例模式）：对局页与设置页等所有入口共享同一个响应式 tier，避免状态孤岛与漂移 */
+const sharedTier = ref<OpggTier>(DEFAULT_OPGG_TIER)
+const sharedLoading = ref(false)
+
 export function useOpggTier(): {
   tier: Ref<OpggTier>
   loading: Ref<boolean>
@@ -34,8 +38,8 @@ export function useOpggTier(): {
   loadTier: () => Promise<void>
   switchTier: (next: OpggTier) => Promise<boolean>
 } {
-  const tier = ref<OpggTier>(DEFAULT_OPGG_TIER)
-  const loading = ref(false)
+  const tier = sharedTier
+  const loading = sharedLoading
 
   /**
    * 从配置读当前段位，未配置过时落到默认值。

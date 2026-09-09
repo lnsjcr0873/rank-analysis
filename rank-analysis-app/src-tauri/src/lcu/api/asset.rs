@@ -281,14 +281,14 @@ const CDRAGON_STRINGTABLE_URL: &str =
 const CDRAGON_STRINGTABLE_FALLBACK_URL: &str =
     "https://raw.communitydragon.org/latest/game/en_us/data/menu/en_us/lol.stringtable.json";
 
-// BINARY_CACHE：图片字节的进程内缓存。无 TTL、无 max_capacity ——
-// 即**永不过期、永不驱逐**，首次取过后常驻到进程退出（asset 集合有限，内存可控）。
-// 注意：下面的 weigher 已设但**当前不生效** —— moka 仅在配了 max_capacity 时才按权重驱逐。
-// 如需容量上限，给 builder 补 `.max_capacity(...)` 即可激活（代价是冷数据可能被淘汰后重下）。
+// BINARY_CACHE：图片字节的进程内缓存。
+// 设置 50MB 软上限容量（配合 weigher 按图片字节大小淘汰），防止用户翻看海量玩家头像等导致内存泄漏。
+const BINARY_CACHE_MAX_BYTES: u64 = 50 * 1024 * 1024;
 use moka::future::Cache; // retained only for BINARY_CACHE
 static BINARY_CACHE: LazyLock<Cache<String, (Vec<u8>, String)>> = LazyLock::new(|| {
     Cache::builder()
         .weigher(|_k: &String, v: &(Vec<u8>, String)| v.0.len() as u32)
+        .max_capacity(BINARY_CACHE_MAX_BYTES)
         .build()
 });
 

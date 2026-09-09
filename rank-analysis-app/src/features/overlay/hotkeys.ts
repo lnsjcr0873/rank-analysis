@@ -7,17 +7,32 @@
 import { isRegistered, register, unregister } from '@tauri-apps/plugin-global-shortcut'
 import { invoke } from '@tauri-apps/api/core'
 
-export const OVERLAY_HOTKEY = 'Alt+A'
+export const DEFAULT_OVERLAY_HOTKEY = 'Alt+A'
+export const OVERLAY_HOTKEY = DEFAULT_OVERLAY_HOTKEY
+
+let currentRegisteredHotkey: string | null = null
 
 /** 幂等应用热键配置；重复调用先解绑再按需绑定。 */
-export async function applyOverlayHotkey(enabled: boolean): Promise<void> {
-  const active = await isRegistered(OVERLAY_HOTKEY).catch(() => false)
-  if (active) {
-    await unregister(OVERLAY_HOTKEY).catch(() => {})
+export async function applyOverlayHotkey(
+  enabled: boolean,
+  customHotkey?: string
+): Promise<void> {
+  const target = (customHotkey && customHotkey.trim()) || OVERLAY_HOTKEY
+
+  if (currentRegisteredHotkey) {
+    await unregister(currentRegisteredHotkey).catch(() => {})
   }
-  if (!enabled) return
+  const active = await isRegistered(target).catch(() => false)
+  if (active) {
+    await unregister(target).catch(() => {})
+  }
+  if (!enabled) {
+    currentRegisteredHotkey = null
+    return
+  }
   // toggle 的可见性判定在 Rust 侧（窗口 is_visible），前端无需跟踪状态
-  await register(OVERLAY_HOTKEY, () => {
+  await register(target, () => {
     void invoke('overlay_toggle').catch(err => console.warn('overlay_toggle failed:', err))
   })
+  currentRegisteredHotkey = target
 }

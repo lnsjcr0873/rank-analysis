@@ -18,7 +18,10 @@ import { requestAIContent } from '@renderer/services/ai/stream'
 import { getChampionName } from '@renderer/services/ai/champion-names'
 import { useCopy } from '@renderer/composables/useCopy'
 import { Copy } from 'lucide-vue-next'
+import { useMessage } from 'naive-ui'
 import { formatReviewReport } from '@renderer/companion/reviewReport'
+
+const message = useMessage()
 
 const injectedCtx = inject(matchDetailContextKey)
 if (!injectedCtx) throw new Error('ReviewTab 必须在 MatchDetailInline 内使用')
@@ -113,6 +116,9 @@ async function generateJudges() {
       )
       return res.success && res.content ? res.content.trim() : null
     })
+    if (results.length === 0) {
+      message.warning('AI 裁判生成失败，请检查网络或 AI 接口配置')
+    }
     judgeResults.value = results
     judgedFor.value = effectiveSelected.value
   } finally {

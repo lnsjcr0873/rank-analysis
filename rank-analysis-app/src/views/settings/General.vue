@@ -239,7 +239,16 @@
               size="small"
               @update:value="persistOverlay"
             />
-            <n-text :depth="3" style="font-size: var(--font-size-xs)">Alt+A 开/关浮窗</n-text>
+            <n-input
+              v-if="overlayPrefs.hotkeyEnabled"
+              v-model:value="overlayPrefs.hotkeyKey"
+              size="tiny"
+              placeholder="Alt+A"
+              style="width: 80px"
+              @blur="persistOverlay"
+              @keyup.enter="persistOverlay"
+            />
+            <n-text :depth="3" style="font-size: var(--font-size-xs)">开/关浮窗</n-text>
           </n-space>
           <n-text :depth="3" style="font-size: var(--font-size-sm)">
             对局中悬浮的「下一动作建议」与搭子气泡浮窗样式；改动即时生效。
@@ -354,9 +363,9 @@ const overlayPrefs = ref(loadOverlayPrefs())
 /** 持久化并实时广播给 overlay 窗口（Tauri emit 全局事件，无需后端参与） */
 async function persistOverlay() {
   saveOverlayPrefs(overlayPrefs.value)
-  // 热键开关即时生效（幂等：先解绑再按需绑定）
+  // 热键开关与键位即时生效（幂等：先解绑再按需绑定）
   try {
-    await applyOverlayHotkey(overlayPrefs.value.hotkeyEnabled)
+    await applyOverlayHotkey(overlayPrefs.value.hotkeyEnabled, overlayPrefs.value.hotkeyKey)
   } catch (e) {
     console.warn('全局热键注册失败:', e)
   }
