@@ -6,7 +6,7 @@
 use crate::lcu::api::champion_select::get_champion_select_session;
 use crate::lcu::api::champion_select::OnePlayer;
 use crate::lcu::api::summoner::Summoner;
-use crate::scouting::{assess_team_threats, PlayerInfo, ThreatRating};
+use crate::scouting::{PlayerInfo, ThreatRating};
 
 /// 还原敌方玩家真实 puuid。
 ///

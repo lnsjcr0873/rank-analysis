@@ -68,7 +68,7 @@ pub async fn fetch_aram_balance_data(
     let instruction_count = std::sync::atomic::AtomicU32::new(0);
     const MAX_INSTRUCTIONS: u32 = 2_000_000;
     lua.set_hook(
-        mlua::HookTriggers::every_nth_instruction(10_000),
+        mlua::HookTriggers::default().every_nth_instruction(10_000),
         move |_lua, _debug| {
             if instruction_count.fetch_add(10_000, std::sync::atomic::Ordering::Relaxed)
                 >= MAX_INSTRUCTIONS
