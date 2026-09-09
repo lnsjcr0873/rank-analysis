@@ -222,7 +222,7 @@ impl AppShard for FandomShard {
             let handle = app.clone();
             tokio::spawn(async move {
                 while !stop.load(Ordering::Relaxed) {
-                    match crate::fandom::api::fetch_aram_balance_data().await {
+                    let sleep_secs = match crate::fandom::api::fetch_aram_balance_data().await {
                         Ok(data) => {
                             let state = handle.state::<AppState>();
                             let count = data.len();
@@ -230,13 +230,15 @@ impl AppShard for FandomShard {
                                 state.fandom_cache.insert(id, balance).await;
                             }
                             log::info!("Updated Fandom ARAM balance data. Count: {}", count);
+                            2 * 60 * 60 // 成功后 2 小时刷新一次
                         }
                         Err(e) => {
-                            log::error!("Failed to update Fandom data: {}", e);
+                            log::warn!("Failed to update Fandom data (will retry in 60s): {}", e);
+                            60 // 失败后 60 秒重试，避免启动期网络瞬断导致 2 小时缓存空缺
                         }
-                    }
+                    };
                     // 停止标记在睡眠期间也可能被置位：睡醒后的下一次循环检查兜住
-                    tokio::time::sleep(Duration::from_secs(2 * 60 * 60)).await;
+                    tokio::time::sleep(Duration::from_secs(sleep_secs)).await;
                 }
                 log::info!("[shard] fandom loop stopped");
             });

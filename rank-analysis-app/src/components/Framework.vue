@@ -52,6 +52,8 @@ import { useGameState } from '@renderer/composables/useGameState'
 import { useWindowShortcuts } from '@renderer/composables/useWindowShortcuts'
 import { useZoom } from '@renderer/composables/useZoom'
 import { useStartupDialogs } from '@renderer/composables/useStartupDialogs'
+import { isMainWindow } from '@renderer/utils/windows'
+import { startLiveBridge } from '@renderer/companion/bridge'
 
 /**
  * 应用主布局框架组件（v3 壳层：舰桥导航 + 三段顶栏 + 命令面板）。
@@ -112,11 +114,8 @@ useZoom()
 // 多窗口快捷键（Ctrl+W 关子窗 / Ctrl+Tab 切窗）：主窗与战绩子窗共用
 useWindowShortcuts()
 
-import { isMainWindow } from '@renderer/utils/windows'
-
 // AI 搭子桥（C2）：应用级单例，对局中周期拉取事件 → 台词 → 浮窗气泡。
 // 仅在主窗口执行轮询，避免每个子窗口重复发起 Live Client 请求与浮窗气泡
-import { startLiveBridge } from '@renderer/companion/bridge'
 const isMain = isMainWindow()
 const liveBridge = isMain ? startLiveBridge() : null
 onMounted(() => {

@@ -55,14 +55,16 @@ export function computeReviewAxes(
   ]
 
   const axes = metrics.map(({ label, value }) => {
-    const allValues = players.map(value)
-    const maxRaw = Math.max(...allValues, EPS)
-    const avgRaw = total(value) / players.length
+    const allValues = players.map(value).filter(Number.isFinite)
+    const maxRaw = allValues.length ? Math.max(...allValues, EPS) : EPS
+    const avgRaw = total(value) / Math.max(1, players.length)
     const selfRaw = value(me)
+    const validSelf = Number.isFinite(selfRaw) ? selfRaw : 0
+    const validAvg = Number.isFinite(avgRaw) ? avgRaw : 0
     return {
       label,
-      self: Number((selfRaw / maxRaw).toFixed(3)),
-      avg: Number((avgRaw / maxRaw).toFixed(3))
+      self: Number(Math.min(1, Math.max(0, validSelf / maxRaw)).toFixed(3)),
+      avg: Number(Math.min(1, Math.max(0, validAvg / maxRaw)).toFixed(3))
     }
   })
   return { axes, found: true }

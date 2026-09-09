@@ -369,6 +369,7 @@ async fn start_match_automation() {
                 last_search_state,
                 cur_state
             );
+            last_search_state.clear();
             continue;
         }
 
@@ -379,6 +380,7 @@ async fn start_match_automation() {
             }
             Ok(false) => {
                 log::debug!("Not the leader, skipping match search");
+                last_search_state.clear();
                 continue;
             }
             Err(e) => {

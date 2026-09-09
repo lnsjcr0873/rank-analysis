@@ -806,31 +806,40 @@ function preloadNames(entry: ChampionDetailEntry) {
   ])
 }
 
+let loadSeq = 0
+
 async function load() {
-  if (!championId.value || Number.isNaN(championId.value)) {
+  const currentId = championId.value
+  if (!currentId || Number.isNaN(currentId)) {
     error.value = '无效的英雄 ID'
     return
   }
+  const seq = ++loadSeq
   loading.value = true
   error.value = ''
   try {
-    detail.value = await mayhemStore.getChampionDetail(championId.value)
-    if (!detail.value) {
-      detail.value = await getMayhemChampionDetail(championId.value)
+    let currentDetail = await mayhemStore.getChampionDetail(currentId)
+    if (!currentDetail) {
+      currentDetail = await getMayhemChampionDetail(currentId)
     }
-    if (detail.value) {
-      preloadNames(detail.value)
+    if (seq !== loadSeq) return
+
+    if (currentDetail) {
+      preloadNames(currentDetail)
       const balance = await invoke<AramBalanceData | null>('get_aram_balance', {
-        id: championId.value
+        id: currentId
       }).catch(() => null)
+      if (seq !== loadSeq) return
       balanceTags.value = buildBalanceTags(balance)
 
       // 🌟 深度数据融合：若狂暴大乱斗数据中缺少加点时序或召唤师技能，自动通过 OP.GG ARAM 官方深度库融合
-      const opggAram = (await getAramChampionBuilds(championId.value).catch(
+      const opggAram = (await getAramChampionBuilds(currentId).catch(
         () => null
       )) as AramChampionBuilds | null
-      if (opggAram && detail.value.builds?.length) {
-        for (const b of detail.value.builds) {
+      if (seq !== loadSeq) return
+
+      if (opggAram && currentDetail.builds?.length) {
+        for (const b of currentDetail.builds) {
           if (!b.skillOrders?.length && opggAram.skillMasteries?.length) {
             b.skillOrders = opggAram.skillMasteries.map(
               (sm: { ids: string[]; play: number; win: number; pickRate: number }) => ({
@@ -869,13 +878,19 @@ async function load() {
           }
         }
       }
+      detail.value = currentDetail
     } else {
+      detail.value = null
       error.value = '暂未查询到该英雄的大乱斗数据（可能尚未同步或上游未覆盖）'
     }
   } catch (e) {
-    error.value = `读取英雄详情失败：${String(e)}`
+    if (seq === loadSeq) {
+      error.value = `读取英雄详情失败：${String(e)}`
+    }
   } finally {
-    loading.value = false
+    if (seq === loadSeq) {
+      loading.value = false
+    }
   }
 }
 
