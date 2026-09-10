@@ -207,7 +207,8 @@ Skip to main content
       无限转菊花；配套 fake-timer 回归测试。
 - [ ] C7 子窗口监听注销/孤儿进程 — 【待修复】
 - [ ] C8 force_close_overlay 鼠标穿透失效 — 【待修复】
-- [ ] C9 safeRelativePercent NaN 渗透 — 【待修复】
+- [x] C9 safeRelativePercent NaN 渗透 — 【已完成】
+      commit(`fix(format)`): 在 `safeRelativePercent` 添加 `!Number.isFinite(maxValue) || !Number.isFinite(value)` 守卫，NaN/Infinity 输入统一返回0（此前 NaN 会穿透到条形图宽度计算）。同步修复 `MatchDetailSummaryTab.vue` 的 `playerBars` 中 `width: (value/max)*100` 裸计算——当 `max <= 0`（全零对局）或 `value` 为 Infinity 时返回 `3%` 兜底。新增2条 NaN/Infinity 单测（规格 8→10），全套 1618 通过。
 
 ### 批次四（16:17 发现）
 
