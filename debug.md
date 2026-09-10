@@ -43,7 +43,11 @@ Skip to main content
       CURRENT_ACTIONS / CURRENT_WIDTH / CURRENT_HEIGHT）保持 `std::sync::Mutex`
       不变——当前所有锁持有期间均为同步操作、无 `.await` 跨越。已在模块文档中标注
       安全约束：如未来需要跨 await 持锁须迁移为 `tokio::sync::Mutex`。
-- [ ] S5 match_history.rs 切片越界 panic — 【待修复】
+- [x] S5 match_history.rs 切片越界 panic — 【已完成】
+      commit: `slice_page` 中 `end_index + 1` 改为 `saturating_add(1)` 防极端
+      值溢出；增加 `debug_assert!(beg ≤ end ≤ total)` 断言验证切片不变量；
+      文档注释标注安全证明。现有 `min(total)` 夹紧已防 panic，此改动增加
+      防御深度。空数据时 `total=0` → `end=beg=0` → `0..0` 合法空切片。
 - [ ] S6 meet_db/backtest/insight 阻塞异步（spawn_blocking/连接池）— 【待修复】
 - [ ] S6b scouting 全表反复反序列化 — 【已完成】
       commit: `scouting::build_games_index` 一次全表扫描构建 puuid 倒排索引，
