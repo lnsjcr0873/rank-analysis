@@ -222,7 +222,16 @@ Skip to main content
 - [x] D4 championPool 无效局计入负场 — 【已完成】
       commit: `aggregateChampionPool` 对 `gameDuration < 300` 的重开/秒退局直接跳过，
       不计入场次与负场；配套测试。
-- [ ] D5 useBestPicks 段位缓存失效 — 【待修复】
+- [x] D5 useBestPicks 段位缓存失效 — 【已验证无需修改】
+      审查结论——报告描述的缓存在当前代码中已正确失效：
+      1) `cacheKey`（`useCounterIntel.ts:39`）包含 `tier` 参数，不同段位产生
+         不同缓存键 → intel 查找命中 → cache miss → 重新拉取。
+      2) `switchTier()`（`useOpggTier.ts:88`）成功后调用 `bumpOpggRevision()`，
+         递增 opggRevision → `useCounterIntel` watch 检测到 `rev !== lastRevision`
+         → 调用 `clearCounterIntelCache()`（清空 `intelCache` Map）+
+         `mainPositionCache.clear()`，所有陈旧数据被彻底丢弃。
+      报告描述的"旧段位协同分/克制分残留"在当前 tier-in-cacheKey + opggRevision
+      双重失效机制下不存在。已有 6 条 `useBestPicks` 时序单测覆盖核心流程。
 
 ### 批次五（16:18 发现）
 
@@ -249,7 +258,13 @@ Skip to main content
       入库统一来自 `game_creation_date`（LCU ISO 或 SGP 映射 ISO），无混合格式通道。
 - [x] F4 meet_db 聚合 SUM NULL 崩溃 — 【已验证无需修改】
       `query_summary_in` 已用 `COALESCE(SUM(...),0)` 与 `COALESCE(SUM(is_my_team AND win),0)`。
-- [ ] F5 useReconnectBanner 定时器竞态 — 【待修复】
+- [x] F5 useReconnectBanner 定时器竞态 — 【已验证无需修改】
+      审查结论——报告描述的两个缺陷在当前代码中已全部修复：
+      1) 闭包内 setTimeout 已有 `clearTimeout(timer)` 前置清理（line 18），
+         高频抖动时旧定时器不会残留——每次 false→true 转换都先清旧再设新。
+      2) `onUnmounted` 回调已执行 `stop()`（注销 watch）+ `clearTimeout(timer)`
+         （line 26-28），路由跳转后无孤儿定时器/Watcher 残留。
+      已有 5 条时序单测（fake timers）覆盖断连→重连→超时回落全流程。
 
 ### 批次七（16:20 发现）
 
