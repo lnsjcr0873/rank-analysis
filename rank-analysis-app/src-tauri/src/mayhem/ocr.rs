@@ -90,11 +90,13 @@ fn levenshtein(a: &[char], b: &[char]) -> usize {
 
 /// 在词表中匹配一段 OCR 文本。
 ///
-/// 策略：归一化后精确命中直接返回；否则取编辑距离最小且 ≤ `max_distance`
+/// 策略：归一化后精确命中直接返回；否则取编辑距离最小且 ≤ 有效容差
 /// 的条目，置信度 = 1 − dist/max(len(text), len(name))。
 ///
-/// `max_distance` 建议按文本长度取 1~2：OCR 中文错字通常单字级别，
-/// 过大的容差会把「灵巧」误配到「灵活应变」这类近义词上。
+/// `max_distance` 是**绝对容差上限**；实际容差还按词条长度动态收缩：
+/// `eff = (name_len / 3).clamp(1, max_distance)`——短名（2~3 字）只允许
+/// 1 处形变，杜绝「双刀」这类短强化被完全不相关的 2 字杂质（如背景文字
+/// 「完全」）以距离 2 强行匹配上的假阳性；长词条才放开到调用方上限。
 pub fn match_text(text: &str, lexicon: &[LexiconEntry], max_distance: usize) -> Option<MatchHit> {
     let norm = normalize_name(text);
     if norm.is_empty() || lexicon.is_empty() {
@@ -111,8 +113,10 @@ pub fn match_text(text: &str, lexicon: &[LexiconEntry], max_distance: usize) -> 
         } else {
             &entry.norm_chars
         };
+        // 动态容差：短词条收紧编辑距离，防止杂质文本假阳性命中
+        let eff_max = (name_chars.len() / 3).clamp(1, max_distance);
         // 长度差超过容差必然超距，跳过省一次 DP
-        if name_chars.len().abs_diff(norm_chars.len()) > max_distance {
+        if name_chars.len().abs_diff(norm_chars.len()) > eff_max {
             continue;
         }
         let dist = levenshtein(&norm_chars, name_chars);
@@ -122,7 +126,7 @@ pub fn match_text(text: &str, lexicon: &[LexiconEntry], max_distance: usize) -> 
                 confidence: 1.0,
             });
         }
-        if dist <= max_distance && best.map(|(_, bd, _)| dist < bd).unwrap_or(true) {
+        if dist <= eff_max && best.map(|(_, bd, _)| dist < bd).unwrap_or(true) {
             best = Some((entry.id, dist, name_chars.len()));
         }
     }
@@ -215,6 +219,18 @@ mod tests {
     fn length_gap_over_tolerance_should_skip_dp() {
         // 「灵巧」两字 vs 六字文本：长度差 4 > 2，必须拒绝
         assert!(match_text("升级无尽之刃大杀器", &lexicon(), 2).is_none());
+    }
+
+    #[test]
+    fn short_words_should_not_be_false_positive_matched_by_unrelated_text() {
+        // 「灵巧」只有 2 字：动态容差收紧为 1。「完全」与它的编辑距离为 2，
+        // 若继续用固定 max_distance=2 会被 100% 强行匹配上（背景杂质假阳性）。
+        assert!(match_text("完全", &lexicon(), 2).is_none());
+        // 单字形变仍允许（「灵巧」→「灵考」，距离 1）
+        let hit = match_text("灵考", &lexicon(), 2);
+        assert_eq!(hit.map(|h| h.id), Some(1022));
+        // 双字完全不同也拒绝（「双刀」→「炼狱」距离 2 > 1）
+        assert!(match_text("炼狱", &lexicon(), 2).is_none());
     }
 
     #[test]
