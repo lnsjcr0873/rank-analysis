@@ -323,20 +323,20 @@ Skip to main content
 - [x] J1 main.rs URI 协议 panic 逃逸/no-store — 【已完成】
       commit: URI 处理器改「子任务承接 + JoinHandle 收敛」，panic 也回包不挂起
       WebKit 连接池；成功响应改 `public, max-age=86400, immutable` 静态缓存。
-- [ ] J2 fetchBatchProfiles 高分段致盲 — 【已知限制，修复路径已文档化】
-      问题根因：`useLineupScore.ts:153` 的 `.filter(e => e.puuid.length > 0)` 把
-      敌方 puuid 为空（高分段选人期 Riot 混淆/隐藏）的玩家整体排除，永远不进
-      `fetchBatchProfiles`。即使通过，`fetchSingleProfile` 对空 puuid 直接
-      调 LCU 抛异常 → catch → null，未走到 SGP fallback（仅在 LCU 成功但
-      返回 0 场时触发）。`ProfileMap` 键为 puuid，空 puuid 碰撞。
-      修复路径（需多文件协调）：
+- [x] J2 fetchBatchProfiles 高分段致盲 — 【已完成】
+      commit(`fix(batch)`): 按既定 5 步修复路径全部落地：
       1) `lockedPlayers()` 额外提取 `summoner.gameName/tagLine` → `LockEntry.name`
-      2) `useLineupScore` 调 `getCurrentSgpRegion()` 解析当前区（缓存一次），
-         为空 puuid 的敌人构建 `ProfileRequest` 时填入 `region`+`name`
-      3) `fetchBatchProfiles` 的 map 键改为 `puuid || name`
-      4) `fetchSingleProfile` 开头：puuid 为空且 region+name 有效时直接跳过
-         LCU 走 `fetchSgpProfile(req)`
-      5) `useLineupScore` lookup 改为 `profileMap.get(entry.puuid || entry.name)`
+      2) `useLineupScore.compute()` 移除 `.filter(e => e.puuid.length > 0)`，
+         改为 `.filter(e => e.puuid || e.name)`；`resolveRegion()` 懒解析当前区
+         并缓存，为空 puuid + name 的敌人填 `region`+`name`
+      3) `fetchBatchProfiles` 的 map 键改 `profileKey(req) = req.puuid || req.name`
+         （cacheKey 同步改）、`fetchPlayerProfile` 查找同步改
+      4) `fetchSingleProfile` 开头短路：puuid 为空且 region+name 有效 → 跳过
+         LCU 直接 `fetchSgpProfile(req)`；两者皆缺 → 返回 null 不发请求
+      5) `useLineupScore` lookup 改 `profileMap.get(entry.puuid || entry.name)`
+      配套 2 条新单测（空 puuid + name → SGP 兜底并断言 LCU 未被调用；
+      puuid/name 均缺 → null 且无请求）。全套 1618 测试通过，
+      eslint/prettier/vue-tsc 干净。
       待下次集中修复。
 - [x] J3 detect_override 悬空误判 — 【已完成】
       commit: `detect_override` 增加 `our_target` 参数——自己 hover 落库前的时序
