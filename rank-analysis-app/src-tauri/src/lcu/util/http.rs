@@ -66,15 +66,23 @@ fn lock_or_recover<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     }
 }
 
+/// 获取 LCU 认证对 `(token, port)`。
+///
+/// 双检：先读缓存，空则**释放锁**后再跑 `get_auth()`（进程扫描/命令行读取可能
+/// 耗时数百毫秒，绝不能持锁等待——那会让所有 LCU 请求排队，也防止任何间接
+/// 路径对 `AUTH` 的重入死锁），拿回结果后短暂抢锁写入。
 fn get_auth_pair() -> Result<(String, String), String> {
     let auth = AUTH.get_or_init(|| Mutex::new((String::new(), String::new())));
+    {
+        let guard = lock_or_recover(auth);
+        if !guard.0.is_empty() && !guard.1.is_empty() {
+            return Ok(guard.clone());
+        }
+    } // guard 在这里 drop，get_auth() 期间不持锁
+    let (token, port) = get_auth()?;
     let mut guard = lock_or_recover(auth);
-    if guard.0.is_empty() || guard.1.is_empty() {
-        let (token, port) = get_auth()?;
-        *guard = (token.clone(), port.clone());
-        return Ok((token, port));
-    }
-    Ok(guard.clone())
+    *guard = (token.clone(), port.clone());
+    Ok((token, port))
 }
 
 /// 当前**已缓存**认证的指纹 `(token 前 8 位, port)`。
