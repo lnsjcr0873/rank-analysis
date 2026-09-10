@@ -161,35 +161,60 @@ const meet = ref<MeetSummary | null>(null)
  * 覆盖新玩家（watcher 重新执行时丢弃过期 resolve）。
  */
 let requestSeq = 0
+/** 当前展示中的画像所属 puuid（'' = 尚未成功加载） */
+let loadedForPuuid = ''
 watchEffect(async () => {
-  if (!props.puuid) return
+  // seq 必须先递增再判断 puuid：puuid 清空（组件在 v-for 中被复用移除目标）
+  // 时，必须使所有在途请求过期，否则它们迟到时会以未递增的旧 seq 误判为
+  // 最新请求，把上一名玩家的数据写进空卡。
   const seq = ++requestSeq
+  // 顶部捕获本次请求参数：await 期间 props 再变也不会读到半新半旧的值
+  //（queryMeetSummary 之前直接读 props.puuid，存在跨请求错配的窄竞态）。
+  const puuid = props.puuid
+  const championId = props.championId
+  const region = props.region
+  const name = props.name
+
+  if (!puuid) {
+    loading.value = false
+    error.value = false
+    profile.value = null
+    meet.value = null
+    loadedForPuuid = ''
+    return
+  }
+
   loading.value = true
   error.value = false
+  let failed = false
   try {
-    const p = await fetchPlayerProfile({
-      puuid: props.puuid,
-      championId: props.championId,
-      region: props.region,
-      name: props.name
-    })
+    const p = await fetchPlayerProfile({ puuid, championId, region, name })
     if (seq !== requestSeq) return
     profile.value = p
+    loadedForPuuid = puuid
   } catch {
     if (seq !== requestSeq) return
+    failed = true
+  }
+  if (seq === requestSeq) loading.value = false
+
+  // 画像失败：同一玩家（championId/region 等触发的重拉）保留上次成功画像，
+  // 避免瞬时失败/慢查询把卡片闪成空态；首次失败或换人才展示空态。
+  if (failed) {
+    if (loadedForPuuid === puuid) return
     error.value = true
     profile.value = null
-  } finally {
-    if (seq === requestSeq) loading.value = false
+    loadedForPuuid = ''
+    return
   }
+
   // 遇见过摘要独立降级：失败/无记录不阻断画像
   try {
-    const m = await queryMeetSummary(props.puuid)
+    const m = await queryMeetSummary(puuid)
     if (seq !== requestSeq) return
     meet.value = m
   } catch {
-    if (seq !== requestSeq) return
-    meet.value = null
+    if (seq === requestSeq) meet.value = null
   }
 })
 

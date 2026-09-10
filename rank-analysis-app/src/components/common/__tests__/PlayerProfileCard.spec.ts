@@ -4,6 +4,7 @@ import PlayerProfileCard from '../PlayerProfileCard.vue'
 import { fetchPlayerProfile } from '@renderer/services/ai/shared/recentProfile.batch'
 import { queryMeetSummary } from '@renderer/features/settings/services/meet'
 import type { RecentPlayerProfile } from '@renderer/services/ai/shared/types'
+import type { MeetSummary } from '@renderer/types/domain/meet'
 
 vi.mock('@renderer/services/ai/shared/recentProfile.batch', () => ({
   fetchPlayerProfile: vi.fn()
@@ -127,6 +128,81 @@ describe('PlayerProfileCard', () => {
     expect(wrapper.text()).not.toContain('60%')
     expect(vi.mocked(fetchPlayerProfile)).toHaveBeenCalledTimes(2)
     expect(vi.mocked(fetchPlayerProfile).mock.calls[1][0]).toMatchObject({ puuid: 'pB' })
+  })
+
+  it('竞态：puuid 清空后迟到的旧请求不得写入空卡', async () => {
+    let resolveA!: (v: RecentPlayerProfile | null) => void
+    vi.mocked(fetchPlayerProfile).mockImplementationOnce(
+      () => new Promise<RecentPlayerProfile | null>(r => (resolveA = r))
+    )
+
+    const wrapper = mount(PlayerProfileCard, { props: { puuid: 'pA' } })
+    // 目标清空（组件被 v-for 复用移除玩家）：在途请求必须一并失效
+    await wrapper.setProps({ puuid: '' })
+    await flushPromises()
+    expect(wrapper.text()).toContain('暂无近期战绩数据')
+
+    // 旧请求迟到成功：不得把上一名玩家的数据写进空卡
+    resolveA(PROFILE)
+    await flushPromises()
+    expect(wrapper.text()).toContain('暂无近期战绩数据')
+    expect(wrapper.text()).not.toContain('李青')
+    expect(wrapper.text()).not.toContain('60%')
+  })
+
+  it('竞态：同玩家重拉失败时保留上次成功画像不闪空态', async () => {
+    vi.mocked(fetchPlayerProfile)
+      .mockResolvedValueOnce(PROFILE)
+      .mockRejectedValueOnce(new Error('boom'))
+
+    const wrapper = mount(PlayerProfileCard, { props: { puuid: 'p1' } })
+    await flushPromises()
+    expect(wrapper.text()).toContain('60%')
+
+    // 同一玩家 championId 变化触发的重拉失败：保留上次画像
+    await wrapper.setProps({ championId: 64 })
+    await flushPromises()
+    expect(wrapper.text()).toContain('60%')
+    expect(wrapper.text()).not.toContain('暂无近期战绩数据')
+  })
+
+  it('竞态：换人后请求失败展示空态（不串玩家）', async () => {
+    vi.mocked(fetchPlayerProfile)
+      .mockResolvedValueOnce(PROFILE)
+      .mockRejectedValueOnce(new Error('boom'))
+
+    const wrapper = mount(PlayerProfileCard, { props: { puuid: 'pA' } })
+    await flushPromises()
+    expect(wrapper.text()).toContain('60%')
+
+    // 换人后新玩家失败：展示空态，不得残留上一玩家画像
+    await wrapper.setProps({ puuid: 'pB' })
+    await flushPromises()
+    expect(wrapper.text()).toContain('暂无近期战绩数据')
+    expect(wrapper.text()).not.toContain('60%')
+  })
+
+  it('竞态：慢的旧 meet 查询不得覆盖新玩家 meet', async () => {
+    let resolveMeetA!: (v: MeetSummary | null) => void
+    vi.mocked(queryMeetSummary)
+      .mockImplementationOnce(() => new Promise<MeetSummary | null>(r => (resolveMeetA = r)))
+      .mockResolvedValueOnce({ ...MEET, lastSeenAt: '2026-08-20' })
+
+    const wrapper = mount(PlayerProfileCard, { props: { puuid: 'pA' } })
+    // 等 A 画像落定、meet 查询挂起（capture resolveMeetA）
+    await flushPromises()
+    expect(queryMeetSummary).toHaveBeenCalledWith('pA')
+
+    await wrapper.setProps({ puuid: 'pB' })
+    await flushPromises()
+    // B 的 meet 先返回（最近 8-20）
+    expect(wrapper.text().replace(/\s+/g, ' ')).toContain('2026-08-20')
+
+    // A 的慢 meet 迟到：不得覆盖 B 的
+    resolveMeetA({ ...MEET, lastSeenAt: '2026-08-01' })
+    await flushPromises()
+    expect(wrapper.text().replace(/\s+/g, ' ')).toContain('2026-08-20')
+    expect(wrapper.text().replace(/\s+/g, ' ')).not.toContain('2026-08-01')
   })
 
   it('region + name 透传给 fetchPlayerProfile（SGP 兜底）', async () => {
