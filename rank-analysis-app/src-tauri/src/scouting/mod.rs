@@ -15,6 +15,8 @@
 //! - 无相遇记录 → `encounter_count = 0`，`caveats` 标注"未交手"
 //! - 无法定位本机 summoner → 整体返回空（不编造）
 
+use std::collections::HashMap;
+
 use serde::Serialize;
 
 use crate::command::score::{score_participants, PlayerScoreInput};
@@ -287,11 +289,41 @@ fn assess_single_threat(style: &PlayerStyle, encounter_count: u32) -> ThreatRati
     }
 }
 
+/// 从 collected_games 全表中为一批 puuid 构建倒排索引（只全表扫描**一次**，
+/// 供多个玩家按 puuid 高效取历史对局；此前每个玩家单独 `all_games_for_player`
+/// 会反复全表 scan + 全量 JSON 反序列化，选人期 5 名敌人触发 5 次全表搬运）。
+fn build_games_index(puuids: &[String]) -> HashMap<String, Vec<Game>> {
+    let mut index: HashMap<String, Vec<Game>> =
+        puuids.iter().map(|p| (p.clone(), Vec::new())).collect();
+    for (_, _, games) in crate::meet_db::all_collected_games() {
+        for game in games {
+            for id in &game.game_detail.participant_identities {
+                if let Some(list) = index.get_mut(&id.player.puuid) {
+                    list.push(game.clone());
+                }
+            }
+        }
+    }
+    // 各 puuid 按时间升序后截断到聚合窗口（口径同原 all_games_for_player）。
+    for list in index.values_mut() {
+        list.sort_by(|a, b| a.game_creation_date.cmp(&b.game_creation_date));
+        if list.len() > AGGREGATE_LIMIT {
+            list.truncate(list.len() - AGGREGATE_LIMIT);
+        }
+    }
+    index
+}
+
 /// 对全体敌方玩家进行威胁评级（兼容纯 PUUID 入参，历史对局自愈 fallback）。
 pub fn assess_team_threats(_my_puuid: &str, enemies: &[PlayerInfo]) -> Vec<ThreatRating> {
+    let puuids: Vec<String> = enemies.iter().map(|e| e.puuid.clone()).collect();
+    let index = build_games_index(&puuids);
     let enemies_with_games: Vec<(PlayerInfo, Vec<Game>)> = enemies
         .iter()
-        .map(|e| (e.clone(), all_games_for_player(&e.puuid)))
+        .map(|e| {
+            let games = index.get(&e.puuid).cloned().unwrap_or_default();
+            (e.clone(), games)
+        })
         .collect();
     assess_team_threats_with_games(_my_puuid, &enemies_with_games)
 }
@@ -301,6 +333,19 @@ pub fn assess_team_threats_with_games(
     _my_puuid: &str,
     enemies_with_games: &[(PlayerInfo, Vec<Game>)],
 ) -> Vec<ThreatRating> {
+    // 仅对「传入对局为空」的玩家，从 collected_games 一次倒排索引补数据；
+    // 避免每个空档玩家各自全表扫描（全表只反序列化一次）。
+    let missing: Vec<String> = enemies_with_games
+        .iter()
+        .filter(|(_, games)| games.is_empty())
+        .map(|(e, _)| e.puuid.clone())
+        .collect();
+    let index = if missing.is_empty() {
+        HashMap::new()
+    } else {
+        build_games_index(&missing)
+    };
+
     let mut results = Vec::new();
 
     for (enemy, passed_games) in enemies_with_games {
@@ -309,7 +354,7 @@ pub fn assess_team_threats_with_games(
         let games = if !passed_games.is_empty() {
             passed_games.clone()
         } else {
-            all_games_for_player(&enemy.puuid)
+            index.get(&enemy.puuid).cloned().unwrap_or_default()
         };
 
         for game in &games {
@@ -391,35 +436,6 @@ fn threat_level_ord(level: ThreatLevel) -> i32 {
         ThreatLevel::High => 2,
         ThreatLevel::Critical => 3,
     }
-}
-
-/// 获取与某玩家的相遇次数。
-fn get_encounter_count(puuid: &str) -> u32 {
-    crate::meet_db::query_summary(puuid)
-        .map(|s| s.total as u32)
-        .unwrap_or(0)
-}
-
-/// 从 collected_games 中提取某 puuid 参与的所有对局（最近 AGGREGATE_LIMIT 局）。
-fn all_games_for_player(puuid: &str) -> Vec<Game> {
-    let mut result = Vec::new();
-    for (_, _, games) in crate::meet_db::all_collected_games() {
-        for game in games {
-            if game
-                .game_detail
-                .participant_identities
-                .iter()
-                .any(|id| id.player.puuid == puuid)
-            {
-                result.push(game);
-            }
-        }
-    }
-    result.sort_by(|a, b| a.game_creation_date.cmp(&b.game_creation_date));
-    if result.len() > AGGREGATE_LIMIT {
-        result = result.split_off(result.len() - AGGREGATE_LIMIT);
-    }
-    result
 }
 
 #[cfg(test)]
