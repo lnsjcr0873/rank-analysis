@@ -230,7 +230,16 @@ import RecordCard from './RecordCard.vue'
 import RecordCardSkeleton from './RecordCardSkeleton.vue'
 import TrendBar from './TrendBar.vue'
 import { ArrowLeft, ArrowRight, Repeat, Download, ChevronDown } from 'lucide-vue-next'
-import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch } from 'vue'
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  provide,
+  ref,
+  shallowRef,
+  watch
+} from 'vue'
 import { NButton, NIcon, NDropdown, NPopconfirm, useLoadingBar, useMessage } from 'naive-ui'
 import EmptyState from '@renderer/components/ui/EmptyState.vue'
 import { Search, TriangleAlert, Inbox } from 'lucide-vue-next'
@@ -415,6 +424,15 @@ const exporting = ref(false)
 const lastExportPath = ref<string | null>(null)
 const pathCopied = ref(false)
 let pathTimer: ReturnType<typeof setTimeout> | null = null
+/** 挂载期内存活的其余未决定时器：卸载时统一清空，避免写已卸载组件的孤儿 ref */
+const pendingTimers = new Set<ReturnType<typeof setTimeout>>()
+function armTimeout(fn: () => void, ms: number): void {
+  const t = setTimeout(() => {
+    pendingTimers.delete(t)
+    fn()
+  }, ms)
+  pendingTimers.add(t)
+}
 function showExportPath(path: string): void {
   lastExportPath.value = path
   pathCopied.value = false
@@ -486,7 +504,7 @@ async function copyExportPath(): Promise<void> {
   try {
     await navigator.clipboard.writeText(lastExportPath.value)
     pathCopied.value = true
-    setTimeout(() => (pathCopied.value = false), 1500)
+    armTimeout(() => (pathCopied.value = false), 1500)
   } catch {
     messageApi?.error('复制失败，请手动选择路径文本')
   }
@@ -580,7 +598,7 @@ async function focusGame(gameId: number): Promise<void> {
     if (!el) return
     highlightedGameId.value = gameId
     el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    setTimeout(() => {
+    armTimeout(() => {
       if (highlightedGameId.value === gameId) highlightedGameId.value = null
     }, 1600)
   })
@@ -850,7 +868,7 @@ function selectTrendGame(gameId: number) {
   if (target) {
     highlightedGameId.value = gameId
     target.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    setTimeout(() => {
+    armTimeout(() => {
       if (highlightedGameId.value === gameId) highlightedGameId.value = null
     }, 1600)
     return
@@ -867,7 +885,7 @@ function selectTrendGame(gameId: number) {
     if (!el) return
     highlightedGameId.value = gameId
     el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    setTimeout(() => {
+    armTimeout(() => {
       if (highlightedGameId.value === gameId) highlightedGameId.value = null
     }, 1600)
   })
@@ -886,6 +904,8 @@ onBeforeUnmount(() => {
   collectGeneration.value++ // 使聚合收集上仍在进行的全量收集失效
   window.removeEventListener('resize', onViewportResize)
   if (pathTimer) clearTimeout(pathTimer)
+  pendingTimers.forEach(clearTimeout)
+  pendingTimers.clear()
 })
 
 // 切换玩家（路由 name 变化）时列表与趋势条一起刷新
