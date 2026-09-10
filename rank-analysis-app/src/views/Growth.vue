@@ -54,7 +54,8 @@
           >
             <template #extra>
               <span class="statc"
-                ><span class="l" title="与同局同位置玩家的场均差值，非全段位基准">vs 同局同位置</span
+                ><span class="l" title="与同局同位置玩家的场均差值，非全段位基准"
+                  >vs 同局同位置</span
                 ><span class="v num" :class="deltaClass(t.avgVsPeer)">{{
                   formatDelta(t.avgVsPeer)
                 }}</span></span
@@ -196,6 +197,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { getVersion } from '@tauri-apps/api/app'
 import { useMessage } from 'naive-ui'
+import { safeSetItem, safeSetJson } from '../utils/safeStorage'
 
 import CornerCard from '../components/ui/CornerCard.vue'
 import EmptyState from '../components/ui/EmptyState.vue'
@@ -257,10 +259,11 @@ function loadGoalNotes(): Record<string, string> {
   }
 }
 function persistNotes(): void {
-  try {
-    localStorage.setItem(GOAL_NOTES_KEY, JSON.stringify(goalNotes.value))
-  } catch {
-    /* 隐私模式等写失败场景静默：备注属增强功能 */
+  const res = safeSetJson(GOAL_NOTES_KEY, goalNotes.value)
+  if (res === 'quota') {
+    message.warning('目标备注本地存储已满，本次修改仅保留在当前会话，重启后可能丢失')
+  } else if (res === 'error') {
+    message.error('目标备注保存失败')
   }
 }
 watch(goals, list => {
@@ -348,11 +351,7 @@ async function backupGoals(): Promise<void> {
       contents: serializeGoalsBackup(goals.value, goalNotes.value, appVersion.value)
     })
     lastBackupAt.value = new Date().toISOString()
-    try {
-      localStorage.setItem(LAST_BACKUP_KEY, lastBackupAt.value)
-    } catch {
-      /* 写失败静默 */
-    }
+    safeSetItem(LAST_BACKUP_KEY, lastBackupAt.value)
     message.success('目标备份已保存')
   } catch (e) {
     console.error('目标备份失败:', e)
@@ -410,10 +409,11 @@ async function importGoalsFile(file: File): Promise<void> {
     await loadGoals()
     const remapped = remapNotesByTitleKey(backup, goals.value)
     goalNotes.value = { ...goalNotes.value, ...remapped }
-    try {
-      localStorage.setItem(GOAL_NOTES_KEY, JSON.stringify(goalNotes.value))
-    } catch {
-      /* 写失败静默 */
+    const noteRes = safeSetJson(GOAL_NOTES_KEY, goalNotes.value)
+    if (noteRes === 'quota') {
+      message.warning('目标备注本地存储已满，还原的备注仅保留在当前会话')
+    } else if (noteRes === 'error') {
+      message.error('目标备注保存失败')
     }
     // 短板卡数据源与本清单同源（习惯标签），还原后同步刷新保持一致
     void refreshAll()
