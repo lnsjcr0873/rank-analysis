@@ -188,8 +188,25 @@ Skip to main content
 - [x] B7 sgp.rs epoch_ms_to_iso 负年份 — 【已完成】
       commit: 输入夹到 [0, 9999-12-31T23:59:59.999Z]，负毫秒/极未来不再产出
       `-001-12-31` 非标准串导致前端 Invalid Date；配套越界回归测试。
-- [ ] B8 mayhemStore sync 后台悬挂 — 【待修复】
-- [ ] B9 Record/MatchHistory 长列表虚拟滚动缺失 — 【待修复】
+- [x] B8 mayhemStore sync 后台悬挂 — 【已验证无需修改】
+      审查结论——报告描述的竞态在当前架构下不成立：
+      1) `Framework.vue`（对局页壳）与 `Settings.vue` 的 `<router-view>` 均未
+         使用 `<KeepAlive>`（见 `useOpggTier.ts` 注释），Mayhem.vue 不会被保活；
+         导航离开时组件完全销毁，所有 watchers 与响应式依赖断开——store 在后台
+         完成同步后写入的 reactive 数据不会触发已卸载组件的重算。
+      2) 错误消息展示：Mayhem.vue 的 `error` 仅在模板 `<div v-if="error">` 中
+         显示（line 53），未使用 `useMessage` 弹出 toast——导航后 DOM 已移除，
+         不存在"未被销毁的消息钩子弹出"的路径。
+      报告描述的竞态仅在启用 `<KeepAlive>` 时才会发生，当前配置下不存在。
+- [x] B9 Record/MatchHistory 长列表虚拟滚动缺失 — 【已验证无需修改】
+      审查结论——报告将其列为"缺陷"，实际是功能增强建议：
+      1) 当前已实施客户端分页（`computePageSize` + `defaultPageSize=10`），
+         真实 DOM 中同一时刻仅渲染单页的 10~15 条 RecordCard，不存在"数百场
+         对局 DOM 节点全挂"的场景。
+      2) SGP 全量收集上限为 500 场（`collectSgpHistoryAll` 的 `maxGames=500`），
+         配合分页后内存占用受控。
+      3) virtual scrolling（如 `vue-virtual-scroller`）在 v3 宽屏双栏布局下
+         实现成本高、收益有限（分页已解决渲染瓶颈），不纳入当前修复范围。
 
 ### 批次三（跨平台/自动化/AI/多窗口/数据）
 
