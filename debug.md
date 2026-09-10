@@ -104,15 +104,19 @@ Skip to main content
 - [ ] G1 http.rs AUTH 锁重入死锁 — 【待修复】
 - [ ] G2 sgp_league_servers 并发雪崩 — 【待修复】
 - [ ] G3 automation 焦点抢占 — 【待修复】
-- [ ] G4 critiqueReport 点评错位 — 【待修复】
-- [ ] G5 ocr.rs 短词固定距离误判 — 【待修复】
+- [x] G5 ocr.rs 短词固定距离误判 — 【已完成】
+      commit: 按词条长度动态收缩编辑距离 `eff=(len/3).clamp(1,max)`，2-3 字短强化
+      只允许单字形变，杜绝杂质文本假阳性命中；配套回归测试。
+- [x] G4 critiqueReport 点评错位 — 【待核验】
 
 ### 批次八（16:21 发现）
 
 - [x] H1 hotkeys.ts 注册前未注销旧键 — 【已验证无需修改】
       `applyOverlayHotkey` 已在注册新键前先 `unregister(currentRegisteredHotkey)`，
       并对已注册目标键幂等解绑后再绑定；报告所述问题已实现。
-- [ ] H2 mergeGamesByGameId 未排序 — 【待修复】
+- [x] H2 mergeGamesByGameId 未排序 — 【已完成】
+      commit: 合并后按 gameCreationDate 稳定降序重排，翻页交叉/续收不再错乱；
+      配套交叉乱序回归测试。
 - [ ] H3 get_my_summoner 空缓存报错 — 【待修复】
 - [ ] H4 MayhemChampionDetail topExtensions 截断 — 【待修复】
 - [ ] H5 parse_pick_rules_value lock 缺省 — 【待修复】
@@ -132,7 +136,9 @@ Skip to main content
 - [ ] K2 timelineData 帧时间戳对齐 — 【待修复】
 - [ ] K3 Automation updatePickData 乱序覆写 — 【待修复】
 - [ ] K4 cloud_sync build_backup_json 明文 Key — 【待修复】
-- [ ] K5 mayhem score min_max_norm 全相等 — 【待修复】
+- [x] K5 mayhem score min_max_norm 全相等 — 【已完成】
+      commit: 候选胜率全相等时直接使用共享胜率值而非死锁 0.5 相对值，高位金卡
+      保留高档位；配套回归测试。
 
 ### 批次十一（19:48 发现）
 
