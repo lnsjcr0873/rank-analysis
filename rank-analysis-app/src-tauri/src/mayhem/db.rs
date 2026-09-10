@@ -80,9 +80,9 @@ fn init_schema(conn: &Connection) -> rusqlite::Result<()> {
 
 /// 持锁执行一次库操作；连接未就绪/出错时返回 None（调用方降级处理）。
 ///
-/// **阻塞警告**：此函数在调用线程上同步执行 SQLite I/O。在异步上下文中调用时
-/// **必须**通过 `spawn_blocking` 包装，否则会阻塞 Tokio worker 线程导致整个
-/// 应用 IPC 响应卡顿（Worker Starvation）。见 [`with_db_async`]。
+/// **阻塞警告**：此函数在调用线程上同步执行 SQLite I/O。异步命令层必须通过
+/// `tauri::async_runtime::spawn_blocking` 包装调用（见 `command/meet.rs` 模式），
+/// 否则会阻塞 Tokio worker 线程导致整个应用 IPC 响应卡顿（Worker Starvation）。
 fn with_db<T>(f: impl FnOnce(&Connection) -> rusqlite::Result<T>) -> Option<T> {
     let guard = CONN.lock().unwrap_or_else(|e| e.into_inner());
     match guard.as_ref() {
@@ -95,16 +95,6 @@ fn with_db<T>(f: impl FnOnce(&Connection) -> rusqlite::Result<T>) -> Option<T> {
         },
         None => None,
     }
-}
-
-/// 异步版本的 [`with_db`]：将 SQLite 操作移到 blocking 线程池执行。
-async fn with_db_async<T: Send + 'static>(
-    f: impl FnOnce(&Connection) -> rusqlite::Result<T> + Send + 'static,
-) -> Option<T> {
-    tokio::task::spawn_blocking(move || with_db(f))
-        .await
-        .ok()
-        .flatten()
 }
 
 // ---------------------------------------------------------------------------
@@ -342,7 +332,7 @@ pub fn wilson_score_lower(wins: i64, total: i64) -> f64 {
     let numerator =
         p + (z2 / (2.0 * n)) - z * ((p * (1.0 - p) / n + z2 / (4.0 * n * n)).max(0.0).sqrt());
     let denominator = 1.0 + (z2 / n);
-    (numerator / denominator).max(0.0).min(1.0)
+    (numerator / denominator).clamp(0.0, 1.0)
 }
 
 /// 全量 10 人众包海克斯强化胜率统计（带 Wilson 95% 置信度）

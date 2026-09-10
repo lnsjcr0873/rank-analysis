@@ -133,8 +133,8 @@ pub fn slot_band_rects(screen: (i32, i32)) -> [Rect; 3] {
     for (i, off) in offsets.iter().enumerate() {
         let x = (center_x + *off as f32 * pitch as f32 - band_w as f32 / 2.0).round() as i32;
         out[i] = Rect {
-            x: x.clamp(0, sw.saturating_sub(1) as i32),
-            y: y.clamp(0, sh.saturating_sub(1) as i32),
+            x: x.clamp(0, (sw - 1.0).max(0.0) as i32),
+            y: y.clamp(0, (sh - 1.0).max(0.0) as i32),
             w: band_w.clamp(1, sw as i32 - x.clamp(0, sw as i32)),
             h: band_h.clamp(1, sh as i32 - y.clamp(0, sh as i32)),
         };

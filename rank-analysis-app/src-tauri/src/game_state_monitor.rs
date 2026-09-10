@@ -158,6 +158,7 @@ impl GameStateMonitor {
     /// - 调用 LCU API 获取召唤师信息
     /// - 调用 LCU API 获取游戏阶段
     /// - 可能启动 WebSocket 监听任务
+    ///
     /// 更新状态快照并向前端推送事件（在写锁内运行，微秒级执行完成）。
     fn update_and_emit(
         &mut self,
@@ -408,11 +409,6 @@ pub async fn start_game_state_monitor(app_handle: AppHandle, stop: Arc<AtomicBoo
     log::info!("Game state monitor started");
 }
 
-/// 断连去抖纯函数：给定上次连接态、连续失败次数、本次探测成败与失败归类，
-/// 返回对外呈现的 connected。
-///
-/// 规则：
-/// - 探测成功 → 恒为 true（计数清零由调用方负责）
 /// 断连去抖纯函数：给定上次连接态、连续失败次数、本次探测成败与失败归类，
 /// 返回对外呈现的 connected。
 ///

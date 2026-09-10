@@ -249,5 +249,6 @@ pub fn destroy() {
         log::info!("[overlay] 窗口已销毁");
     }
     OVERLAY_CREATED.store(false, Ordering::Relaxed);
-    APP_HANDLE.lock().unwrap_or_else(|e| e.into_inner()).take();
+    // APP_HANDLE 是 OnceLock（写入一次即生效）：进程退出时无需清空句柄，
+    // 复用也无副作用；此处不再调用不存在的 `take()`。
 }

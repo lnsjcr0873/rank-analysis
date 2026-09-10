@@ -435,6 +435,7 @@ mod tests {
         HabitTag {
             dimension: dim.to_string(),
             avg_vs_peer: -5.0,
+            rel_gap: 0.0,
             streak,
             first_seen: "2026-08-01T00:00:00Z".to_string(),
             last_seen: "2026-08-18T00:00:00Z".to_string(),

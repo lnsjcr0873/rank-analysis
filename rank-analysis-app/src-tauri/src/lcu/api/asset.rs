@@ -628,6 +628,10 @@ async fn enrich_augment_descriptions() {
 
 /// 自愈用单飞器：仅当 `is_empty()` 为真时，拿锁后再次确认仍为空，才跑一次 `run_init`。
 /// 并发调用只触发一次 init，其余等锁后复查即返回。抽出来便于单测（不依赖 LCU）。
+///
+/// 运行时自愈由 [`ensure_caches_ready`] 内联实现（含 10s 冷却，逻辑更重），
+/// 此泛型助手当前仅被 `#[cfg(test)]` 复用，故允许 dead_code。
+#[allow(dead_code)]
 async fn run_once_if_empty<E, I, F>(is_empty: E, lock: &tokio::sync::Mutex<()>, run_init: I)
 where
     E: Fn() -> bool,

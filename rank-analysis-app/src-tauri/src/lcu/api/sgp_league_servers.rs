@@ -68,7 +68,11 @@ static STORE: LazyLock<Mutex<Store>> = LazyLock::new(|| {
 
 /// 远程拉取的单飞锁：冷启动并发首拉时合并为一次（SingleFlight）。
 /// 与 [`STORE`] 分开——拉取期间不持 STORE 锁，避免其它读路径排队。
-static REFRESH_GUARD: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+// 单飞锁：跨 await 持有（std::sync::MutexGuard 非 Send，会导致 future 非 Send，
+// 令 tokio::spawn / Box::pin 编译失败），改用 tokio Mutex——与 asset.rs 的
+// CACHE_LOCK/ASSET_INIT_LOCK 同一模式。
+static REFRESH_GUARD: LazyLock<tokio::sync::Mutex<()>> =
+    LazyLock::new(|| tokio::sync::Mutex::new(()));
 
 /// 解析远程/磁盘的原始 JSON 文本为配置（校验失败返回错误，调用方回退静态表）。
 pub fn parse_config(text: &str) -> Result<LeagueServersConfig, String> {
@@ -170,7 +174,7 @@ fn maybe_spawn_revalidate() {
         tokio::spawn(async {
             // 与 resolve_sgp_host 的首拉共用单飞锁，避免后台 revalidate 与用户
             // 请求的首次拉取在冷启动窗口内双发
-            let _guard = REFRESH_GUARD.lock().unwrap_or_else(|e| e.into_inner());
+            let _guard = REFRESH_GUARD.lock().await;
             refresh_from_remote().await;
         });
     }
@@ -236,7 +240,7 @@ pub async fn resolve_sgp_host(platform_id: &str, common: bool) -> Option<String>
         .map(|t| t.elapsed() >= REVALIDATE_INTERVAL)
         .unwrap_or(true);
     if stale {
-        let _guard = REFRESH_GUARD.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = REFRESH_GUARD.lock().await;
         // 拿到锁后可能已被其他调用方刷新过（SingleFlight 等锁语义），回查一次
         if dynamic_host(platform_id, common).is_none() {
             refresh_from_remote().await;

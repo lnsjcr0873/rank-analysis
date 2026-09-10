@@ -348,7 +348,7 @@ pub fn evaluate_bp_decision(ctx: &BpContext) -> Option<BpDecision> {
 
     Some(BpDecision {
         action_type: pending.action_type,
-        target,
+        target: target.clone(),
         rejected,
         mode: ctx.mode,
         time_left_secs: phase_secs_left(&ctx.session.timer),
