@@ -293,7 +293,7 @@ static LONG_TOKEN_RE: LazyLock<Regex> =
 /// 整体脱敏。
 static PII_PARAM_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
-        r#"(?i)("?\b(?:game_?name|tag_?line|summoner_?name|display_?name|riot_?id|puuid|account|name|auth_?token|access_?token|token|password|secret)"?\s*[:=]\s*"?)([^"&,\s}\])]+)"#,
+        r#"(?i)("?\b(?:riot_?id_?game_?name|riot_?id_?tag_?line|game_?name|tag_?line|summoner_?name|summoner_?id|display_?name|riot_?id|puuid|account|name|auth_?token|access_?token|token|password|secret)"?\s*[:=]\s*"?)([^"&,\s}\])]+)"#,
     )
     .expect("valid pii-param regex")
 });
@@ -421,6 +421,25 @@ mod tests {
     fn should_redact_debug_struct_name() {
         let out = redact_pii(r#"Summoner { summoner_name: "Faker", level: 30 }"#);
         assert!(!out.contains("Faker"), "Debug 形态的名字应被脱敏: {out}");
+    }
+
+    #[test]
+    fn should_redact_sgp_compound_riot_id_fields() {
+        // SGP match-v5 响应的 camelCase 复合字段名，旧正则的 riot_?id 匹配不到
+        let json = r#"{"riotIdGameName": "Faker", "riotIdTagline": "KR1"}"#;
+        let out = redact_pii(json);
+        assert!(!out.contains("Faker"), "riotIdGameName 值应被脱敏: {out}");
+        assert!(!out.contains("KR1"), "riotIdTagline 值应被脱敏: {out}");
+    }
+
+    #[test]
+    fn should_redact_summoner_id_summoner_name() {
+        let out = redact_pii(r#"{"summonerId": 123456789, "summonerName": "Faker"}"#);
+        assert!(
+            !out.contains("123456789"),
+            "summonerId 值应被脱敏: {out}"
+        );
+        assert!(!out.contains("Faker"), "summonerName 值应被脱敏: {out}");
     }
 
     #[test]
