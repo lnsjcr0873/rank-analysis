@@ -17,6 +17,9 @@ Skip to main content
 - [ ] S4 overlay std Mutex 混用 — 【待修复】
 - [ ] S5 match_history.rs 切片越界 panic — 【待修复】
 - [ ] S6 meet_db/backtest/insight 阻塞异步（spawn_blocking/连接池）— 【待修复】
+- [ ] S6b scouting 全表反复反序列化 — 【已完成】
+      commit: `scouting::build_games_index` 一次全表扫描构建 puuid 倒排索引，
+      `assess_team_threats` 与空档 fallback 复用同一索引，停止 5 次全表搬运。
 - [ ] S7 game_state_monitor 重连竞争闪屏 — 【待修复】
 - [ ] S8 PlayerProfileCard 异步竞态 — 【待修复】
 - [ ] S9 Gaming/MatchHistory 定时器泄露 — 【待修复】
@@ -28,11 +31,11 @@ Skip to main content
 
 ### 批次二（致命逻辑/业务规则）
 
-- [ ] B1 config.rs 负数英雄 ID 强转 u16 溢出/哨兵项 — 【已完成】
+- [x] B1 config.rs 负数英雄 ID 强转 u16 溢出/哨兵项 — 【已完成】
       commit: 在 `get_champion_options` 中对 `id <= 0` 直接 `continue`，负数哨兵
       （-1 占位等）不再进入 `CHAMPION_MAP` 查表与选项列表。按报告建议实现
       （id > 0 守卫）。
-- [ ] B2 normalize_position 辅助位 SUPPORT 误判为 ADC — 【已完成】
+- [x] B2 normalize_position 辅助位 SUPPORT 误判为 ADC — 【已完成】
       commit: `samples.rs::normalize_position` 增加 trim+大写归一，并将
       `("BOTTOM","SUPPORT")`、`("NONE","DUO_SUPPORT"/"SUPPORT")` 显式归
       UTILITY，配套单元断言。按报告建议实现。
