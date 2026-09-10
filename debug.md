@@ -317,7 +317,16 @@ Skip to main content
 
 ### 批次十一（19:48 发现）
 
-- [ ] M1 purge_login_client_autostart 权限降级 — 【待修复】
+- [x] M1 purge_login_client_autostart 权限降级 — 【已验证无需修改】
+      审查结论——报告描述的 3 个缺陷在当前代码中已全部修复：
+      1) 权限降级时 `open_subkey_with_flags(KEY_SET_VALUE)` 失败已被
+         `match` + `log::info!` 记录（`launcher.rs:236`），不再静默失败。
+      2) 每次 `delete_value` 失败都通过 `match` + `log::warn!` 逐条记录
+         原因（`launcher.rs:243`），不再用 `let _ = ...` 吞掉错误。
+      3) 报告提到的"多次调用无标记"问题不存在——该函数在 `game_state_monitor`
+         的连接/断开回调中调用，每次调用都完整遍历注册表（设计意图：每次连接
+         时重新清理，因为腾讯客户端可能在运行中再次写入自启项）。
+      报告基于旧版代码描述的 `let _ = ...` 吞错模式在当前实现中不存在。
 - [x] M2 capture.rs scale_rect 21:9 畸变 — 【已完成】
       commit: `slot_band_rects` 改统一等比缩放 `f=min(fx,fy)` + 水平居中，
       带鱼屏不再横向拉伸卡位；配套 3440×1440 居中断言。
