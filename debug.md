@@ -22,7 +22,14 @@ Skip to main content
          未来时间戳拒绝(+24h)；合并循环增加 MAX_MERGED_NOTES(10000)熔断。
       3. 配套测试: mergePlayerNotes.spec.ts 增加 8 条 S1 毒行加固用例；
          cloud_sync.rs 增加 validate_puuid 超长拒绝+pick_latest 巨配置/未来时间戳过滤测试。
-- [ ] S2 http.rs `danger_accept_invalid_certs` 作用域 — 【待修复】
+- [x] S2 http.rs `danger_accept_invalid_certs` 作用域 — 【已完成】
+      审查结论：`get_client()` 的 `danger_accept_invalid_certs(true)` 仅用于 LCU/Riot
+      Client（均 127.0.0.1 自签证书），SGP 与外网走独立 client 无 cert bypass——
+      架构已正确隔离。加固措施：1) `build_url()` 增加 `assert!(url.contains("127.0.0.1"))`
+      运行时守卫，防止 URL 被意外改为外网地址；2) `riot_client_get()` 同样增加
+      localhost 断言；3) `get_client()` 文档明确标注"绝不用于外网请求"；
+      4) `listener.rs` WebSocket TLS 注释标注安全边界。无需修改 SGP/external client
+      配置（已正确分离）。
 - [ ] S3 launcher.rs ShellExecuteW 路径注入 — 【待修复】
 - [ ] S4 overlay std Mutex 混用 — 【待修复】
 - [ ] S5 match_history.rs 切片越界 panic — 【待修复】
