@@ -114,13 +114,14 @@ describe('mergeGamesByGameId', () => {
   it('追加 fresh 到 prev 尾部，保持时间降序', () => {
     const prev = [makeGame(3), makeGame(2)]
     const merged = mergeGamesByGameId(prev, [makeGame(1), makeGame(0)])
-    expect(merged.map(g => g.gameId)).toEqual([3, 2, 1, 0])
+    // helper 中 gameCreationDate = 1_700_000_000_000 - gameId，因此 gameId 越小越新
+    expect(merged.map(g => g.gameId)).toEqual([0, 1, 2, 3])
   })
 
   it('重叠对局只保留先到的（按 gameId 去重）', () => {
     const prev = [makeGame(3), makeGame(2), makeGame(1)]
     const merged = mergeGamesByGameId(prev, [makeGame(2), makeGame(1), makeGame(0)])
-    expect(merged.map(g => g.gameId)).toEqual([3, 2, 1, 0])
+    expect(merged.map(g => g.gameId)).toEqual([0, 1, 2, 3])
     expect(merged.length).toBe(4)
   })
 
@@ -132,6 +133,14 @@ describe('mergeGamesByGameId', () => {
   it('全重复页（数据源异常）原样返回 prev 引用', () => {
     const prev = [makeGame(1), makeGame(2)]
     expect(mergeGamesByGameId(prev, [makeGame(2), makeGame(1)])).toBe(prev)
+  })
+
+  it('incoming 与 prev 时间交叉时合并结果仍按时间降序重排', () => {
+    // prev 时间降序 [3,2]（即日期新→旧），incoming 是更旧/更新的交叉数据 [5,1,4,0]
+    // 合并后必须整体按 gameCreationDate 降序（= gameId 升序），而不是简单 prev+fresh 拼接。
+    const prev = [makeGame(3), makeGame(2)]
+    const merged = mergeGamesByGameId(prev, [makeGame(5), makeGame(1), makeGame(4), makeGame(0)])
+    expect(merged.map(g => g.gameId)).toEqual([0, 1, 2, 3, 4, 5])
   })
 })
 

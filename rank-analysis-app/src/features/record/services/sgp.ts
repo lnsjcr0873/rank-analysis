@@ -253,15 +253,21 @@ export async function getSgpMatchDetail(
 }
 
 /**
- * 按 gameId 合并两批对局（保持 prev 时间降序，incoming 追加在尾）。
- * SGP 翻页可能重叠（重试/边界漂移），重复对局只保留先到的。
+ * 按 gameId 合并两批对局，并保证结果按 `gameCreationDate` 时间降序。
+ * SGP 翻页可能重叠（重试/边界漂移）或乱序（多页交叉、缓存续收），重复对局
+ * 只保留先到的；合并后重新稳定排序，避免列表/趋势条（默认取前 20 场）被
+ * 夹在中间的旧对局污染。
  * @returns 合并后的新数组（无 fresh 时原样返回 prev 引用）
  */
 export function mergeGamesByGameId(prev: Game[], incoming: Game[]): Game[] {
   if (incoming.length === 0) return prev
   const seen = new Set(prev.map(g => g.gameId))
   const fresh = incoming.filter(g => !seen.has(g.gameId))
-  return fresh.length > 0 ? [...prev, ...fresh] : prev
+  if (fresh.length === 0) return prev
+  // 稳定排序：同时间戳（或解析失败 NaN）保留原相对顺序；降序保证最新在前。
+  return [...prev, ...fresh].sort(
+    (a, b) => new Date(b.gameCreationDate).getTime() - new Date(a.gameCreationDate).getTime()
+  )
 }
 
 /** 全量收集（collectMode）的翻页实现签名：单测可注入替代真实 invoke */
