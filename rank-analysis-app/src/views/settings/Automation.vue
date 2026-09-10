@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <n-space vertical>
     <!-- Basic settings card -->
     <n-card>
@@ -102,7 +102,7 @@
           已开启，但没有可执行目标：规则和兜底池都是空的，本局不会自动选择英雄
         </div>
         <n-flex>
-          <VueDraggable ref="el" v-model="myPickData">
+          <VueDraggable ref="el" v-model="myPickData" @update:model-value="updatePickData">
             <n-tag
               v-for="item in myPickData"
               :key="item"
@@ -198,7 +198,7 @@
           已开启，但没有可执行目标：规则和兜底池都是空的，本局不会自动 Ban
         </div>
         <n-flex>
-          <VueDraggable ref="el" v-model="myBanData">
+          <VueDraggable ref="el" v-model="myBanData" @update:model-value="updateBanData">
             <n-tag
               v-for="item in myBanData"
               :key="item"
@@ -552,11 +552,34 @@ const updatePickSwitch = async () => {
 const updateBanSwitch = async () => {
   await putConfigByIpc('settings.auto.banChampionSwitch', autoBan.value)
 }
+
+// 兜底池写串行化：拖拽/增删高频连续触发 putConfigByIpc 时，后发请求若比先发
+// 先落地（IPC 时序不确定），会用旧数组覆盖新数组——排成一条链保证按触发顺序落盘。
+let pickDataChain: Promise<void> = Promise.resolve()
+let banDataChain: Promise<void> = Promise.resolve()
+const runPickDataWrite = (): Promise<void> => {
+  const next = pickDataChain.then(() =>
+    putConfigByIpc('settings.auto.pickChampionSlice', myPickData.value).catch(e =>
+      console.error('兜底选人池写入失败', e)
+    )
+  )
+  pickDataChain = next
+  return next
+}
+const runBanDataWrite = (): Promise<void> => {
+  const next = banDataChain.then(() =>
+    putConfigByIpc('settings.auto.banChampionSlice', myBanData.value).catch(e =>
+      console.error('兜底 Ban 池写入失败', e)
+    )
+  )
+  banDataChain = next
+  return next
+}
 const updatePickData = async () => {
-  await putConfigByIpc('settings.auto.pickChampionSlice', myPickData.value)
+  await runPickDataWrite()
 }
 const updateBanData = async () => {
-  await putConfigByIpc('settings.auto.banChampionSlice', myBanData.value)
+  await runBanDataWrite()
 }
 const updateStartSwitch = async () => {
   await putConfigByIpc('settings.auto.startMatchSwitch', autoStart.value)
