@@ -41,7 +41,7 @@ Skip to main content
       UTILITY，配套单元断言。按报告建议实现。
 - [ ] B3 uuid.rs 混淆 PUUID 密钥轮换无弹性 — 【待修复】
 - [ ] B4 四个自动化任务并发轮询 SELECT_CACHE — 【待修复】
-- [ ] B5 wegame_score 前后端 KDA 归一化不一致 — 【已验证无需修改】
+- [x] B5 wegame_score 前后端 KDA 归一化不一致 — 【已验证无需修改】
       `match_history.rs::wegame_score` 与 `useMatchDetailPlayers.ts::computeMatchScore`
       现均为 `kda/(kda+3)` 饱和 + 同权重（KDA 26/输出 22/参团 18/承伤 10/经济 10/
       补刀 8/推塔 6），两端注释互指；无需改动。
@@ -64,10 +64,16 @@ Skip to main content
 
 ### 批次四（16:17 发现）
 
-- [ ] D1 validator.ts stripFencedCodeBlock 锚点过严 — 【待修复】
-- [ ] D2 twoStage 坏缓存死锁 — 【待修复】
+- [x] D1 validator.ts stripFencedCodeBlock 锚点过严 — 【已完成】
+      commit: 代码块前后夹带自然语言时退化为「第一个 { 到最后一个 }」模糊定位，
+      配套带前后缀文本的回归测试。
+- [x] D2 twoStage 坏缓存死锁 — 【已验证无需修改】
+      `runTwoStage` 在 Stage 1 解析失败后已 `sessionStorage.removeItem(cacheKey)`
+      再重试，坏产物不会命中缓存；现有注释与实现即报告建议的修复。
 - [ ] D3 token.rs windows 二次查询缺失 — 【待修复】
-- [ ] D4 championPool 无效局计入负场 — 【待修复】
+- [x] D4 championPool 无效局计入负场 — 【已完成】
+      commit: `aggregateChampionPool` 对 `gameDuration < 300` 的重开/秒退局直接跳过，
+      不计入场次与负场；配套测试。
 - [ ] D5 useBestPicks 段位缓存失效 — 【待修复】
 
 ### 批次五（16:18 发现）
@@ -80,14 +86,14 @@ Skip to main content
 
 ### 批次六（16:19 发现）
 
-- [ ] F1 model.rs Stats 多杀 camelCase — 【已验证无需修改】
+- [x] F1 model.rs Stats 多杀 camelCase — 【已验证无需修改】
       `doubleKills/tripleKills/quadraKills/pentaKills` 已显式声明并带序列化测试。
-- [ ] F2 score/events.rs frame_increments NaN — 【已验证无需修改】
+- [x] F2 score/events.rs frame_increments NaN — 【已验证无需修改】
       `team_avg_increment` 已过滤 `n > 0` 才做除法，`compute_score_events` 对空帧
       短路返回；`clusters.last()` 用 `is_none_or` 无 unwrap。
-- [ ] F3 meet_db 混合日期格式排序 — 【已验证无需修改】
+- [x] F3 meet_db 混合日期格式排序 — 【已验证无需修改】
       入库统一来自 `game_creation_date`（LCU ISO 或 SGP 映射 ISO），无混合格式通道。
-- [ ] F4 meet_db 聚合 SUM NULL 崩溃 — 【已验证无需修改】
+- [x] F4 meet_db 聚合 SUM NULL 崩溃 — 【已验证无需修改】
       `query_summary_in` 已用 `COALESCE(SUM(...),0)` 与 `COALESCE(SUM(is_my_team AND win),0)`。
 - [ ] F5 useReconnectBanner 定时器竞态 — 【待修复】
 
