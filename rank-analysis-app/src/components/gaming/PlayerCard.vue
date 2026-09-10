@@ -473,16 +473,16 @@ watch(
   display: flex;
   flex-direction: column;
   border-radius: var(--radius-md);
-  background: var(--glass-bg-mid) !important;
-  border: 1px solid var(--glass-border) !important;
-  box-shadow: var(--shadow-md), var(--glass-highlight) !important;
+  background: var(--glass-bg-mid);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-md), var(--glass-highlight);
   transition: box-shadow var(--dur-normal) var(--ease-expo);
   animation: fade-up var(--dur-normal) var(--ease-expo) both;
   animation-delay: calc(var(--stagger) * var(--stagger-i, 0));
 }
 
 .player-card:hover {
-  box-shadow: var(--shadow-lg), var(--glass-highlight) !important;
+  box-shadow: var(--shadow-lg), var(--glass-highlight);
 }
 
 .player-card-team-blue {
@@ -826,16 +826,14 @@ watch(
 }
 
 /* ---- 选人四态动画（同 ChampionIntelCard 的视觉语言：琥珀呼吸/绿脉冲/红脉冲/锁定过冲）----
- * PlayerCard 比情报卡内容重得多，直接照搬 box-shadow ring 会撞上 .player-card 已有的
- * `box-shadow: ... !important`（CSS 优先级里 author !important 高于 CSS 动画，动画对它
- * 无效）。这里改用 filter: drop-shadow 做发光（不受该 !important 影响，且天然贴合圆角），
- * 边框色/宽度走静态声明——靠复合选择器 `.player-card.pc-xxx` 的更高特异度 + 同为
- * !important 正常参与层叠，无需动画介入。逗号组合规则同情报卡：fade-up 恒第一位，
- * 状态动画第二位，delay 列表对应（stagger 延迟, 0s）。
+ * 发光用 filter: drop-shadow（不撞卡片自身 box-shadow，且天然贴合圆角）。
+ * 边框色/宽度走静态声明——复合选择器 `.player-card.pc-xxx` 有更高特异度，
+ * 无需 !important（也避免在亮色主题下被主题补丁覆盖后无法回写）。逗号组合
+ * 规则同情报卡：fade-up 恒第一位，状态动画第二位，delay 列表对应（stagger 延迟, 0s）。
  */
 .player-card.pc-intent {
-  border-width: 1px !important;
-  border-color: rgba(230, 193, 90, 0.55) !important;
+  border-width: 1px;
+  border-color: rgba(230, 193, 90, 0.55);
   animation:
     fade-up var(--dur-normal) var(--ease-expo) both,
     pc-breathe 2s ease-in-out infinite;
@@ -852,8 +850,8 @@ watch(
 }
 
 .player-card.pc-picking {
-  border-width: 2px !important;
-  border-color: var(--semantic-win) !important;
+  border-width: 2px;
+  border-color: var(--semantic-win);
   animation:
     fade-up var(--dur-normal) var(--ease-expo) both,
     pc-pulse 1.1s ease-in-out infinite;
@@ -872,8 +870,8 @@ watch(
 /* 禁用阶段是全队同时进行的——ban 时 5 张卡（加敌方 5 个占位）一起变红，
    所以这里刻意比 pc-picking 克制：1px 半透明边框 + 更慢更弱的呼吸，只做状态提示不抢焦点 */
 .player-card.pc-banning {
-  border-width: 1px !important;
-  border-color: color-mix(in srgb, var(--semantic-loss) 45%, transparent) !important;
+  border-width: 1px;
+  border-color: color-mix(in srgb, var(--semantic-loss) 45%, transparent);
   animation:
     fade-up var(--dur-normal) var(--ease-expo) both,
     pc-ban-pulse 2s ease-in-out infinite;
