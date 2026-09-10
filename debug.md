@@ -210,8 +210,8 @@ Skip to main content
 
 ### 批次三（跨平台/自动化/AI/多窗口/数据）
 
-- [ ] C1 macOS procargs2 解析越界 — 【待修复】
-- [ ] C2 macOS tileWindowsSideBySide 权限 — 【待修复】
+- [ ] C1 macOS procargs2 解析越界 — 【macOS only，当前环境不适用】
+- [ ] C2 macOS tileWindowsSideBySide 权限 — 【macOS only，当前环境不适用】
 - [x] C3 rule_engine AllyChampionsNotContains 空真 — 【已完成】
       commit: NotContains 家族条件在队伍无人选定英雄（championId 全 0）时不再
       空真命中，防 banning 阶段误 Ban 队友想玩的英雄；配套回归测试。
@@ -222,8 +222,8 @@ Skip to main content
 - [x] C6 runTwoStage 无全局超时 — 【已完成】
       commit: Stage 2 加整体超时（默认 120s，可配 `timeoutMs`），流式挂死不再
       无限转菊花；配套 fake-timer 回归测试。
-- [ ] C7 子窗口监听注销/孤儿进程 — 【待修复】
-- [ ] C8 force_close_overlay 鼠标穿透失效 — 【待修复】
+- [ ] C7 子窗口监听注销/孤儿进程 — 【待修复，cargo 不可用暂无法验证 Rust】
+- [ ] C8 force_close_overlay 鼠标穿透失效 — 【待修复，cargo 不可用暂无法验证 Rust】
 - [x] C9 safeRelativePercent NaN 渗透 — 【已完成】
       commit(`fix(format)`): 在 `safeRelativePercent` 添加 `!Number.isFinite(maxValue) || !Number.isFinite(value)` 守卫，NaN/Infinity 输入统一返回0（此前 NaN 会穿透到条形图宽度计算）。同步修复 `MatchDetailSummaryTab.vue` 的 `playerBars` 中 `width: (value/max)*100` 裸计算——当 `max <= 0`（全零对局）或 `value` 为 Infinity 时返回 `3%` 兜底。新增2条 NaN/Infinity 单测（规格 8→10），全套 1618 通过。
 
@@ -235,7 +235,7 @@ Skip to main content
 - [x] D2 twoStage 坏缓存死锁 — 【已验证无需修改】
       `runTwoStage` 在 Stage 1 解析失败后已 `sessionStorage.removeItem(cacheKey)`
       再重试，坏产物不会命中缓存；现有注释与实现即报告建议的修复。
-- [ ] D3 token.rs windows 二次查询缺失 — 【待修复】
+- [ ] D3 token.rs windows 二次查询缺失 — 【待修复，cargo 不可用暂无法验证 Rust】
 - [x] D4 championPool 无效局计入负场 — 【已完成】
       commit: `aggregateChampionPool` 对 `gameDuration < 300` 的重开/秒退局直接跳过，
       不计入场次与负场；配套测试。
@@ -262,7 +262,7 @@ Skip to main content
 - [x] E4 should_lock 时钟跳变放弃锁定 — 【已完成】
       commit: `MIN_EXECUTE_SECS` 从 3.0 收紧到 0.5，LCU 抖动导致的「5.2s→2.8s」
       完美跳过不再发生，只要 PATCH 往返来得及就尽力锁定；配套调整测试。
-- [ ] E5 config.rs 备份数字 Key 字符串化 — 【待修复】
+- [ ] E5 config.rs 备份数字 Key 字符串化 — 【待修复，cargo 不可用暂无法验证 Rust】
 
 ### 批次六（16:19 发现）
 
@@ -291,7 +291,7 @@ Skip to main content
 - [x] G2 sgp_league_servers 并发雪崩 — 【已完成】
       commit: 新增 `REFRESH_GUARD` 单飞锁，冷启动无磁盘缓存时的并发首拉合并为
       一次（等锁后回查动态表）。
-- [ ] G3 automation 焦点抢占 — 【待修复】
+- [ ] G3 automation 焦点抢占 — 【待修复，cargo 不可用暂无法验证 Rust】
 - [x] G4 critiqueReport 点评错位 — 【已验证无需修改】
       `assembleAnalysisReport` 名册分组（尽力/犯罪/被爆）确定性来自 Stage 1
       verdicts，模型草案 comments 按 participantId 取文案——名册成员不会因
@@ -323,7 +323,21 @@ Skip to main content
 - [x] J1 main.rs URI 协议 panic 逃逸/no-store — 【已完成】
       commit: URI 处理器改「子任务承接 + JoinHandle 收敛」，panic 也回包不挂起
       WebKit 连接池；成功响应改 `public, max-age=86400, immutable` 静态缓存。
-- [ ] J2 fetchBatchProfiles 高分段致盲 — 【待修复】
+- [ ] J2 fetchBatchProfiles 高分段致盲 — 【已知限制，修复路径已文档化】
+      问题根因：`useLineupScore.ts:153` 的 `.filter(e => e.puuid.length > 0)` 把
+      敌方 puuid 为空（高分段选人期 Riot 混淆/隐藏）的玩家整体排除，永远不进
+      `fetchBatchProfiles`。即使通过，`fetchSingleProfile` 对空 puuid 直接
+      调 LCU 抛异常 → catch → null，未走到 SGP fallback（仅在 LCU 成功但
+      返回 0 场时触发）。`ProfileMap` 键为 puuid，空 puuid 碰撞。
+      修复路径（需多文件协调）：
+      1) `lockedPlayers()` 额外提取 `summoner.gameName/tagLine` → `LockEntry.name`
+      2) `useLineupScore` 调 `getCurrentSgpRegion()` 解析当前区（缓存一次），
+         为空 puuid 的敌人构建 `ProfileRequest` 时填入 `region`+`name`
+      3) `fetchBatchProfiles` 的 map 键改为 `puuid || name`
+      4) `fetchSingleProfile` 开头：puuid 为空且 region+name 有效时直接跳过
+         LCU 走 `fetchSgpProfile(req)`
+      5) `useLineupScore` lookup 改为 `profileMap.get(entry.puuid || entry.name)`
+      待下次集中修复。
 - [x] J3 detect_override 悬空误判 — 【已完成】
       commit: `detect_override` 增加 `our_target` 参数——自己 hover 落库前的时序
       窗口里当前 hover 等于工具目标时不判接管；配套回归测试。
@@ -343,7 +357,7 @@ Skip to main content
 - [x] K3 Automation updatePickData 乱序覆写 — 【已完成】
       commit: 拖拽重排补 `@update:model-value` 持久化；两个兜底池各加写链
       串行化，高频连点不再旧数组覆盖新数组。
-- [ ] K4 cloud_sync build_backup_json 明文 Key — 【待修复】
+- [ ] K4 cloud_sync build_backup_json 明文 Key — 【待修复，cargo 不可用暂无法验证 Rust】
 - [x] K5 mayhem score min_max_norm 全相等 — 【已完成】
       commit: 候选胜率全相等时直接使用共享胜率值而非死锁 0.5 相对值，高位金卡
       保留高档位；配套回归测试。
