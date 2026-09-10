@@ -88,6 +88,14 @@ describe('gamesToCsv', () => {
     const line = gamesToCsv([g], label).split('\r\n')[1]
     expect(line).toContain('"排位,单双排""测试"""')
   })
+
+  it('CSV 公式注入：= + - @ 开头字段前置 tab 打断公式语义', () => {
+    // 模式列被恶意构造为公式（如 =cmd|'/c calc'!A1），导出后 Excel 不应执行
+    const g = makeGame({ queueName: '=cmd|\'/c calc\'!A1' })
+    const line = gamesToCsv([g], label).split('\r\n')[1]
+    expect(line).not.toContain(',=cmd|')
+    expect(line).toContain(',\t=cmd|')
+  })
 })
 
 describe('gamesToJson', () => {

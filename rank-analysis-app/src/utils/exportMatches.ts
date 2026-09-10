@@ -7,9 +7,17 @@ import type { Game } from '../types/domain/match'
 
 export type ExportFormat = 'csv' | 'csv-full' | 'json'
 
-/** CSV 字段转义：含引号/逗号/换行时包引号并双写内部引号 */
+/** CSV 字段转义：含引号/逗号/换行时包引号并双写内部引号。
+ * 同时防范 CSV 公式注入（CSV Injection）：Excel/WPS 会把以 `=` `+` `-` `@`
+ * 开头的单元格当公式执行（如 `=cmd|'/c calc'!A1`）。这里对所有危险前缀
+ * 单元格前置一个制表符 `\t` 打断公式语义——开表后看到的是原值前的 tab，
+ * 数据本身不丢，也不会被当作命令执行。 */
 function csvEscape(value: string | number): string {
-  const s = String(value)
+  let s = String(value)
+  if (/^[=+\-@\t\r]/.test(s)) {
+    // 前缀危险符号 → 前置 tab 打断公式求值（RFC 4180 建议的缓解手段之一）
+    s = `\t${s}`
+  }
   return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
 }
 
