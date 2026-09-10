@@ -48,8 +48,14 @@ Skip to main content
       值溢出；增加 `debug_assert!(beg ≤ end ≤ total)` 断言验证切片不变量；
       文档注释标注安全证明。现有 `min(total)` 夹紧已防 panic，此改动增加
       防御深度。空数据时 `total=0` → `end=beg=0` → `0..0` 合法空切片。
-- [ ] S6 meet_db/backtest/insight 阻塞异步（spawn_blocking/连接池）— 【待修复】
-- [ ] S6b scouting 全表反复反序列化 — 【已完成】
+- [x] S6 meet_db/backtest/insight 阻塞异步（spawn_blocking/连接池）— 【已完成】
+      commit: 未采用连接池方案（连接复用收益有限且引入生命周期复杂度），改为
+      在 4 个 SQLite 模块（meet_db.rs / backtest/store.rs / insight/store.rs /
+      mayhem/db.rs）各新增 `with_db_async()` 包装——内部使用
+      `tokio::task::spawn_blocking` 将同步 `with_db` 闭包放到阻塞线程池执行，
+      避免 SQLite 磁盘 IO 占死 Tokio worker 线程（Worker Starvation）。
+      同步 `with_db()` 保留供非 async 场景使用，并在其文档中标注"阻塞"警告。
+- [x] S6b scouting 全表反复反序列化 — 【已完成】
       commit: `scouting::build_games_index` 一次全表扫描构建 puuid 倒排索引，
       `assess_team_threats` 与空档 fallback 复用同一索引，停止 5 次全表搬运。
 - [ ] S7 game_state_monitor 重连竞争闪屏 — 【待修复】
