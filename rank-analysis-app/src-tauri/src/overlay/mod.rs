@@ -10,8 +10,7 @@
 //! 后续可配置化为左上/右下/左下（评估文档 §5.2）。
 
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::LazyLock;
-use std::sync::Mutex;
+use std::sync::{LazyLock, Mutex, OnceLock};
 
 use tauri::Manager;
 use tauri::Position;
@@ -21,10 +20,19 @@ use tauri::WebviewWindowBuilder;
 /// 标记 overlay 窗口是否已创建。
 static OVERLAY_CREATED: LazyLock<AtomicBool> = LazyLock::new(|| AtomicBool::new(false));
 
-/// 全局 AppHandle（创建窗口时写入，供后续通过标签查找窗口句柄）。
-static APP_HANDLE: LazyLock<Mutex<Option<tauri::AppHandle>>> = LazyLock::new(|| Mutex::new(None));
+/// 全局 AppHandle（创建窗口时写入一次，供后续通过标签查找窗口句柄）。
+///
+/// 使用 `OnceLock` 保证写入安全：`create()` 是唯一写入点，写入后永不变更；
+/// 读取方无需持锁，消除了 `std::sync::Mutex` 在异步上下文中被跨 await 持有
+/// 导致死锁的隐患。
+static APP_HANDLE: OnceLock<tauri::AppHandle> = OnceLock::new();
 
 /// 当前生效的浮窗锚点（默认右上，支持 top-left / top-center / top-right）。
+///
+/// **注意**：以下 `Mutex` 均为 `std::sync::Mutex`（非 tokio），在异步命令中被
+/// 同步调用时**必须保证锁持有期间不含任何 `.await`**——否则会阻塞 tokio worker
+/// 线程导致事件循环死锁。当前所有锁均在单次同步操作内完成读写后立即释放，
+/// 如未来需要跨 await 请迁移为 `tokio::sync::Mutex`。
 static CURRENT_ANCHOR: LazyLock<Mutex<String>> =
     LazyLock::new(|| Mutex::new("top-right".to_string()));
 
@@ -95,18 +103,14 @@ fn create(app: &tauri::AppHandle) -> Result<(), String> {
     let _ = w.set_ignore_cursor_events(true);
     log::info!("[overlay] 窗口创建完成（置顶/无边框/透明/鼠标穿透）");
 
-    APP_HANDLE
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .replace(app.clone());
+    let _ = APP_HANDLE.set(app.clone());
     OVERLAY_CREATED.store(true, Ordering::Relaxed);
     Ok(())
 }
 
 /// 通过标签查找已创建的 overlay 窗口句柄。
 fn get_window() -> Option<tauri::WebviewWindow> {
-    let guard = APP_HANDLE.lock().unwrap_or_else(|e| e.into_inner());
-    guard.as_ref()?.get_webview_window("overlay")
+    APP_HANDLE.get()?.get_webview_window("overlay")
 }
 
 /// 显示 overlay 窗口（对局中调用）。
