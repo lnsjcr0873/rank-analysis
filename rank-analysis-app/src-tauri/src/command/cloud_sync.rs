@@ -35,6 +35,7 @@ const MAX_PULL_BYTES: usize = 5 * 1024 * 1024;
 /// 云端单次推送的字节上限（5MiB）：与拉取侧对齐，超限拒绝并提示用户清理备注。
 const MAX_PUSH_BYTES: usize = 5 * 1024 * 1024;
 /// puuid 长度上限：正常 UUID 36 字符，留余量；防巨型字符串拼进 URL/打爆查询。
+/// `>=` 而非 `>`：达到上限的填充串（如 128 个 'a'）不应放行，实际 puuid 恒更短。
 const MAX_PUUID_LEN: usize = 128;
 /// 云端配置行可接受的最大键数：正常快照几十个键；超限说明被塞了垃圾，
 /// 直接丢弃该行（防脏 payload 用巨 map 撑内存 / 借 LWW 劫持配置）。
@@ -190,7 +191,7 @@ async fn ensure_session() -> Result<CloudSession, String> {
 /// 正常路径 puuid 来自 LCU，恒为 UUID 格式，不受影响。
 fn validate_puuid(puuid: &str) -> Result<(), String> {
     if puuid.is_empty()
-        || puuid.len() > MAX_PUUID_LEN
+        || puuid.len() >= MAX_PUUID_LEN
         || !puuid.chars().all(|c| c.is_ascii_hexdigit() || c == '-')
     {
         return Err("puuid 格式非法".to_string());

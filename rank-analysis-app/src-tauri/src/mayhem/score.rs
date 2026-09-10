@@ -32,6 +32,11 @@ const W_SYNERGY: f64 = 0.15;
 /// 该英雄历史胜率参与归一化的最小样本门槛。
 const CHAMP_MIN_GAMES: i64 = 30;
 
+/// 胜率归一化视为「无统计差异」的最小极差（0.5 个百分点）。
+/// 低于该值不再做 min-max 放大——高频浮点噪声（万分之一差）会被炸成 0/1
+/// 两级，输出极具误导性的推荐（95 分 vs 50 分）。
+const MIN_NORM_SPREAD: f64 = 0.005;
+
 /// 单个强化的全局统计（来自 augments.json stats）。
 #[derive(Debug, Clone, Default)]
 pub struct GlobalStats {
@@ -117,9 +122,12 @@ pub struct ScoredCandidate {
 
 /// 当轮候选 min-max 归一化。
 ///
-/// 全部相等时不能再退化为死锁的 0.5：三张冷门/新强化若同为高位胜率（如 0.62），
-/// 强行归一化会让它们全部拿到 0.5 相对值 → 综合分跌到 C 档，误导用户 reroll。
-/// 相等时直接返回该共享值自身（胜率本身就在 0..1），让高分卡留在高档位。
+/// 全部相等（或极差小于 [`MIN_NORM_SPREAD`]）时不能再做 min-max 放大：
+/// - 3 张冷门/新强化同为高位胜率（如 0.62）时，强行归一化让它们全部拿到
+///   0.5 相对值 → 综合分跌到 C 档，误导用户 reroll。相等时返回共享值本身。
+/// - 胜率近似相等（如 0.52000000001 vs 0.52000000002，浮点噪声）时，旧的
+///   `f64::EPSILON` 阈值放不过它们，会被放大成 0 与 1（95 分 vs 50 分），
+///   纯属把样本噪声当真实差距。低于统计显著阈值时输出均值，不再放大。
 fn min_max_norm(values: &[f64]) -> Vec<f64> {
     let Some(&min) = values.iter().min_by(|a, b| a.total_cmp(b)) else {
         return Vec::new();
@@ -127,8 +135,14 @@ fn min_max_norm(values: &[f64]) -> Vec<f64> {
     let Some(&max) = values.iter().max_by(|a, b| a.total_cmp(b)) else {
         return Vec::new();
     };
-    if (max - min).abs() < f64::EPSILON {
-        return values.iter().map(|v| v.clamp(0.0, 1.0)).collect();
+    if (max - min) < MIN_NORM_SPREAD {
+        let mean = if values.is_empty() {
+            0.0
+        } else {
+            values.iter().sum::<f64>() / values.len() as f64
+        };
+        let m = mean.clamp(0.0, 1.0);
+        return vec![m; values.len()];
     }
     values
         .iter()
@@ -495,8 +509,9 @@ mod tests {
 
     #[test]
     fn equal_winrates_should_not_deadlock_to_c_grade() {
-        // 三张新强化全服胜率同为高位（0.62）——max==min，不能再各给 0.5 相对值
-        // 把它们打成 C 档（0.455 → C）。共享值自身应直接映射保持 A 档。
+        // 三张新强化全服胜率同为高位（0.62）——max==min。旧版各给 0.5 相对值，
+        // 综合分 0.35*0.5+0.5*0.5+0.15*0.2=0.455 → C 档。现返回共享胜率 0.62：
+        // 0.35*0.62+0.5*0.62+0.15*0.2=0.557 → B 档（>=55），不得落入 C。
         let t = tables_with(&[(1, 0.62), (2, 0.62), (3, 0.62)], &[], &[]);
         let m = meta_map(&[1, 2, 3]);
         let hits = [Some(&hit(1, 1.0)), Some(&hit(2, 1.0)), Some(&hit(3, 1.0))];
@@ -504,9 +519,23 @@ mod tests {
         let cands = payload["candidates"].as_array().unwrap();
         for c in cands {
             let s = c["score"].as_f64().unwrap();
-            assert!(s >= 60.0, "同为 62% 胜率不应被打成 C 档，实得 {s}");
+            assert!(s >= 55.0, "同为 62% 胜率不得落入 C 档，实得 {s}");
             assert!(c["grade"].as_str().unwrap() != "C");
         }
+    }
+
+    #[test]
+    fn near_equal_winrates_should_not_amplify_noise() {
+        // 两强化胜率仅差浮点噪声（<0.5pp）：不得被 min-max 放大成 0 与 1，
+        // 应输出均值 0.56 → 两者同分同级。
+        let t = tables_with(&[(1, 0.56), (2, 0.56000000001)], &[], &[]);
+        let m = meta_map(&[1, 2]);
+        let hits = [Some(&hit(1, 1.0)), Some(&hit(2, 1.0)), None];
+        let payload = score_round(hits, &m, &t, None);
+        let cands = payload["candidates"].as_array().unwrap();
+        let s1 = cands[0]["score"].as_f64().unwrap();
+        let s2 = cands[1]["score"].as_f64().unwrap();
+        assert!((s1 - s2).abs() < 1.0, "噪声应被抹平，实得 {s1} vs {s2}");
     }
 
     #[test]
