@@ -124,13 +124,26 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             // get_asset_binary 内部会后台自愈一次 init（见 asset::ensure_caches_ready），
             // 就绪后再通过 responder 回包——首屏冷启动也能自动补上图标，无需手动刷新。
             //
-            // Cache-Control: no-store —— 成功响应命中 Rust 端 BINARY_CACHE 是 O(1)，
-            // 重新请求成本可忽略；失败响应不被浏览器负缓存，cache 就绪后下次请求即恢复。
+            // Cache-Control: immutable——英雄头像/装备/符文/技能图标是静态资源，
+            // 命中 Rust 端 BINARY_CACHE 是 O(1)；让 WebView 原生缓存长期复用，
+            // 避免每次重绘都走一遍 IPC（此前 no-store 在组件重挂时会反复重建请求）。
+            // 若 BINARY_CACHE 未来引入按版本失效，再改回短 TTL 即可。
             tauri::async_runtime::spawn(async move {
-                let response = match asset_api::get_asset_binary(kind, id).await {
+                // panic 兜底：get_asset_binary 内部若发生 panic（如底层锁中毒），
+                // 会让 responder 永不回包，WebKit 的 URI 连接池被挂起请求耗尽后
+                // 整页所有本地图标卡死。用独立任务承接 + JoinHandle 收敛：
+                // 子任务 panic 时 JoinHandle 返回 Err，父侧照样回包 500。
+                let handle = tauri::async_runtime::spawn(async move {
+                    asset_api::get_asset_binary(kind, id).await
+                });
+                let result = match handle.await {
+                    Ok(res) => res,
+                    Err(_) => Err("asset handler panicked".to_string()),
+                };
+                let response = match result {
                     Ok((bytes, mime)) => tauri::http::Response::builder()
                         .header("Content-Type", mime)
-                        .header("Cache-Control", "no-store")
+                        .header("Cache-Control", "public, max-age=86400, immutable")
                         .body(bytes)
                         .unwrap(),
                     Err(e) => tauri::http::Response::builder()
