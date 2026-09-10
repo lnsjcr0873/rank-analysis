@@ -714,8 +714,13 @@ function topExtensions(b: MayhemBuild): ItemExtension[] {
   const primaryCoreIds = new Set<number>(getCoreBuildItems(b))
 
   for (const ext of b.itemExtensions ?? []) {
-    const itemId = ext.itemIds.find(id => !isBootItem(id))
-    if (!itemId || primaryCoreIds.has(itemId)) continue
+    // 延伸推荐里可能把备选核心件列在第一位（构成 4 件套）：只看第一件会把
+    // 整个「第 4/5 件延伸」全部 continue 掉变成空集。优先取「非鞋 + 非核心」
+    // 的延伸件；整个组合都是核心件时才退回第一个非鞋件，保证延伸区不空白。
+    const itemId =
+      ext.itemIds.find(id => !isBootItem(id) && !primaryCoreIds.has(id)) ??
+      ext.itemIds.find(id => !isBootItem(id))
+    if (!itemId) continue
     const existing = map.get(itemId)
     if (!existing) {
       map.set(itemId, { ...ext, itemIds: [itemId] })
