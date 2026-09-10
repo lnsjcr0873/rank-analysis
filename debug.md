@@ -92,7 +92,15 @@ Skip to main content
       空态不串玩家、慢 meet 迟到不覆盖新玩家。相关组件已先行加固：ChampionIntelCard
       有 requestKey 竞态守卫、BestPicksPanel 走 useBestPicks（150ms 防抖+revision
       失效），无需改动。
-- [ ] S9 Gaming/MatchHistory 定时器泄露 — 【待修复】
+- [x] S9 Gaming/MatchHistory 定时器泄露 — 【已完成】
+      commit(`fix(record)`): 审查结论——Gaming.vue 的 `nextActionTimer` 已有
+      `if (!nextActionTimer)` 单例守护 + phase 退出分支与 onUnmounted 双重清理，
+      不存在报告担心的并行 setInterval；MatchDetailStatsTab.vue 的 `debounceTimer`
+      也已 onBeforeUnmount 清理。真实缺口在 MatchHistory.vue：4 处 fire-and-forget
+      setTimeout（pathCopied 复位 + 3 处 highlight 闪烁清除）既无单例约束（连续
+      触发会叠计时器）又无卸载清理（路由跳转后仍会写已卸载组件的孤儿 ref）。
+      新增 `pendingTimers` Set + `armTimeout()` 统一登记/自移除，onBeforeUnmount
+      统一 clearTimeout；`pathTimer` 原有守卫保持不变。违规 setInterval 全部清零。
 - [ ] S10 localStorage 配额保护 — 【待修复】
 - [ ] S11 AssetTooltipContent v-html XSS — 【待修复】
 - [ ] S12 跨区(SGP) 战绩字段差异降级 — 【待修复】
