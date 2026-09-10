@@ -27,6 +27,12 @@ static SINGLEFLIGHT: LazyLock<moka::future::Cache<String, String>> = LazyLock::n
         .max_capacity(200)
         .build()
 });
+/// LCU / Riot Client 专用客户端（仅 127.0.0.1）。
+///
+/// **`danger_accept_invalid_certs(true)` 只在此处开启**——LCU 与 Riot Client
+/// 使用自签名证书，此设置是必要的。此客户端**绝不**可用于外网请求（SGP、
+/// CommunityDragon 等），否则将彻底丧失 TLS 防中间人保护。所有 URL 必须通过
+/// [`build_url`] 或手动 `assert!(url.contains("127.0.0.1"))` 校验。
 fn get_client() -> &'static Client {
     HTTP_CLIENT.get_or_init(|| {
         Client::builder()
@@ -130,9 +136,19 @@ fn refresh_auth() -> Result<(String, String), String> {
         }
     }
 }
+/// 构造 LCU 本地请求 URL（`https://riot:{token}@127.0.0.1:{port}/{uri}`）。
+///
+/// `get_client()` 开启了 `danger_accept_invalid_certs`（LCU 自签证书），
+/// 此函数是唯一入口——所有 URL 必须走这里，确保只连 127.0.0.1，
+/// 防止 `danger_accept_invalid_certs` 被意外复用到外网请求丢失 MITM 防护。
 fn build_url(token: &str, uri: &str, port: &str) -> String {
     let uri = uri.trim_start_matches('/');
-    format!("https://riot:{}@127.0.0.1:{}/{}", token, port, uri)
+    let url = format!("https://riot:{}@127.0.0.1:{}/{}", token, port, uri);
+    assert!(
+        url.contains("127.0.0.1"),
+        "LCU URL must target localhost — danger_accept_invalid_certs is NOT safe for public hosts"
+    );
+    url
 }
 
 /// 判断响应是否属于「凭据可能失效」需要刷新认证后重试的情况。
@@ -586,6 +602,10 @@ pub async fn riot_client_get<T: DeserializeOwned>(
 ) -> Result<T, String> {
     let uri = uri.trim_start_matches('/');
     let url = format!("https://riot:{}@127.0.0.1:{}/{}", token, port, uri);
+    assert!(
+        url.contains("127.0.0.1"),
+        "Riot Client URL must target localhost — danger_accept_invalid_certs is NOT safe for public hosts"
+    );
     let resp = get_client()
         .get(&url)
         .send()

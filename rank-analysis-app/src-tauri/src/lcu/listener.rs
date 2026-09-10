@@ -236,7 +236,8 @@ impl LcuListener {
             .map_err(|e| format!("TCP 连接失败: {}", e))?;
 
         // 2. 建立 TLS 连接 (忽略证书验证)
-        // LCU 使用自签名证书，必须忽略验证
+        // LCU 使用自签名证书，必须忽略验证；仅连接 127.0.0.1（不得改为外网地址，
+        // 否则 danger_accept_invalid_certs 会丧失 MITM 防护）
         let cx = native_tls::TlsConnector::builder()
             .danger_accept_invalid_certs(true)
             .build()
