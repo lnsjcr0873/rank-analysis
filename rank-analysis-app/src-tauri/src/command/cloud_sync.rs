@@ -2,6 +2,16 @@
 //!
 //! 身份模型：每台设备一个匿名 Supabase 账号，只用于写入溯源（RLS「谁写的谁能改」），
 //! 不承担跨设备身份识别；跨设备找回数据按 puuid 查询所有设备的行，前端合并。
+//!
+//! 威胁模型（S1）：`sync_data` 按 puuid 寻址且同 puuid 的行任何人可读、
+//! 任何匿名账号可插入——知道受害者 puuid（对局内队友/对手、战绩网站均可见）
+//! 即可向其名下写毒行，受害者下次 `syncNow` 会拉取并合并。缓解措施：
+//! - `validate_puuid` 限字符集 + 限长（堵注入与巨型 URL）；
+//! - `pull_payloads` 限响应字节（堵超大 JSON 在反序列化前撑爆内存）；
+//! - `push_payload` 限推送字节（超限直接拒绝，避免把本地巨表打上云端）；
+//! - 前端 `mergeNotesMaps` 把每行当不可信输入做条目级校验（白名单 label、
+//!   字段限长、时间戳限未来漂移、总条数熔断），毒行只计 `invalid` 不进内存；
+//! - 配置走独立 LWW 通道 + 云端黑名单，备注毒行够不到 API Key（Key 根本不上云）。
 
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -18,6 +28,20 @@ const SUPABASE_URL: &str = "https://agutdvbhkhxzngscdlsh.supabase.co";
 /// 硬编码提交是 Supabase 官方推荐用法，不是泄密
 const SUPABASE_PUBLISHABLE_KEY: &str = "sb_publishable_ksZfyme84izJY9oTWC4VOw_l9OBXWBp";
 
+/// 云端单次拉取响应的字节上限（5MiB）：同 puuid 的行任何匿名账号可插入，
+/// 攻击者可注册大量账号塞行把响应撑到 GB 级；超限直接失败（同步报错而非 OOM），
+/// 正常备注表（万条以内）远小于此值，不受影响。
+const MAX_PULL_BYTES: usize = 5 * 1024 * 1024;
+/// 云端单次推送的字节上限（5MiB）：与拉取侧对齐，超限拒绝并提示用户清理备注。
+const MAX_PUSH_BYTES: usize = 5 * 1024 * 1024;
+/// puuid 长度上限：正常 UUID 36 字符，留余量；防巨型字符串拼进 URL/打爆查询。
+const MAX_PUUID_LEN: usize = 128;
+/// 云端配置行可接受的最大键数：正常快照几十个键；超限说明被塞了垃圾，
+/// 直接丢弃该行（防脏 payload 用巨 map 撑内存 / 借 LWW 劫持配置）。
+const MAX_CLOUD_CONFIG_KEYS: usize = 500;
+/// 云端时间戳允许的未来漂移（24h）：本地时钟 + LWW 都有小时级偏差，
+/// 超过即视为投毒——攻击者盖 `u64::MAX` 会永久赢下 LWW，后续正常推送再也覆盖不掉。
+const MAX_FUTURE_SKEW_MS: u64 = 24 * 60 * 60 * 1000;
 /// 会话在 config.yaml 里的存储键（序列化为 JSON 字符串存 Value::String）
 const SESSION_CONFIG_KEY: &str = "cloudSyncSession";
 /// 云端备注行的数据类型标识
@@ -165,7 +189,10 @@ async fn ensure_session() -> Result<CloudSession, String> {
 /// 以 "" 为键的共享行（所有同状态用户混写一行，跨用户数据串流）。
 /// 正常路径 puuid 来自 LCU，恒为 UUID 格式，不受影响。
 fn validate_puuid(puuid: &str) -> Result<(), String> {
-    if puuid.is_empty() || !puuid.chars().all(|c| c.is_ascii_hexdigit() || c == '-') {
+    if puuid.is_empty()
+        || puuid.len() > MAX_PUUID_LEN
+        || !puuid.chars().all(|c| c.is_ascii_hexdigit() || c == '-')
+    {
         return Err("puuid 格式非法".to_string());
     }
     Ok(())
@@ -188,11 +215,17 @@ async fn pull_payloads(puuid: &str, data_type: &str) -> Result<Vec<serde_json::V
     if !resp.status().is_success() {
         return Err(format!("拉取失败: HTTP {}", resp.status()));
     }
+    // S1:先按字节验大小再反序列化——同 puuid 的行任何匿名账号可插入，
+    // 不设上限时攻击者塞行可把响应撑到 GB 级直接 OOM。超限报同步失败而非崩溃。
+    let bytes = resp.bytes().await.map_err(|e| e.to_string())?;
+    if bytes.len() > MAX_PULL_BYTES {
+        return Err("云端数据过大，已拒绝合并（疑似脏数据），请稍后重试".to_string());
+    }
     #[derive(Deserialize)]
     struct Row {
         payload: serde_json::Value,
     }
-    let rows: Vec<Row> = resp.json().await.map_err(|e| e.to_string())?;
+    let rows: Vec<Row> = serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
     Ok(rows.into_iter().map(|r| r.payload).collect())
 }
 
@@ -203,6 +236,12 @@ async fn push_payload(
     payload: serde_json::Value,
 ) -> Result<(), String> {
     validate_puuid(puuid)?;
+    // S1:推送侧同样限字节——超限说明本地表已被毒行撑大，直接拒绝并提示清理，
+    // 避免把本地巨表打上云端、让所有同 puuid 设备跟着遭殃。
+    let payload_bytes = serde_json::to_vec(&payload).map_err(|e| e.to_string())?;
+    if payload_bytes.len() > MAX_PUSH_BYTES {
+        return Err("本地备注过大（>5MB），已拒绝推送，请先清理备注".to_string());
+    }
     let session = ensure_session().await?;
     let url = format!("{SUPABASE_URL}/rest/v1/sync_data?on_conflict=owner_id,puuid,data_type");
     let body = json!([{
@@ -266,9 +305,16 @@ pub struct ConfigPayload {
 ///
 /// 云端行任何人可写,逐行当不可信输入:反序列化失败的行直接跳过;
 /// 解析成功后再按云端黑名单剔键(防脏 payload 夹带 cloudSyncSession 等)。
+/// S1 加固:两条额外防线——
+/// - 键数上限:正常快照几十个键,超限直接丢弃该行(防巨 map 撑内存/劫持 LWW);
+/// - 时间戳未来漂移上限:攻击者盖 `u64::MAX` 会永久赢下 LWW,后续正常推送
+///   再也覆盖不掉,超限行直接丢弃(本地时钟小时级偏差不受影响)。
 fn pick_latest_config(rows: Vec<serde_json::Value>) -> Option<ConfigPayload> {
+    let now_ms = now_unix().saturating_mul(1000);
     rows.into_iter()
         .filter_map(|v| serde_json::from_value::<ConfigPayload>(v).ok())
+        .filter(|p| p.config.len() <= MAX_CLOUD_CONFIG_KEYS)
+        .filter(|p| p.updated_at <= now_ms.saturating_add(MAX_FUTURE_SKEW_MS))
         .max_by_key(|p| p.updated_at)
         .map(|mut p| {
             p.config.retain(|k, _| crate::config::allowed_in_cloud(k));
@@ -511,6 +557,13 @@ mod tests {
     }
 
     #[test]
+    fn validate_puuid_rejects_oversize() {
+        // S1:巨型字符串不能拼进 PostgREST URL
+        assert!(validate_puuid(&"a".repeat(MAX_PUUID_LEN + 1)).is_err());
+        assert!(validate_puuid(&"a".repeat(MAX_PUUID_LEN)).is_err()); // 字符集也不合法
+    }
+
+    #[test]
     fn today_iso_should_render_known_dates() {
         // 2026-08-22 00:00:00 UTC = 1_787_356_800
         assert_eq!(today_iso_from_unix(1_787_356_800), "2026-08-22");
@@ -598,5 +651,33 @@ mod tests {
     fn pick_latest_should_return_none_when_all_malformed() {
         assert!(pick_latest_config(vec![serde_json::json!("junk")]).is_none());
         assert!(pick_latest_config(vec![]).is_none());
+    }
+
+    #[test]
+    fn pick_latest_should_drop_oversize_config_and_future_timestamp() {
+        // S1:巨 map 行直接丢弃(防撑内存/劫持 LWW)
+        let mut big_config = serde_json::Map::new();
+        for i in 0..(MAX_CLOUD_CONFIG_KEYS + 1) {
+            big_config.insert(format!("k{i}"), serde_json::json!({"value": true}));
+        }
+        let rows = vec![
+            serde_json::json!({ "updatedAt": 1, "config": big_config }),
+            serde_json::json!({ "updatedAt": 2, "config": { "theme": "ok" } }),
+        ];
+        let latest = pick_latest_config(rows).unwrap();
+        assert_eq!(latest.updated_at, 2);
+
+        // S1:未来时间戳投毒行直接丢弃(攻击者盖 u64::MAX 会永久赢下 LWW)
+        let now_ms = now_unix().saturating_mul(1000);
+        let rows = vec![
+            serde_json::json!({ "updatedAt": now_ms + MAX_FUTURE_SKEW_MS + 1, "config": { "theme": "evil" } }),
+            serde_json::json!({ "updatedAt": 3, "config": { "theme": "good" } }),
+        ];
+        let latest = pick_latest_config(rows).unwrap();
+        assert_eq!(latest.updated_at, 3);
+        assert!(matches!(
+            latest.config.get("theme"),
+            Some(crate::config::Value::String(s)) if s == "good"
+        ));
     }
 }

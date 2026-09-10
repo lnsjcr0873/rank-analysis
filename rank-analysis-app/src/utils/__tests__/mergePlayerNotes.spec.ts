@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest'
-import { mergeNotesMaps, TOMBSTONE_TTL_MS } from '../mergePlayerNotes'
+import {
+  mergeNotesMaps,
+  TOMBSTONE_TTL_MS,
+  MAX_ENCOUNTERS_PER_NOTE,
+  MAX_MERGED_NOTES,
+  MAX_NAME_FIELD_LEN,
+  MAX_NOTE_KEY_LEN,
+  MAX_NOTE_TEXT_LEN
+} from '../mergePlayerNotes'
 import type { PlayerNotesMap } from '@renderer/types/domain/playerNote'
 
 function note(updatedAt: number, text = 'x'): PlayerNotesMap[string] {
@@ -79,6 +87,75 @@ describe('mergeNotesMaps', () => {
     const base = { p1: note(100) }
     mergeNotesMaps(base, { p2: note(50) })
     expect(Object.keys(base)).toEqual(['p1'])
+  })
+
+  describe('S1 毒行加固(云端行不可信)', () => {
+    const NOW = 1_800_000_000_000
+
+    it('未来时间戳投毒被拒(超 24h)，一旦并入将永远无法被"新者赢"覆盖', () => {
+      const poison = note(NOW + 25 * 60 * 60 * 1000, 'poison')
+      const { merged, stats } = mergeNotesMaps({}, { p1: poison }, NOW)
+      expect(merged.p1).toBeUndefined()
+      expect(stats.invalid).toBe(1)
+    })
+
+    it('24h 内时钟漂移放行(本地时钟小时级偏差不受影响)', () => {
+      const drifted = note(NOW + 60 * 60 * 1000, 'drifted')
+      const { merged, stats } = mergeNotesMaps({}, { p1: drifted }, NOW)
+      expect(merged.p1.note).toBe('drifted')
+      expect(stats.added).toBe(1)
+    })
+
+    it('非法 label 被拒(白名单外档位说明 payload 被手改)', () => {
+      const bad = { ...note(100), label: 'admin' } as unknown as PlayerNotesMap[string]
+      const { merged, stats } = mergeNotesMaps({}, { p1: bad }, NOW)
+      expect(merged.p1).toBeUndefined()
+      expect(stats.invalid).toBe(1)
+    })
+
+    it('缺 note/gameName/tagLine 字段被拒(云端脏行不再靠"类型断言"混入)', () => {
+      const missing = { label: 'normal', updatedAt: 100 } as unknown as PlayerNotesMap[string]
+      const { merged, stats } = mergeNotesMaps({}, { p1: missing }, NOW)
+      expect(merged.p1).toBeUndefined()
+      expect(stats.invalid).toBe(1)
+    })
+
+    it('超长 note 文本被拒(防毒行撑爆内存/注入 AI prompt)', () => {
+      const fat = { ...note(100), note: 'x'.repeat(MAX_NOTE_TEXT_LEN + 1) }
+      const { merged, stats } = mergeNotesMaps({}, { p1: fat }, NOW)
+      expect(merged.p1).toBeUndefined()
+      expect(stats.invalid).toBe(1)
+    })
+
+    it('超长 gameName/tagLine 被拒', () => {
+      const fat = { ...note(100), gameName: 'x'.repeat(MAX_NAME_FIELD_LEN + 1) }
+      const { merged, stats } = mergeNotesMaps({}, { p1: fat }, NOW)
+      expect(merged.p1).toBeUndefined()
+      expect(stats.invalid).toBe(1)
+    })
+
+    it('超长 key 被拒(防巨 key 撑内存)', () => {
+      const fatKey = 'k'.repeat(MAX_NOTE_KEY_LEN + 1)
+      const { merged, stats } = mergeNotesMaps({}, { [fatKey]: note(100) }, NOW)
+      expect(Object.keys(merged)).toHaveLength(0)
+      expect(stats.invalid).toBe(1)
+    })
+
+    it('超量 encounters 被拒(防单条备注塞巨数组)', () => {
+      const fat = { ...note(100), encounters: new Array(MAX_ENCOUNTERS_PER_NOTE + 1).fill({}) }
+      const { merged, stats } = mergeNotesMaps({}, { p1: fat } as unknown as PlayerNotesMap, NOW)
+      expect(merged.p1).toBeUndefined()
+      expect(stats.invalid).toBe(1)
+    })
+
+    it('合并上限熔断:超限部分按 invalid 丢弃，内存有界', () => {
+      const base: PlayerNotesMap = {}
+      for (let i = 0; i < MAX_MERGED_NOTES; i++) base[`base-${i}`] = note(100)
+      const { merged, stats } = mergeNotesMaps(base, { fresh: note(200) }, NOW)
+      expect(merged['fresh']).toBeUndefined()
+      expect(stats.invalid).toBe(1)
+      expect(Object.keys(merged)).toHaveLength(MAX_MERGED_NOTES)
+    })
   })
 
   describe('墓碑 TTL(过期删除标记不随合并复活)', () => {
