@@ -682,8 +682,12 @@ async fn start_champion_ban_automation() {
 /// 默认执行阈值：剩余降到该秒数时执行锁定。
 const DEFAULT_EXECUTE_AT_SECS_LEFT: f64 = 5.0;
 
-/// 剩余不足该秒数时放弃本次自动执行，避免半吊子状态。
-pub(crate) const MIN_EXECUTE_SECS: f64 = 3.0;
+/// 剩余不足该秒数时放弃本次自动执行。
+///
+/// 从 3.0 收紧到 0.5：轮询周期 1s 叠加 LCU 抖动时，上一次采样 5.2s（还没到 5.0
+/// 阈值）、下一次直接跳到 2.8s 的场景会用 3.0s 下限把整局自动锁定「完美跳过」。
+/// 只要还剩 ≥0.5s（PATCH 往返通常 <300ms）就仍有机会把锁定发出，绝不轻易放弃。
+pub(crate) const MIN_EXECUTE_SECS: f64 = 0.5;
 
 /// bench 换人冷却：锁定后决策变化引发的换人至少间隔这么久，
 /// 防止「双维推荐在多个目标间震荡」时把 LCU 的换人窗口刷穿。
@@ -1854,8 +1858,9 @@ mod bp_execution_tests {
         // 到点 → 锁
         assert!(should_lock(&decision(BpMode::Auto, 5.0, false), 5.0, true));
         assert!(should_lock(&decision(BpMode::Auto, 3.5, false), 3.5, true));
-        // 不足 3s → 放弃，避免半吊子状态
-        assert!(!should_lock(&decision(BpMode::Auto, 2.9, false), 2.9, true));
+        assert!(should_lock(&decision(BpMode::Auto, 2.9, false), 2.9, true));
+        // 不足 0.5s → 才放弃（PATCH 往返已来不及）
+        assert!(!should_lock(&decision(BpMode::Auto, 0.4, false), 0.4, true));
         // 没轮到我 → 不锁
         assert!(!should_lock(
             &decision(BpMode::Auto, 4.0, false),
