@@ -79,6 +79,10 @@ fn init_schema(conn: &Connection) -> rusqlite::Result<()> {
 }
 
 /// 持锁执行一次库操作；连接未就绪/出错时返回 None（调用方降级处理）。
+///
+/// **阻塞警告**：此函数在调用线程上同步执行 SQLite I/O。在异步上下文中调用时
+/// **必须**通过 `spawn_blocking` 包装，否则会阻塞 Tokio worker 线程导致整个
+/// 应用 IPC 响应卡顿（Worker Starvation）。见 [`with_db_async`]。
 fn with_db<T>(f: impl FnOnce(&Connection) -> rusqlite::Result<T>) -> Option<T> {
     let guard = CONN.lock().unwrap_or_else(|e| e.into_inner());
     match guard.as_ref() {
@@ -91,6 +95,16 @@ fn with_db<T>(f: impl FnOnce(&Connection) -> rusqlite::Result<T>) -> Option<T> {
         },
         None => None,
     }
+}
+
+/// 异步版本的 [`with_db`]：将 SQLite 操作移到 blocking 线程池执行。
+async fn with_db_async<T: Send + 'static>(
+    f: impl FnOnce(&Connection) -> rusqlite::Result<T> + Send + 'static,
+) -> Option<T> {
+    tokio::task::spawn_blocking(move || with_db(f))
+        .await
+        .ok()
+        .flatten()
 }
 
 // ---------------------------------------------------------------------------
