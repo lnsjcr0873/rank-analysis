@@ -546,7 +546,15 @@ pub async fn resolve_puuid_by_riot_id(game_name: &str, tag_line: &str) -> Result
 /// SGP 的 `gameCreation` 是毫秒时间戳，而现有 `Game.game_creation_date` 是 ISO 字符串
 /// （前端按 `new Date(str)` 解析）。无 chrono 依赖，用 Howard Hinnant 的历法算法手算。
 /// pub(crate)：决策对账（command/backtest）反向解析复用同一历法。
+///
+/// 防御：异常/时钟错误传入极端值（负毫秒、远超 9999 年）时，`{:04}` 会输出
+/// `-001-12-31T...` 这类非标准串，Chromium 解析成 Invalid Date 并在前端
+/// `.slice(0,10)`/`getMonth()` 处抛 NaN 使对局卡片崩溃。这里把越界值先夹到
+/// [0, 9999 年末] 的合法区间——对实战数据没有任何影响（对局不可能早于 1970），
+/// 但保证输出始终是可被 `new Date` 解析的标准 ISO 串。
 pub(crate) fn epoch_ms_to_iso(ms: i64) -> String {
+    // 上限 ≈ 9999-12-31T23:59:59.999Z（8.4 万亿毫秒量级）
+    let ms = ms.clamp(0, 253_402_300_799_999);
     let secs = ms.div_euclid(1000);
     let millis = ms.rem_euclid(1000);
     let days = secs.div_euclid(86_400);
@@ -793,6 +801,18 @@ mod tests {
             epoch_ms_to_iso(1_609_459_200_123),
             "2021-01-01T00:00:00.123Z"
         );
+    }
+
+    #[test]
+    fn epoch_ms_to_iso_clamps_absurd_inputs() {
+        // 负毫秒（时钟错误/脏数据）：必须夹到 1970，而不是输出 -001-12-31 这类
+        // 让前端 new Date 变 Invalid Date 的非标准串
+        assert_eq!(epoch_ms_to_iso(-1), "1970-01-01T00:00:00.000Z");
+        assert_eq!(epoch_ms_to_iso(-999_999_999_999), "1970-01-01T00:00:00.000Z");
+        // 极未来（远超 9999 年）：夹到 9999 年末，仍可被解析
+        let far = epoch_ms_to_iso(9_999_999_999_999_999);
+        assert!(far.starts_with("9999-"), "got {far}");
+        assert!(far.ends_with('Z'));
     }
 
     #[test]
