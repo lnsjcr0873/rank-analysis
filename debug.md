@@ -112,8 +112,12 @@ Skip to main content
 
 ### 批次七（16:20 发现）
 
-- [ ] G1 http.rs AUTH 锁重入死锁 — 【待修复】
-- [ ] G2 sgp_league_servers 并发雪崩 — 【待修复】
+- [x] G1 http.rs AUTH 锁重入死锁 — 【已完成】
+      commit: `get_auth_pair` 改双检，`get_auth()`（进程扫描可能耗时数百 ms）不再
+      在持 AUTH 锁期间执行，杜绝间接重入死锁与全局请求排队。
+- [x] G2 sgp_league_servers 并发雪崩 — 【已完成】
+      commit: 新增 `REFRESH_GUARD` 单飞锁，冷启动无磁盘缓存时的并发首拉合并为
+      一次（等锁后回查动态表）。
 - [ ] G3 automation 焦点抢占 — 【待修复】
 - [x] G4 critiqueReport 点评错位 — 【已验证无需修改】
       `assembleAnalysisReport` 名册分组（尽力/犯罪/被爆）确定性来自 Stage 1
@@ -143,7 +147,9 @@ Skip to main content
 
 ### 批次九（17:13 发现）
 
-- [ ] J1 main.rs URI 协议 panic 逃逸/no-store — 【待修复】
+- [x] J1 main.rs URI 协议 panic 逃逸/no-store — 【已完成】
+      commit: URI 处理器改「子任务承接 + JoinHandle 收敛」，panic 也回包不挂起
+      WebKit 连接池；成功响应改 `public, max-age=86400, immutable` 静态缓存。
 - [ ] J2 fetchBatchProfiles 高分段致盲 — 【待修复】
 - [ ] J3 detect_override 悬空误判 — 【待修复】
 - [x] J4 useCopy 剪贴板竞争 — 【已完成】
