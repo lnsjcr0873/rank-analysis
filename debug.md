@@ -101,7 +101,16 @@ Skip to main content
       触发会叠计时器）又无卸载清理（路由跳转后仍会写已卸载组件的孤儿 ref）。
       新增 `pendingTimers` Set + `armTimeout()` 统一登记/自移除，onBeforeUnmount
       统一 clearTimeout；`pathTimer` 原有守卫保持不变。违规 setInterval 全部清零。
-- [ ] S10 localStorage 配额保护 — 【待修复】
+- [x] S10 localStorage 配额保护 — 【已完成】
+      commit(`fix(growth)`): 审查结论——报告点名的 playerNotes store 已改用
+      `putConfigByIpc`（Rust 侧 config 落盘，非 localStorage），且 persist 失败会
+      重新抛出不吞异常；growth 用量台账有 500 条上限。真实缺口在 Growth.vue：
+      3 处 `localStorage.setItem` 裸调用 + 全部吞异常（QuotaExceeded 静默丢备注，
+      用户毫不知情）。新增 `utils/safeStorage.ts`（safeSetItem/safeSetJson/
+      isQuotaExceeded/safeRemoveItem，9 条单测，归一 'written'/'quota'/'error'），
+      persistNotes / 备份还原两处目标备注落盘改为 safeSetJson 并据结果码弹
+      warning/error（备注内存值保留，当前会话不丢）；LAST_BACKUP_KEY 时间戳改
+      safeSetItem。其余 localStorage 用户已逐一核查为小体积/有界值，不入本次范围。
 - [ ] S11 AssetTooltipContent v-html XSS — 【待修复】
 - [ ] S12 跨区(SGP) 战绩字段差异降级 — 【待修复】
 - [ ] S13 BestPicksPanel 主线程阻塞渲染 — 【待修复】
