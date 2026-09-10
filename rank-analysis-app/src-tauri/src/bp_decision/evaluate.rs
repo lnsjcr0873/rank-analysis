@@ -81,13 +81,16 @@ pub fn unavailable_map(session: &SelectSession) -> HashMap<i32, Unavailable> {
 /// 用户接管检测。
 ///
 /// 记住我们最后一次 hover 的英雄 ID：
-/// - 若此前尚未主动 hover（`last_hovered` 为 None），但当前会话中已有选定英雄（`current_hover != 0`），
-///   说明用户在自动化介入前已自主预选，判定为接管，尊重用户意图不予覆盖；
-/// - 若已有记录（`Some(ours)`），当且仅当非 0 且不等于我们记录的值时判定接管。
-pub fn detect_override(current_hover: i32, last_hovered: Option<i32>) -> bool {
+/// - 若此前已主动 hover（`last_hovered` 为 `Some(ours)`）：当且仅当非 0 且
+///   不等于我们记录的值时判定接管（用户手动改选了别的英雄）；
+/// - 若此前尚未主动 hover（`None`）：此时 `current_hover` 可能是用户自主预选，
+///   也可能是**我们自己的 hover 正在落库**（PATCH 已生效、但 set_last_hovered
+///   因时序尚未写入）。因此只有「当前非 0 且 ≠ 我们正要执行的 target」才判定
+///   接管——等于工具自身目标时显然是自己的动作，不算用户覆盖。
+pub fn detect_override(current_hover: i32, last_hovered: Option<i32>, our_target: Option<i32>) -> bool {
     match last_hovered {
         Some(ours) => current_hover != 0 && current_hover != ours,
-        None => current_hover != 0,
+        None => current_hover != 0 && our_target != Some(current_hover),
     }
 }
 
@@ -346,7 +349,11 @@ pub fn evaluate_bp_decision(ctx: &BpContext) -> Option<BpDecision> {
         mode: ctx.mode,
         time_left_secs: phase_secs_left(&ctx.session.timer),
         execute_at_secs_left: ctx.execute_at_secs_left,
-        user_overridden: detect_override(pending.champion_id, ctx.last_hovered),
+        user_overridden: detect_override(
+            pending.champion_id,
+            ctx.last_hovered,
+            target.as_ref().map(|t| t.champion_id),
+        ),
     })
 }
 
@@ -942,13 +949,25 @@ mod tests {
     #[test]
     fn detect_override_respects_user_choice() {
         assert!(
-            detect_override(157, Some(64)),
+            detect_override(157, Some(64), None),
             "我们 hover 盲僧、变成亚索 → 接管"
         );
-        assert!(!detect_override(64, Some(64)), "没变 → 不接管");
-        assert!(!detect_override(0, Some(64)), "撤回成 0 → 不接管");
-        assert!(detect_override(157, None), "进入前已有预选 → 尊重用户接管");
-        assert!(!detect_override(0, None), "尚未有预选 → 未接管");
+        assert!(!detect_override(64, Some(64), None), "没变 → 不接管");
+        assert!(!detect_override(0, Some(64), None), "撤回成 0 → 不接管");
+        assert!(detect_override(157, None, None), "进入前已有预选 → 尊重用户接管");
+        assert!(!detect_override(0, None, None), "尚未有预选 → 未接管");
+    }
+
+    #[test]
+    fn detect_override_ignores_our_own_inflight_hover() {
+        // 自动 hover 的 PATCH 已生效但 last_hovered 尚未落库（时序窗口）：
+        // current == our_target → 是工具自身的动作，不是用户接管
+        assert!(
+            !detect_override(64, None, Some(64)),
+            "自己的 hover 正在落库不判接管"
+        );
+        // 用户选了别的英雄（≠ target）→ 判接管
+        assert!(detect_override(157, None, Some(64)), "用户选了别的 → 接管");
     }
 
     #[test]

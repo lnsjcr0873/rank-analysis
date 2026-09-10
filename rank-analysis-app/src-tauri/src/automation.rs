@@ -1233,7 +1233,13 @@ async fn apply_bp_decision(
     // 接管检测用实时数据:用户在快照生成后的 2s 窗口内抢过方向盘也要立即退让。
     // 快照里的 user_overridden 是 2s 前算的,只用于展示与本 tick 的保守短路,
     // 不用它做持久化标记(它可能因读取时序出现一帧误报,持久化会造成永久退让)。
-    if evaluate::detect_override(pending.champion_id, store::last_hovered()) {
+    // 第三个参数 = 本工具正要执行的 target：若当前 hover 等于我们自己即将
+    // PATCH 的目标（写入 last_hovered 前的时序窗口），不算用户接管。
+    if evaluate::detect_override(
+        pending.champion_id,
+        store::last_hovered(),
+        decision.target.as_ref().map(|t| t.champion_id),
+    ) {
         store::mark_overridden(pending.action_id);
     }
     if store::is_overridden(pending.action_id) || !should_act(decision) {
