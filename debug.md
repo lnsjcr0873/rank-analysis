@@ -151,7 +151,15 @@ Skip to main content
          `computeDualPicks` 耗时 ~3ms，远低于 60Hz 帧预算（16.6ms）和
          144Hz 帧预算（6.9ms），不会引起丢帧。
       报告基于旧版同步 computed 描述的阻塞场景在当前代码中不存在。
-- [ ] S14 observability redact_pii 覆盖不足 — 【待修复】
+- [x] S14 observability redact_pii 覆盖不足 — 【已完成】
+      commit(`fix(observability)`): 扩展 `PII_PARAM_RE` 字段名列表，新增
+      SGP match-v5 响应中使用的驼峰复合字段名 `riotIdGameName` / `riotIdTagline`
+      以及 `summonerId`（旧正则的 `riot_?id` 无法匹配 `riotIdGameName`
+      中的 `riotId` + `GameName` 连写形式，因为 `\b` 字边界要求后面是非
+      字符）。新增 2 条单测覆盖新字段名脱敏。Cargo 测试因环境不可用暂无法
+      运行，正则匹配行为已通过 JS 等价验证。已知局限（代码注释已声明）：
+      无字段名上下文的自由文本中的名字（如 `format!("{} not found", name)`）
+      无法被正则捕获——根本防线是 Sentry 默认关闭 + 不在日志里拼接玩家名。
 
 ### 批次二（致命逻辑/业务规则）
 
