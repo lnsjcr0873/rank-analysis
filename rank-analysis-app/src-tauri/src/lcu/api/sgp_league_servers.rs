@@ -66,6 +66,10 @@ static STORE: LazyLock<Mutex<Store>> = LazyLock::new(|| {
     })
 });
 
+/// 远程拉取的单飞锁：冷启动并发首拉时合并为一次（SingleFlight）。
+/// 与 [`STORE`] 分开——拉取期间不持 STORE 锁，避免其它读路径排队。
+static REFRESH_GUARD: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
 /// 解析远程/磁盘的原始 JSON 文本为配置（校验失败返回错误，调用方回退静态表）。
 pub fn parse_config(text: &str) -> Result<LeagueServersConfig, String> {
     let config: LeagueServersConfig =
@@ -164,6 +168,9 @@ fn maybe_spawn_revalidate() {
         .unwrap_or(true);
     if stale {
         tokio::spawn(async {
+            // 与 resolve_sgp_host 的首拉共用单飞锁，避免后台 revalidate 与用户
+            // 请求的首次拉取在冷启动窗口内双发
+            let _guard = REFRESH_GUARD.lock().unwrap_or_else(|e| e.into_inner());
             refresh_from_remote().await;
         });
     }
@@ -199,6 +206,11 @@ fn static_host(platform_id: &str, common: bool) -> Option<String> {
 ///
 /// 顺序：动态表（内存，首次 miss 时并入磁盘缓存）→ 同步拉一次远程并回查 →
 /// 静态表兜底。返回值 `None` 仅在「远程不可达且静态表也无此大区」时出现。
+///
+/// 并发防护：冷启动无磁盘缓存时，多个并发调用会同时观察到 `stale=true` 并各自
+/// 发起完全相同的远程拉取（10 人画像可触发 10 次 → CDN 限流）。`refresh_guard`
+/// 是进程级互斥锁，同一时刻至多一个远程拉取在途；其余调用等待它完成后回查
+/// 动态表（SingleFlight 语义）。
 pub async fn resolve_sgp_host(platform_id: &str, common: bool) -> Option<String> {
     if STORE
         .lock()
@@ -215,7 +227,8 @@ pub async fn resolve_sgp_host(platform_id: &str, common: bool) -> Option<String>
         return Some(host);
     }
 
-    // 动态表 miss：距上次拉取 ≥2h（或从未拉过）才同步拉一次，之后回查
+    // 动态表 miss：距上次拉取 ≥2h（或从未拉过）才同步拉一次，之后回查。
+    // 冷启动并发首拉用 refresh_guard 排成单飞，避免 10 路相同请求同时打到 CDN。
     let stale = STORE
         .lock()
         .unwrap_or_else(|e| e.into_inner())
@@ -223,7 +236,11 @@ pub async fn resolve_sgp_host(platform_id: &str, common: bool) -> Option<String>
         .map(|t| t.elapsed() >= REVALIDATE_INTERVAL)
         .unwrap_or(true);
     if stale {
-        refresh_from_remote().await;
+        let _guard = REFRESH_GUARD.lock().unwrap_or_else(|e| e.into_inner());
+        // 拿到锁后可能已被其他调用方刷新过（SingleFlight 等锁语义），回查一次
+        if dynamic_host(platform_id, common).is_none() {
+            refresh_from_remote().await;
+        }
         if let Some(host) = dynamic_host(platform_id, common) {
             return Some(host);
         }
