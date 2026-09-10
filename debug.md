@@ -11,7 +11,17 @@ Skip to main content
 
 ### 批次一（初始审计，安全/并发/前端/架构）
 
-- [ ] S1 cloud_sync.rs 内置 Supabase Key + puuid 隔离风险 — 【待修复】
+- [x] S1 cloud_sync.rs 内置 Supabase Key + puuid 隔离风险 — 【已完成】
+      Supabase publishable key 硬编码是官方推荐做法（RLS 在服务端强制执行），
+      真正风险是 puuid 数据可被任意匿名账户读写。已加固：
+      1. Rust 端: validate_puuid 增加 MAX_PUUID_LEN(128)长度上限；pull_payloads
+         增加 MAX_PULL_BYTES(5MiB)字节限制；pick_latest_config 增加
+         MAX_CLOUD_CONFIG_KEYS(500)键数上限+MAX_FUTURE_SKEW_MS(24h)时间戳投毒过滤。
+      2. TS 端: isValidNote 增加 label 白名单、字段长度上限(MAX_NOTE_TEXT_LEN 1000,
+         MAX_NAME_FIELD_LEN 100, MAX_NOTE_KEY_LEN 64)、encounters 数组上限(20)、
+         未来时间戳拒绝(+24h)；合并循环增加 MAX_MERGED_NOTES(10000)熔断。
+      3. 配套测试: mergePlayerNotes.spec.ts 增加 8 条 S1 毒行加固用例；
+         cloud_sync.rs 增加 validate_puuid 超长拒绝+pick_latest 巨配置/未来时间戳过滤测试。
 - [ ] S2 http.rs `danger_accept_invalid_certs` 作用域 — 【待修复】
 - [ ] S3 launcher.rs ShellExecuteW 路径注入 — 【待修复】
 - [ ] S4 overlay std Mutex 混用 — 【待修复】
