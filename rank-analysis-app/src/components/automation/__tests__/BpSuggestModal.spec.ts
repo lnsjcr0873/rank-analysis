@@ -170,6 +170,31 @@ describe('BpSuggestModal', () => {
     expect(btn.text()).not.toContain('已加入')
   })
 
+  it('adopt chain survives a failure: later adopt still lands', async () => {
+    vi.mocked(invoke).mockResolvedValue(okResult())
+    vi.mocked(getConfigByIpc).mockResolvedValue([])
+    // 第一次采用失败（IPC 偶发错误），第二次恢复成功
+    vi.mocked(putConfigByIpc).mockRejectedValueOnce(new Error('transient'))
+    const w = mount(BpSuggestModal, { props: { show: true, championOptions }, global: { stubs } })
+    await new Promise(r => setTimeout(r, 0))
+    await w.vm.$nextTick()
+
+    const addBtn = w.findAll('button').find(b => b.text().includes('加入英雄池'))!
+    // 第一次：失败被 doAdopt 内部 catch 吞掉，链上不应残留 Rejected Promise
+    await addBtn.trigger('click')
+    await new Promise(r => setTimeout(r, 0))
+    await w.vm.$nextTick()
+
+    // 第二次点击同一张卡：若链已断（adoptChain 是 Rejected），本次采用不会执行
+    await addBtn.trigger('click')
+    await new Promise(r => setTimeout(r, 0))
+    await w.vm.$nextTick()
+
+    expect(vi.mocked(putConfigByIpc)).toHaveBeenCalledTimes(2)
+    // 第二次成功写入 [86]
+    expect(vi.mocked(putConfigByIpc).mock.calls[1][1]).toEqual([86])
+  })
+
   it('position select re-invokes with explicit value (including empty) and is not overwritten by main_position', async () => {
     vi.mocked(invoke).mockResolvedValue(okResult())
     const w = mount(BpSuggestModal, {
