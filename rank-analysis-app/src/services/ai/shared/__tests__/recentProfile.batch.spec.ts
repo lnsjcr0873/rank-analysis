@@ -213,6 +213,51 @@ describe('SGP 跨区战绩兜底（fetchBatchProfiles + region/name）', () => {
     expect(sgpCallCount()).toBe(1)
   })
 
+  it('高分段敌方 puuid 为空 + name/region → 跳过 LCU 直接走 SGP 兜底（debug.md J2）', async () => {
+    mockInvoke.mockImplementation(async (cmd: string, args: HistoryArgs) => {
+      if (cmd === 'get_sgp_match_history_by_name') {
+        expect(args.region).toBe('HN10')
+        expect(args.name).toBe('匿名敌方#KR1')
+        return {
+          games: {
+            games: [
+              sgpGame({ championId: 64, lane: 'TOP', win: true }),
+              sgpGame({ championId: 64, lane: 'TOP', win: false })
+            ]
+          }
+        }
+      }
+      return null
+    })
+
+    const result = await fetchBatchProfiles([
+      {
+        puuid: '',
+        teamPosition: 'UNKNOWN',
+        championId: 64,
+        region: 'HN10',
+        name: '匿名敌方#KR1'
+      }
+    ])
+
+    // 空 puuid 用例键按 name 落盘（ProfileMap 键 = puuid || name）
+    const profile = result.get('匿名敌方#KR1')
+    expect(profile).not.toBeNull()
+    expect(profile?.recentWinRate).toBeCloseTo(0.5)
+    // LCU 不应被调用（空 puuid 直接短路，不发出无效请求）
+    expect(historyCallCount()).toBe(0)
+    expect(sgpCallCount()).toBe(1)
+  })
+
+  it('puuid 与 name 均缺失 → 返回 null，不发 LCU/SGP 请求', async () => {
+    const result = await fetchBatchProfiles([
+      { puuid: '', teamPosition: 'UNKNOWN', championId: 64 }
+    ])
+    expect(result.get('')).toBeNull()
+    expect(historyCallCount()).toBe(0)
+    expect(sgpCallCount()).toBe(0)
+  })
+
   it('本区无战绩但无 region → 不启用 SGP 兜底（返回空画像，不编造）', async () => {
     mockInvoke.mockImplementation(async (cmd: string, _args: HistoryArgs) => {
       if (cmd === 'get_match_history_by_puuid') return { games: { games: [] } }

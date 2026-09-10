@@ -65,8 +65,10 @@ export interface UseLineupScoreOptions {
 
 interface LockEntry {
   championId: number
-  /** 玩家 puuid（隐藏战绩/无有效 summoner 时为空串，跳过画像） */
+  /** 玩家 puuid（隐藏战绩/无有效 summoner 时为空串） */
   puuid: string
+  /** Riot ID 格式 `gameName#tagLine`（高分段 puuid 被混淆时用于 SGP 降级） */
+  name: string
   /** 官方分配分路（敌方 LCU 恒为空 → UNKNOWN，不判补位） */
   position: string
 }
@@ -79,16 +81,23 @@ interface LockSnapshot {
 function lockedPlayers(players: Array<{ championId: number; pickState?: string }>): LockEntry[] {
   return players
     .filter(p => p.championId > 0 && p.pickState === 'locked')
-    .map(p => ({
-      championId: p.championId,
-      puuid: (p as { summoner?: { puuid?: string } }).summoner?.puuid ?? '',
-      position: (p as { assignedPosition?: string }).assignedPosition ?? ''
-    }))
+    .map(p => {
+      const s =
+        (p as { summoner?: { puuid?: string; gameName?: string; tagLine?: string } }).summoner ?? {}
+      const gn = s.gameName ?? ''
+      const tl = s.tagLine ?? ''
+      return {
+        championId: p.championId,
+        puuid: s.puuid ?? '',
+        name: gn ? `${gn}#${tl}` : '',
+        position: (p as { assignedPosition?: string }).assignedPosition ?? ''
+      }
+    })
 }
 
 function sameSnapshot(a: LockEntry[], b: LockEntry[]): boolean {
   if (a.length !== b.length) return false
-  const key = (e: LockEntry) => `${e.championId}:${e.puuid}`
+  const key = (e: LockEntry) => `${e.championId}:${e.puuid}:${e.name}`
   const bSet = new Set(b.map(key))
   return a.every(e => bSet.has(key(e)))
 }
@@ -121,16 +130,22 @@ export function useLineupScore(
     const subteams = sessionData.subteams ?? []
     const players = subteams.flatMap(s => s.players)
     try {
+      const entries = players.filter(p => p.summoner?.puuid || p.summoner?.gameName)
+      const region = entries.some(p => !p.summoner?.puuid) ? await resolveRegion() : ''
       await fetchBatchProfiles(
-        players
-          .filter(p => p.summoner?.puuid)
-          .map(p => ({
-            puuid: p.summoner.puuid,
-            teamPosition: (p.assignedPosition && p.assignedPosition.length > 0
-              ? p.assignedPosition
-              : 'UNKNOWN') as ProfileRequest['teamPosition'],
-            championId: p.championId || 0
-          }))
+        entries.map(p => ({
+          puuid: p.summoner?.puuid ?? '',
+          region: region || undefined,
+          name: (() => {
+            const gn = p.summoner?.gameName ?? ''
+            const tl = p.summoner?.tagLine ?? ''
+            return gn ? `${gn}#${tl}` : undefined
+          })(),
+          teamPosition: (p.assignedPosition && p.assignedPosition.length > 0
+            ? p.assignedPosition
+            : 'UNKNOWN') as ProfileRequest['teamPosition'],
+          championId: p.championId || 0
+        }))
       )
     } catch {
       // 预取失败不抛：锁定后的正常取数会重试
@@ -141,30 +156,48 @@ export function useLineupScore(
     void prefetchAll()
   }
 
+  /**
+   * 懒解析当前登录大区（SGP fallback 用）。跨区战绩按大区分存，必须知道目标
+   * 大区才能按名字查；解析一次后缓存供后续 compute 复用。
+   */
+  let currentRegion: string | null | undefined
+  async function resolveRegion(): Promise<string | null> {
+    if (currentRegion !== undefined) return currentRegion
+    currentRegion = await getCurrentSgpRegion().catch(() => null)
+    return currentRegion
+  }
+
   async function compute(snapshot: LockSnapshot): Promise<void> {
     const seq = ++requestSeq
     const modeValue = toValue(mode)
     loading.value = true
     try {
-      // 画像加权（best-effort）：取数失败/无 puuid 的玩家保持纯 meta，绝不阻塞分数
+      // 画像加权（best-effort）：取数失败/无 puuid 的玩家保持纯 meta，绝不阻塞分数。
+      // 高分段敌方 puuid 被 Riot 混淆为空串时，用 name#tag + region 走 SGP 降级
+      // （OpggTier 高分段匿名漏洞修复，debug.md J2）。
       const profileMap = includePlayerProfiles
-        ? await fetchBatchProfiles(
-            [...snapshot.mine, ...snapshot.enemy]
-              .filter(e => e.puuid.length > 0)
-              .map(e => ({
+        ? await (async () => {
+            const entries = [...snapshot.mine, ...snapshot.enemy].filter(e => e.puuid || e.name)
+            const needSgp = entries.some(e => !e.puuid && e.name)
+            const region = needSgp ? await resolveRegion() : ''
+            return fetchBatchProfiles(
+              entries.map(e => ({
                 puuid: e.puuid,
+                region: region || undefined,
+                name: e.name || undefined,
                 teamPosition: (e.position.length > 0
                   ? e.position
                   : 'UNKNOWN') as ProfileRequest['teamPosition'],
                 championId: e.championId
               }))
-          )
+            )
+          })()
         : new Map()
       const fetchMeta = async (entry: LockEntry): Promise<LineupScoreInput> => {
         return {
           championId: entry.championId,
           meta: await getChampionMeta(modeValue, entry.championId),
-          profile: profileMap.get(entry.puuid) ?? null
+          profile: profileMap.get(entry.puuid || entry.name) ?? null
         }
       }
       const [mineInputs, enemyInputs] = await Promise.all([

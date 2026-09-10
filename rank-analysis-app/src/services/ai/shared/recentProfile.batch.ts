@@ -21,8 +21,12 @@ const CACHE_TTL_MS = 10 * 60 * 1000
  */
 const CACHE = new Map<string, { profile: RecentPlayerProfile; expireAt: number }>()
 
+function profileKey(req: ProfileRequest): string {
+  return req.puuid || req.name || ''
+}
+
 function cacheKey(req: ProfileRequest): string {
-  return `${req.puuid}:${req.championId}`
+  return `${profileKey(req)}:${req.championId}`
 }
 
 interface RawHistoryResponse {
@@ -76,7 +80,7 @@ export async function fetchBatchProfiles(requests: ProfileRequest[]): Promise<Pr
   for (const req of requests) {
     const cached = CACHE.get(cacheKey(req))
     if (cached && cached.expireAt > now) {
-      result.set(req.puuid, cached.profile)
+      result.set(profileKey(req), cached.profile)
     } else {
       toFetch.push(req)
     }
@@ -88,7 +92,8 @@ export async function fetchBatchProfiles(requests: ProfileRequest[]): Promise<Pr
   for (let i = 0; i < toFetch.length; i++) {
     const req = toFetch[i]
     const profile = fetched[i]
-    result.set(req.puuid, profile)
+    const key = profileKey(req)
+    result.set(key, profile)
     if (profile !== null) {
       CACHE.set(cacheKey(req), { profile, expireAt: now + CACHE_TTL_MS })
     }
@@ -122,6 +127,12 @@ export async function injectNoteBriefs(profileMap: ProfileMap): Promise<ProfileM
 }
 
 async function fetchSingleProfile(req: ProfileRequest): Promise<RecentPlayerProfile | null> {
+  // 高分段敌方 puuid 被 Riot 混淆为空串（debug.md J2）：有 name#tag + region 时
+  // 直接走 SGP 战绩降级（LCU 按 puuid 查询必然失败）；两者短缺则无解，返回 null。
+  if (!req.puuid) {
+    if (req.region && req.name) return fetchSgpProfile(req)
+    return null
+  }
   try {
     const resp = await invoke<RawHistoryResponse>('get_match_history_by_puuid', {
       puuid: req.puuid,
@@ -257,8 +268,9 @@ export async function fetchPlayerProfile(query: {
     name: query.name
   }
   const map = await fetchBatchProfiles([req])
-  const profile = map.get(query.puuid) ?? null
+  const key = query.puuid || query.name || ''
+  const profile = map.get(key) ?? null
   if (profile === null) return null
-  const withNotes = await injectNoteBriefs(new Map([[query.puuid, profile]]))
+  const withNotes = await injectNoteBriefs(new Map([[key, profile]]))
   return withNotes.get(query.puuid) ?? profile
 }
