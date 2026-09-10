@@ -47,7 +47,13 @@ export interface Stage2Config<In, Out> {
   jsonMode?: boolean
   /** D-P1：token 用量回调 */
   onUsage?: (usage: AiUsage) => void
+  /** Stage 2 整体超时（毫秒）。流式调用若 TCP 挂死（连接建立但无数据），
+   *  没有兜底会让 UI 的「AI 复盘」永远转菊花且无法重试。默认 120s。 */
+  timeoutMs?: number
 }
+
+/** Stage 2 默认整体超时：120s（大模型流式通常 10-40s 完成，给足余量）。 */
+const STAGE2_DEFAULT_TIMEOUT_MS = 120_000
 
 export type TwoStageResult<S1, S2> =
   | { kind: 'ok'; stage1: S1; stage2: S2 }
@@ -122,7 +128,13 @@ export async function runTwoStage<Stage1Out, Stage2Out>(opts: {
   // ─── Stage 2 ───
   let stage2Raw = ''
   let stage2Err: string | null = null
+  let stage2TimedOut = false
+  const stage2TimeoutMs = opts.stage2.timeoutMs ?? STAGE2_DEFAULT_TIMEOUT_MS
   await new Promise<void>(resolve => {
+    const timer = setTimeout(() => {
+      stage2TimedOut = true
+      resolve()
+    }, stage2TimeoutMs)
     requestAIContentStream(
       opts.stage2.buildUserPrompt(stage1Final),
       {
@@ -130,8 +142,12 @@ export async function runTwoStage<Stage1Out, Stage2Out>(opts: {
           stage2Raw += chunk
           opts.stage2.streamCallback?.(chunk)
         },
-        onDone: () => resolve(),
+        onDone: () => {
+          clearTimeout(timer)
+          resolve()
+        },
         onError: err => {
+          clearTimeout(timer)
           stage2Err = err
           resolve()
         },
@@ -142,6 +158,15 @@ export async function runTwoStage<Stage1Out, Stage2Out>(opts: {
       { jsonMode: opts.stage2.jsonMode }
     )
   })
+
+  // 流式挂死超时：即便底层没回调 onError，也绝不让 UI 无限转菊花
+  if (stage2TimedOut) {
+    return {
+      kind: 'stage2Error',
+      error: `AI 流式响应超时（>${Math.round(stage2TimeoutMs / 1000)}s）`,
+      stage1: stage1Final
+    }
+  }
 
   if (stage2Err !== null) {
     return { kind: 'stage2Error', error: stage2Err, stage1: stage1Final }

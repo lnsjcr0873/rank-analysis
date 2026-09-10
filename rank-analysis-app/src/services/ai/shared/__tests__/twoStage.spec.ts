@@ -258,6 +258,38 @@ describe('runTwoStage', () => {
     expect(chunks).toEqual(['hello ', 'world'])
   })
 
+  it('times out a hung stage2 stream instead of spinning forever', async () => {
+    vi.useFakeTimers()
+    try {
+      mockRequest.mockResolvedValueOnce({ success: true, content: '{}' })
+      // 流式挂死：从不调用 onDone / onError（模拟 TCP 连接建立但无数据）
+      mockStream.mockImplementation(async () => {})
+
+      const promise = runTwoStage<unknown, unknown>({
+        stage1: {
+          systemPrompt: 'S1',
+          userPrompt: 'U1',
+          parse: () => ({ ok: true, value: {} })
+        },
+        stage2: {
+          buildSystemPrompt: () => 'S2',
+          buildUserPrompt: () => 'U2',
+          parse: () => ({ ok: true, value: {} }),
+          timeoutMs: 10_000
+        }
+      })
+
+      await vi.advanceTimersByTimeAsync(10_000)
+      const result = await promise
+      expect(result.kind).toBe('stage2Error')
+      if (result.kind === 'stage2Error') {
+        expect(result.error).toMatch(/超时/)
+      }
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('forwards onUsage from both stages to their sinks', async () => {
     mockRequest.mockResolvedValueOnce({ success: true, content: '{"foo":1}' })
     mockStream.mockImplementation(async (_p, callbacks) => {
