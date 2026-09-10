@@ -36,7 +36,13 @@ Skip to main content
       `spawn_detached()`（执行层）双重拦截。config 可被外部工具篡改时，
       恶意 exe 路径无法通过校验。`system.rs` 的 `relaunch_as_admin` 使用
       `std::env::current_exe()`（当前运行二进制），无需加固。
-- [ ] S4 overlay std Mutex 混用 — 【待修复】
+- [x] S4 overlay std Mutex 混用 — 【已完成】
+      commit: `APP_HANDLE` 为 write-once 语义（仅 `create()` 写入一次），已将
+      `LazyLock<Mutex<Option<AppHandle>>>` 改为 `OnceLock<AppHandle>`，消除异步
+      上下文中持锁死锁隐患。其余 Mutex（CURRENT_ANCHOR / CURRENT_PANEL_ENVELOPE /
+      CURRENT_ACTIONS / CURRENT_WIDTH / CURRENT_HEIGHT）保持 `std::sync::Mutex`
+      不变——当前所有锁持有期间均为同步操作、无 `.await` 跨越。已在模块文档中标注
+      安全约束：如未来需要跨 await 持锁须迁移为 `tokio::sync::Mutex`。
 - [ ] S5 match_history.rs 切片越界 panic — 【待修复】
 - [ ] S6 meet_db/backtest/insight 阻塞异步（spawn_blocking/连接池）— 【待修复】
 - [ ] S6b scouting 全表反复反序列化 — 【已完成】
