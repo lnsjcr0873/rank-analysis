@@ -151,7 +151,9 @@ Skip to main content
       commit: URI 处理器改「子任务承接 + JoinHandle 收敛」，panic 也回包不挂起
       WebKit 连接池；成功响应改 `public, max-age=86400, immutable` 静态缓存。
 - [ ] J2 fetchBatchProfiles 高分段致盲 — 【待修复】
-- [ ] J3 detect_override 悬空误判 — 【待修复】
+- [x] J3 detect_override 悬空误判 — 【已完成】
+      commit: `detect_override` 增加 `our_target` 参数——自己 hover 落库前的时序
+      窗口里当前 hover 等于工具目标时不判接管；配套回归测试。
 - [x] J4 useCopy 剪贴板竞争 — 【已完成】
       commit: `useCopy` 引入最多 2 次指数微退避重试，瞬时锁竞争不再直接报「复制失败」。
 - [x] J5 mayhemData topExtensions 空集 — 【已完成】
