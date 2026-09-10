@@ -144,9 +144,7 @@ describe('validateAttribution', () => {
       // 模型常见行为：代码块前后夹带自然语言，^```$ 锚定正则无法命中，
       // 需要模糊定位第一个 { 与最后一个 } 提取。
       const raw =
-        '好的，以下是对局归因分析：\n```json\n' +
-        JSON.stringify(result) +
-        '\n```\n希望对你有帮助！'
+        '好的，以下是对局归因分析：\n```json\n' + JSON.stringify(result) + '\n```\n希望对你有帮助！'
       const out = validateAttribution(raw, snap)
       expect(out.ok).toBe(true)
     })

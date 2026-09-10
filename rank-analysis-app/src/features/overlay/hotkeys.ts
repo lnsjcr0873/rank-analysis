@@ -13,10 +13,7 @@ export const OVERLAY_HOTKEY = DEFAULT_OVERLAY_HOTKEY
 let currentRegisteredHotkey: string | null = null
 
 /** 幂等应用热键配置；重复调用先解绑再按需绑定。 */
-export async function applyOverlayHotkey(
-  enabled: boolean,
-  customHotkey?: string
-): Promise<void> {
+export async function applyOverlayHotkey(enabled: boolean, customHotkey?: string): Promise<void> {
   const target = (customHotkey && customHotkey.trim()) || OVERLAY_HOTKEY
 
   if (currentRegisteredHotkey) {

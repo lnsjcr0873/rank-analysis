@@ -1,0 +1,36 @@
+name: fmt-patch
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fmt:
+    name: Produce cargo fmt diff
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: ./rank-analysis-app/src-tauri
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run cargo fmt (normalize)
+        run: cargo fmt --all
+
+      - name: Emit diff
+        run: |
+          git diff -- . ':(exclude).venv' > ../fmt.patch 2>$null
+          Get-Content ../fmt.patch | Measure-Object -Line
+
+      - name: Upload fmt patch
+        uses: actions/upload-artifact@v4
+        with:
+          name: fmt-patch
+          path: rank-analysis-app/fmt.patch
+          if-no-files-found: error

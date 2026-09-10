@@ -19,7 +19,13 @@ describe('overlayPrefs', () => {
   })
 
   it('round-trips saved prefs', () => {
-    saveOverlayPrefs({ maxItems: 5, opacity: 0.7, hotkeyEnabled: false, hotkeyKey: 'Alt+Z', anchor: 'top-left' })
+    saveOverlayPrefs({
+      maxItems: 5,
+      opacity: 0.7,
+      hotkeyEnabled: false,
+      hotkeyKey: 'Alt+Z',
+      anchor: 'top-left'
+    })
     expect(loadOverlayPrefs()).toEqual({
       maxItems: 5,
       opacity: 0.7,

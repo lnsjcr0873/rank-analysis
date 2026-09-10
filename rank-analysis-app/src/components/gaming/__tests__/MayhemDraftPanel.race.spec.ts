@@ -9,7 +9,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import MayhemDraftPanel from '../MayhemDraftPanel.vue'
-import type { ChampionDetailEntry, MayhemChampion } from '@renderer/features/mayhem/services/mayhemData'
+import type {
+  ChampionDetailEntry,
+  MayhemChampion
+} from '@renderer/features/mayhem/services/mayhemData'
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }))
 vi.mock('naive-ui', () => ({
@@ -45,7 +48,13 @@ function champ(id: number, title: string): MayhemChampion {
     title,
     roles: ['mage'],
     iconUrl: '',
-    stats: { tier: 1, games: 100, wins: 55, winRate: 0.55, pickRate: 0.1 } as MayhemChampion['stats']
+    stats: {
+      tier: 1,
+      games: 100,
+      wins: 55,
+      winRate: 0.55,
+      pickRate: 0.1
+    } as MayhemChampion['stats']
   }
 }
 
@@ -67,7 +76,9 @@ describe('MayhemDraftPanel loadDetail 竞态（R11）', () => {
       }
       return null
     })
-    vi.mocked(getMayhemChampions).mockResolvedValue({ data: [champ(1, '安妮'), champ(2, '阿狸')] } as unknown as Awaited<ReturnType<typeof getMayhemChampions>>)
+    vi.mocked(getMayhemChampions).mockResolvedValue({
+      data: [champ(1, '安妮'), champ(2, '阿狸')]
+    } as unknown as Awaited<ReturnType<typeof getMayhemChampions>>)
     vi.mocked(getMyChampionStats).mockResolvedValue([])
     vi.mocked(extractMayhemChampions).mockReturnValue([champ(1, '安妮'), champ(2, '阿狸')])
   })

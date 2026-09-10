@@ -155,9 +155,7 @@ export const useMayhemStore = defineStore('mayhem', () => {
    * R16:返回明确结果，调用方必须据实反馈——此前内部吞错返回 void，
    * 诊断台在断网/下载失败后仍显示"校验完成"。
    */
-  async function sync(
-    force = false
-  ): Promise<{ ok: boolean; busy?: boolean; error?: string }> {
+  async function sync(force = false): Promise<{ ok: boolean; busy?: boolean; error?: string }> {
     if (syncing.value) return { ok: false, busy: true }
     syncing.value = true
     error.value = ''

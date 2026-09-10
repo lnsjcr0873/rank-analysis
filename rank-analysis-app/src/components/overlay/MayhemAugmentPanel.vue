@@ -47,8 +47,8 @@ function scoreText(c: MayhemAugmentCandidate | null): string {
         class="m3p__scope"
         title="未能确定当前英雄，按全局胜率给出通用建议"
       >
-        全局建议
-      </span><span
+        全局建议 </span
+      ><span
         v-if="isMayhemAugmentsPayload(payload) && payload.rerollsLeft != null"
         class="m3p__reroll"
       >

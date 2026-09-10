@@ -234,7 +234,10 @@ describe('requestAIContent 缓存容错（R12）', () => {
   async function driveSuccess(): Promise<void> {
     const { invoke } = await import('@tauri-apps/api/core')
     ;(invoke as unknown as ReturnType<typeof vi.fn>).mockImplementation(
-      async (cmd: string, args: { onEvent: { onmessage: ((e: AiStreamEvent) => void) | null } }) => {
+      async (
+        cmd: string,
+        args: { onEvent: { onmessage: ((e: AiStreamEvent) => void) | null } }
+      ) => {
         if (cmd === 'stream_ai_analysis') {
           queueMicrotask(() => {
             args.onEvent.onmessage?.({ event: 'chunk', data: 'hello' })

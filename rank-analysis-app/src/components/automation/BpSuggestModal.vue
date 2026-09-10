@@ -197,9 +197,11 @@ async function adopt(item: BpSuggestItem, pool: SuggestedPool) {
   // 链上每个环节都追加 catch(() => {})：即使某次 doAdopt 意外抛出（IPC 偶发
   // 网络错误 / 反序列化异常），链本身也保持 resolved 状态，后续点击不会被
   // 一个已 Rejected 的 Promise 短路——「加入英雄池/Ban 池」按钮不能永久失效。
-  const myTurn = adoptChain.then(() => doAdopt(item, pool, aKey)).catch(e => {
-    console.error('采用失败:', e)
-  })
+  const myTurn = adoptChain
+    .then(() => doAdopt(item, pool, aKey))
+    .catch(e => {
+      console.error('采用失败:', e)
+    })
   adoptChain = myTurn
   await myTurn
 }
