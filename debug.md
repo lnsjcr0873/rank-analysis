@@ -78,7 +78,20 @@ Skip to main content
          把聊天状态等字符串误写为游戏阶段）已在 handle_event 增加
          `uri == "/lol-gameflow/v1/gameflow-phase"` 前置判断，仅 gameflow 事件可
          更新 phase 缓存。
-- [ ] S8 PlayerProfileCard 异步竞态 — 【待修复】
+- [x] S8 PlayerProfileCard 异步竞态 — 【已完成】
+      commit(`fix(card)`): 修复 3 处竞态缺口并补 4 条竞态用例（规格 10→15）：
+      1) puuid 清空（组件被 v-for 复用移除目标）时在途请求未失效——原实现
+         `if (!props.puuid) return` 在 `++requestSeq` 之前，旧请求迟到会以未
+         递增的旧 seq 误判为最新请求，把上一玩家数据写进空卡。现先递增 seq
+         再判空，置空分支同时清空画像/meet/loading。
+      2) 同玩家重拉失败（championId/region 变化触发）会闪成空态——现保留上次
+         成功画像（loadedForPuuid 匹配直接 return），仅换人或首次失败展示空态。
+      3) queryMeetSummary(props.puuid) 在 await 期间读实时 props，存在跨请求
+         错配窄竞态——改为顶部捕获本次请求的 puuid/championId/region/name。
+      配套新用例：空 puuid 迟到丢弃、同玩家失败保画像不闪空态、换人失败展示
+      空态不串玩家、慢 meet 迟到不覆盖新玩家。相关组件已先行加固：ChampionIntelCard
+      有 requestKey 竞态守卫、BestPicksPanel 走 useBestPicks（150ms 防抖+revision
+      失效），无需改动。
 - [ ] S9 Gaming/MatchHistory 定时器泄露 — 【待修复】
 - [ ] S10 localStorage 配额保护 — 【待修复】
 - [ ] S11 AssetTooltipContent v-html XSS — 【待修复】
