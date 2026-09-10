@@ -58,7 +58,26 @@ Skip to main content
 - [x] S6b scouting 全表反复反序列化 — 【已完成】
       commit: `scouting::build_games_index` 一次全表扫描构建 puuid 倒排索引，
       `assess_team_threats` 与空档 fallback 复用同一索引，停止 5 次全表搬运。
-- [ ] S7 game_state_monitor 重连竞争闪屏 — 【待修复】
+- [x] S7 game_state_monitor 重连竞争闪屏 — 【已验证无需修改】
+      报告建议的 GamePhase 状态机重构未采用——Flash 已被现存多层防护从两端闭环，
+      状态机收益有限且引入复杂度。防护清单：
+      1) 后端 game_state_monitor.rs：`resolved_connected` 去抖纯函数（7 条单测）——
+         连续 DISCONNECT_FAIL_STREAK=8 次（2s×8=16s）探测失败才翻转 connected=false；
+         游戏加载期（ChampSelect→InProgress）短暂抖动仅 1~2 次失败，远低于阈值；
+         探测失败时保留 last_state 的 phase/summoner；summoner 与 phase 任一存活
+         即视为已连接（反作弊拦截系统调用不误判断连）。
+      2) 前端 useGameState.ts：断连 12s 宽限（DISCONNECT_GRACE_MS）且踢回仅作用于
+         废弃 /Loading 门——Gaming/Record/Mayhem 等功能页绝不强制跳出；身份粘滞
+         （请求未携带 summoner 时保留上次已知身份）；自动跳转标记仅由显式阶段
+         （Lobby/Matchmaking/ReadyCheck/EndOfGame/PreEndOfGame）复位，"None"/
+         空字符串不触发。
+      3) session-complete 空数据广播（command/session.rs 无效 phase 时的发射）被
+         useSessionSync.ts 以 `if (!data.phase) return` 直接忽略；useGameState 的
+         session-complete 处理器有 lastPhase 守卫。空广播无法把页面刷白。
+      4) 衍生根因 Phase 污染（lcu/listener.rs 曾对所有 URI 事件写 phase 缓存，可能
+         把聊天状态等字符串误写为游戏阶段）已在 handle_event 增加
+         `uri == "/lol-gameflow/v1/gameflow-phase"` 前置判断，仅 gameflow 事件可
+         更新 phase 缓存。
 - [ ] S8 PlayerProfileCard 异步竞态 — 【待修复】
 - [ ] S9 Gaming/MatchHistory 定时器泄露 — 【待修复】
 - [ ] S10 localStorage 配额保护 — 【待修复】
