@@ -78,7 +78,9 @@ Skip to main content
 
 ### 批次五（16:18 发现）
 
-- [ ] E1 BpSuggestModal adoptChain 断链 — 【待修复】
+- [x] E1 BpSuggestModal adoptChain 断链 — 【已完成】
+      commit: 链上每环节追加 catch 兜底，失败后链保持 resolved，后续点击不再短路；
+      配套「失败后再点仍能写入」回归测试。
 - [ ] E2 cloud_sync LWW 时钟回拨死锁 — 【待修复】
 - [ ] E3 Mayhem fallbackIcon 死循环 — 【待修复】
 - [ ] E4 should_lock 时钟跳变放弃锁定 — 【待修复】
@@ -107,7 +109,9 @@ Skip to main content
 
 ### 批次八（16:21 发现）
 
-- [ ] H1 hotkeys.ts 注册前未注销旧键 — 【待修复】
+- [x] H1 hotkeys.ts 注册前未注销旧键 — 【已验证无需修改】
+      `applyOverlayHotkey` 已在注册新键前先 `unregister(currentRegisteredHotkey)`，
+      并对已注册目标键幂等解绑后再绑定；报告所述问题已实现。
 - [ ] H2 mergeGamesByGameId 未排序 — 【待修复】
 - [ ] H3 get_my_summoner 空缓存报错 — 【待修复】
 - [ ] H4 MayhemChampionDetail topExtensions 截断 — 【待修复】
@@ -118,7 +122,8 @@ Skip to main content
 - [ ] J1 main.rs URI 协议 panic 逃逸/no-store — 【待修复】
 - [ ] J2 fetchBatchProfiles 高分段致盲 — 【待修复】
 - [ ] J3 detect_override 悬空误判 — 【待修复】
-- [ ] J4 useCopy 剪贴板竞争 — 【待修复】
+- [x] J4 useCopy 剪贴板竞争 — 【已完成】
+      commit: `useCopy` 引入最多 2 次指数微退避重试，瞬时锁竞争不再直接报「复制失败」。
 - [ ] J5 mayhemData topExtensions 空集 — 【待修复】
 
 ### 批次十（19:35 发现）
@@ -135,7 +140,8 @@ Skip to main content
 - [ ] M2 capture.rs scale_rect 21:9 畸变 — 【待修复】
 - [ ] M3 LcuListener 幽灵防抖任务 — 【待修复】
 - [ ] M4 PlayerCard !important 主题冲突 — 【待修复】
-- [ ] M5 exportMatches CSV 公式注入 — 【待修复】
+- [x] M5 exportMatches CSV 公式注入 — 【已完成】
+      commit: `csvEscape` 对 `= + - @` 前缀前置 tab 打断公式语义，配套回归测试。
 
 User 16:14
 docs
