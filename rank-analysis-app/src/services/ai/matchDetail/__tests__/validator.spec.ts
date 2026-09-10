@@ -124,6 +124,32 @@ describe('validateAttribution', () => {
       const out = validateAttribution(raw, snap)
       expect(out.ok).toBe(true)
     })
+
+    it('extracts JSON from fenced block with leading/trailing prose', () => {
+      const snap = snapshotWithPlayer({
+        participantId: 1,
+        teamId: 100,
+        otherPlayers: [
+          { participantId: 2, teamId: 100 },
+          { participantId: 3, teamId: 200 },
+          { participantId: 4, teamId: 200 }
+        ]
+      })
+      const result = validResult([
+        validVerdict(1),
+        validVerdict(2),
+        validVerdict(3),
+        validVerdict(4)
+      ])
+      // 模型常见行为：代码块前后夹带自然语言，^```$ 锚定正则无法命中，
+      // 需要模糊定位第一个 { 与最后一个 } 提取。
+      const raw =
+        '好的，以下是对局归因分析：\n```json\n' +
+        JSON.stringify(result) +
+        '\n```\n希望对你有帮助！'
+      const out = validateAttribution(raw, snap)
+      expect(out.ok).toBe(true)
+    })
   })
 
   describe('shape validation', () => {

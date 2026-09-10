@@ -200,8 +200,16 @@ function isFactorGrounded(
 
 function stripFencedCodeBlock(raw: string): string {
   const trimmed = raw.trim()
-  // Match ```json ... ``` or ``` ... ```
+  // Match ```json ... ``` or ``` ... ```（整段都是 fenced block 时）
   const fenceMatch = trimmed.match(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/)
   if (fenceMatch) return fenceMatch[1].trim()
+  // 模型前后夹带自然语言（"好的，以下是分析：\n```json\n{...}\n```\n希望对你有帮助"）
+  // 时，锚定 ^...$ 的 fenced 匹配失效——退化为模糊定位：取第一个 { 到最后一个 }。
+  // 仅当确实存在成对花括号时才截取，否则原样返回（后续 JSON.parse 抛错走正常失败路径）。
+  const start = trimmed.indexOf('{')
+  const end = trimmed.lastIndexOf('}')
+  if (start !== -1 && end !== -1 && end > start) {
+    return trimmed.slice(start, end + 1).trim()
+  }
   return trimmed
 }
