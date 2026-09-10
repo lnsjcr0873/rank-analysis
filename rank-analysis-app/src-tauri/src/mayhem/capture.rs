@@ -28,8 +28,6 @@ const BAND_H: f32 = 0.055;
 const CARD_W: f32 = 0.17;
 /// 相邻卡片中心间距比例
 const CARD_PITCH: f32 = 0.195;
-/// 三卡组中心的 x 比例（约屏幕中央）
-const GROUP_CENTER_X: f32 = 0.50;
 
 /// 归一化矩形（像素坐标，已缩放到目标分辨率）。
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
@@ -108,15 +106,24 @@ pub fn scale_rect(base: (i32, i32), base_rect: Rect, target: (i32, i32)) -> Rect
 }
 
 /// 计算当前分辨率下左/中/右三张卡的标题带矩形（顺序即卡位）。
+///
+/// 高宽比差异（21:9 / 32:9 带鱼屏、16:10）时，LoL 的三选一面板保持 16:9
+/// 等比居中（两侧留出 Pillarbox 场景视野），并不会随屏幕宽度横向拉伸。
+/// 因此这里用**统一等比缩放** `f = min(sw/1920, sh/1080)` 表达面板尺寸，
+/// 再整体居中——而不是 x/y 各自线性拉伸（那会把卡位向两侧推飞、截到背景）。
 pub fn slot_band_rects(screen: (i32, i32)) -> [Rect; 3] {
     let sw = screen.0 as f32;
     let sh = screen.1 as f32;
-    let band_w = sw * CARD_W;
-    let band_h = sh * BAND_H;
-    let y = sh * CARD_ROW_Y;
-    let center_x = sw * GROUP_CENTER_X;
+    // 统一比例：以 16:9 基准等比缩放到当前屏幕（纵向对齐），横向有多余空间时居中
+    let f = (sw / BASE_WIDTH as f32).min(sh / BASE_HEIGHT as f32);
 
-    let offsets = [-CARD_PITCH, 0.0, CARD_PITCH];
+    let band_w = (CARD_W * BASE_WIDTH as f32 * f) as i32;
+    let band_h = (BAND_H * BASE_HEIGHT as f32 * f) as i32;
+    let pitch = (CARD_PITCH * BASE_WIDTH as f32 * f) as i32;
+    let y = ((sh - BASE_HEIGHT as f32 * f) / 2.0 + CARD_ROW_Y * BASE_HEIGHT as f32 * f) as i32;
+    let center_x = sw / 2.0;
+
+    let offsets = [-1i32, 0, 1];
     let mut out = [Rect {
         x: 0,
         y: 0,
@@ -124,19 +131,13 @@ pub fn slot_band_rects(screen: (i32, i32)) -> [Rect; 3] {
         h: 1,
     }; 3];
     for (i, off) in offsets.iter().enumerate() {
-        // 先在基准系里表达再统一缩放，保证与 scale_rect 的钳制语义一致
-        let bx = ((center_x + sw * off - band_w / 2.0) / sw * BASE_WIDTH as f32) as i32;
-        let by = (y / sh * BASE_HEIGHT as f32) as i32;
-        out[i] = scale_rect(
-            (BASE_WIDTH, BASE_HEIGHT),
-            Rect {
-                x: bx,
-                y: by,
-                w: (band_w / sw * BASE_WIDTH as f32) as i32,
-                h: (band_h / sh * BASE_HEIGHT as f32) as i32,
-            },
-            screen,
-        );
+        let x = (center_x + *off as f32 * pitch as f32 - band_w as f32 / 2.0).round() as i32;
+        out[i] = Rect {
+            x: x.clamp(0, sw.saturating_sub(1) as i32),
+            y: y.clamp(0, sh.saturating_sub(1) as i32),
+            w: band_w.clamp(1, sw as i32 - x.clamp(0, sw as i32)),
+            h: band_h.clamp(1, sh as i32 - y.clamp(0, sh as i32)),
+        };
     }
     out
 }
@@ -307,11 +308,18 @@ mod geometry_tests {
 
     #[test]
     fn slot_bands_should_adapt_to_ultrawide() {
+        // 21:9 3440×1440：面板保持 16:9 等比居中（Pillarbox），中卡中心 ≈ 屏幕中心，
+        // 三卡不得随宽度横向拉伸到两侧背景上
         let bands = slot_band_rects((3440, 1440));
         for b in &bands {
             assert!(b.x >= 0 && b.y >= 0);
             assert!(b.x + b.w <= 3440 && b.y + b.h <= 1440);
         }
+        let mid_center = bands[1].x + bands[1].w / 2;
+        assert!((mid_center - 1720).abs() <= 4, "中卡应居中: {mid_center}");
+        // 同 1080p 相比卡宽按纵向等比缩放（≈×1.333），而不是按宽度拉伸（×1.79）
+        let w1080 = slot_band_rects((1920, 1080))[0].w;
+        assert!((bands[0].w as f32 / w1080 as f32 - 1.3333).abs() < 0.05);
     }
 }
 
