@@ -63,8 +63,12 @@ Skip to main content
 
 - [ ] C1 macOS procargs2 解析越界 — 【待修复】
 - [ ] C2 macOS tileWindowsSideBySide 权限 — 【待修复】
-- [ ] C3 rule_engine AllyChampionsNotContains 空真 — 【待修复】
-- [ ] C4 autoAccept 100ms 轮询/backoff — 【待修复】
+- [x] C3 rule_engine AllyChampionsNotContains 空真 — 【已完成】
+      commit: NotContains 家族条件在队伍无人选定英雄（championId 全 0）时不再
+      空真命中，防 banning 阶段误 Ban 队友想玩的英雄；配套回归测试。
+- [x] C4 autoAccept 100ms 轮询/backoff — 【已验证无需修改】
+      `get_phase` 有 2s 缓存（100ms 轮询多数命中缓存），FailureBackoff 已治理
+      客户端未运行时的错误风暴，不存在把 409/500 期间的接受窗口拖爆的场景。
 - [ ] C5 ai.rs SSE \r 残留 — 【待修复】
 - [ ] C6 runTwoStage 无全局超时 — 【待修复】
 - [ ] C7 子窗口监听注销/孤儿进程 — 【待修复】
@@ -90,11 +94,13 @@ Skip to main content
 - [x] E1 BpSuggestModal adoptChain 断链 — 【已完成】
       commit: 链上每环节追加 catch 兜底，失败后链保持 resolved，后续点击不再短路；
       配套「失败后再点仍能写入」回归测试。
-- [ ] E2 cloud_sync LWW 时钟回拨死锁 — 【待修复】
+- [x] E2 cloud_sync LWW 时钟回拨死锁 — 【待修复】
 - [x] E3 Mayhem fallbackIcon 死循环 — 【已验证无需修改】
       `dataset.fallback` 防重入守卫已在位：本地 404 → 切远程；远程也不通再触发
       `@error` 时守卫直接 return，不会形成死循环重发。
-- [ ] E4 should_lock 时钟跳变放弃锁定 — 【待修复】
+- [x] E4 should_lock 时钟跳变放弃锁定 — 【已完成】
+      commit: `MIN_EXECUTE_SECS` 从 3.0 收紧到 0.5，LCU 抖动导致的「5.2s→2.8s」
+      完美跳过不再发生，只要 PATCH 往返来得及就尽力锁定；配套调整测试。
 - [ ] E5 config.rs 备份数字 Key 字符串化 — 【待修复】
 
 ### 批次六（16:19 发现）
