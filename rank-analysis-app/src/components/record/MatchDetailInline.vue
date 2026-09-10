@@ -29,6 +29,15 @@
                 </span>
                 <span class="match-detail-queue">{{ game.queueName }}</span>
                 <span class="match-detail-meta">{{ formattedDate }} · {{ durationLabel }}</span>
+                <n-tooltip v-if="dataSource.isCrossSgp" trigger="hover" placement="bottom">
+                  <template #trigger>
+                    <span class="match-detail-source-pill">跨区 · SGP</span>
+                  </template>
+                  <span v-if="dataSource.missingGameVersion"
+                    >本局目标区未返回版本号，回放可用性自动放行。</span
+                  >
+                  部分字段（如完整符文页、版本号）缺失时，相关子 Tab 均展示缺省提示，不会抛错。
+                </n-tooltip>
               </div>
               <div class="match-detail-player-row">
                 <LazyImg
@@ -232,6 +241,7 @@ import type { DetailPlayer } from '@renderer/composables/useMatchDetailPlayers'
 import type { OneGamePlayer } from '@renderer/types/domain/analysis'
 import { matchDetailContextKey, type SgpDetailStatus } from './matchDetailContext'
 import { getSgpMatchDetail, type SgpGameDetail } from '@renderer/features/record/services/sgp'
+import { resolveMatchDataSource } from './matchDataSource'
 import MatchDetailSummaryTab from './tabs/MatchDetailSummaryTab.vue'
 import MatchDetailStatsTab from './tabs/MatchDetailStatsTab.vue'
 import MatchDetailRunesTab from './tabs/MatchDetailRunesTab.vue'
@@ -261,6 +271,7 @@ const currentPlayerKey = computed(() => {
 
 const gameRef = toRef(() => props.game)
 const regionRef = toRef(() => props.region ?? '')
+const dataSource = computed(() => resolveMatchDataSource(regionRef.value, props.game))
 const players = useMatchDetailPlayers(gameRef, currentPlayerKey)
 const { detailPlayers, mySummary } = players
 const ai = useMatchAIAnalysis(gameRef)
@@ -651,6 +662,18 @@ watch(
 .match-detail-meta {
   color: var(--text-secondary);
   font-size: var(--font-size-xs);
+}
+
+.match-detail-source-pill {
+  padding: 1px 7px;
+  font-size: var(--font-size-2xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--accent-gold-deep);
+  background: color-mix(in srgb, var(--accent-gold-deep) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-gold-deep) 35%, transparent);
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
 }
 
 .match-detail-player-row {
