@@ -142,7 +142,15 @@ Skip to main content
       + 7 条纯函数单测 + `MatchDetailInline.vue` 标题行展示「跨区 · SGP」
       药丸标签（含 n-tooltip 提示字段可能缺失、子 Tab 已降级兜底）。
       全套 1616 测试通过，eslint/vue-tsc/prettier 干净。
-- [ ] S13 BestPicksPanel 主线程阻塞渲染 — 【待修复】
+- [x] S13 BestPicksPanel 主线程阻塞渲染 — 【已验证无需修改】
+      审查结论——报告描述与当前实现不符：
+      1) `computeDualPicks` 已在异步函数 `run()` 中调用（`useCounterIntel.ts:250`），
+         非 computed 属性；`shownPicks` 仅是 `picks.value.slice()` 的纯截断。
+      2) watch 已有 150ms debounce（`DEBOUNCE_MS`），拖动选人时不会频繁触发。
+      3) 实测最坏情况（170 候选 × 5 敌方 + 5 队友 × ~100 counters/synergies）
+         `computeDualPicks` 耗时 ~3ms，远低于 60Hz 帧预算（16.6ms）和
+         144Hz 帧预算（6.9ms），不会引起丢帧。
+      报告基于旧版同步 computed 描述的阻塞场景在当前代码中不存在。
 - [ ] S14 observability redact_pii 覆盖不足 — 【待修复】
 
 ### 批次二（致命逻辑/业务规则）
