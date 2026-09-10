@@ -82,7 +82,9 @@ Skip to main content
       commit: 链上每环节追加 catch 兜底，失败后链保持 resolved，后续点击不再短路；
       配套「失败后再点仍能写入」回归测试。
 - [ ] E2 cloud_sync LWW 时钟回拨死锁 — 【待修复】
-- [ ] E3 Mayhem fallbackIcon 死循环 — 【待修复】
+- [x] E3 Mayhem fallbackIcon 死循环 — 【已验证无需修改】
+      `dataset.fallback` 防重入守卫已在位：本地 404 → 切远程；远程也不通再触发
+      `@error` 时守卫直接 return，不会形成死循环重发。
 - [ ] E4 should_lock 时钟跳变放弃锁定 — 【待修复】
 - [ ] E5 config.rs 备份数字 Key 字符串化 — 【待修复】
 
@@ -104,10 +106,13 @@ Skip to main content
 - [ ] G1 http.rs AUTH 锁重入死锁 — 【待修复】
 - [ ] G2 sgp_league_servers 并发雪崩 — 【待修复】
 - [ ] G3 automation 焦点抢占 — 【待修复】
+- [x] G4 critiqueReport 点评错位 — 【已验证无需修改】
+      `assembleAnalysisReport` 名册分组（尽力/犯罪/被爆）确定性来自 Stage 1
+      verdicts，模型草案 comments 按 participantId 取文案——名册成员不会因
+      模型标签不匹配而被丢弃，与报告建议同构。
 - [x] G5 ocr.rs 短词固定距离误判 — 【已完成】
       commit: 按词条长度动态收缩编辑距离 `eff=(len/3).clamp(1,max)`，2-3 字短强化
       只允许单字形变，杜绝杂质文本假阳性命中；配套回归测试。
-- [x] G4 critiqueReport 点评错位 — 【待核验】
 
 ### 批次八（16:21 发现）
 
@@ -118,8 +123,12 @@ Skip to main content
       commit: 合并后按 gameCreationDate 稳定降序重排，翻页交叉/续收不再错乱；
       配套交叉乱序回归测试。
 - [ ] H3 get_my_summoner 空缓存报错 — 【待修复】
-- [ ] H4 MayhemChampionDetail topExtensions 截断 — 【待修复】
-- [ ] H5 parse_pick_rules_value lock 缺省 — 【待修复】
+- [x] H4 MayhemChampionDetail topExtensions 截断 — 【已完成】
+      commit: 延伸件优先取「非鞋 + 非核心」项，整个组合皆核心时才退回首个非鞋件，
+      第 4/5 件延伸区不再空白。
+- [x] H5 parse_pick_rules_value lock 缺省 — 【已完成】
+      commit: `PickAction.lock` 加 `#[serde(default = "default_lock_true")]`，旧规则
+      缺 lock 字段不再整条反序列化失败，配套回溯测试。
 
 ### 批次九（17:13 发现）
 
@@ -128,7 +137,8 @@ Skip to main content
 - [ ] J3 detect_override 悬空误判 — 【待修复】
 - [x] J4 useCopy 剪贴板竞争 — 【已完成】
       commit: `useCopy` 引入最多 2 次指数微退避重试，瞬时锁竞争不再直接报「复制失败」。
-- [ ] J5 mayhemData topExtensions 空集 — 【待修复】
+- [x] J5 mayhemData topExtensions 空集 — 【已完成】
+      与 H4 同源（MayhemChampionDetail / MayhemDraftPanel 各一份）一并修复。
 
 ### 批次十（19:35 发现）
 
