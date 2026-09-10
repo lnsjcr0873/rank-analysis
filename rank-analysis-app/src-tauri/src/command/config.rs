@@ -94,6 +94,11 @@ pub struct ChampionOption {
 pub fn get_champion_options() -> Result<Vec<ChampionOption>, String> {
     let mut options = vec![];
     for (id, item) in asset::CHAMPION_CACHE.read().unwrap().iter() {
+        // 负数哨兵 ID（-1 占位 / 训练模式 / 未选中）不应进入选项：
+        // `as u16` 会让 -1 环绕成 65535 并在 CHAMPION_MAP 查表中错乱，直接跳过。
+        if *id <= 0 {
+            continue;
+        }
         let champion = item.clone();
         let known_alias = constant::game::CHAMPION_MAP
             .get(&(*id as u16))
