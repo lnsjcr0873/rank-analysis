@@ -30,7 +30,12 @@ Skip to main content
       localhost 断言；3) `get_client()` 文档明确标注"绝不用于外网请求"；
       4) `listener.rs` WebSocket TLS 注释标注安全边界。无需修改 SGP/external client
       配置（已正确分离）。
-- [ ] S3 launcher.rs ShellExecuteW 路径注入 — 【待修复】
+- [x] S3 launcher.rs ShellExecuteW 路径注入 — 【已完成】
+      commit: 新增 `is_safe_exe_path()` 校验函数（.exe 扩展名 + 空字节拒绝 +
+      `..` 路径遍历拒绝），在 `resolve_launch_target()`（发现层）和
+      `spawn_detached()`（执行层）双重拦截。config 可被外部工具篡改时，
+      恶意 exe 路径无法通过校验。`system.rs` 的 `relaunch_as_admin` 使用
+      `std::env::current_exe()`（当前运行二进制），无需加固。
 - [ ] S4 overlay std Mutex 混用 — 【待修复】
 - [ ] S5 match_history.rs 切片越界 panic — 【待修复】
 - [ ] S6 meet_db/backtest/insight 阻塞异步（spawn_blocking/连接池）— 【待修复】
