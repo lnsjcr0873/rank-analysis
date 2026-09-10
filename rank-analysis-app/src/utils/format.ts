@@ -7,7 +7,7 @@ export function dotFillCount(rate: number | undefined): number {
 }
 
 export function safeRelativePercent(value: number, maxValue: number) {
-  if (maxValue <= 0 || value <= 0) {
+  if (maxValue <= 0 || value <= 0 || !Number.isFinite(maxValue) || !Number.isFinite(value)) {
     return 0
   }
   return Math.max(0, Math.min(100, Math.round((value / maxValue) * 100)))

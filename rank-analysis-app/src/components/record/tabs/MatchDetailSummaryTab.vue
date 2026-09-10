@@ -436,7 +436,8 @@ function playerBars(player: DetailPlayer) {
     key,
     label,
     valueText: formatCompactNumber(value),
-    width: `${Math.max(3, Math.round((value / max) * 100))}%`,
+    width:
+      max > 0 && Number.isFinite(value) ? `${Math.max(3, Math.round((value / max) * 100))}%` : '3%',
     fillClass,
     tooltip: `${label} ${value.toLocaleString()} · 占己方 ${teamPct}%`
   })

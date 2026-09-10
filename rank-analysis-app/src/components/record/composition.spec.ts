@@ -426,6 +426,17 @@ describe('composition', () => {
       const result = safeRelativePercent(2, 3)
       expect(result).toBe(67)
     })
+
+    it('should return 0 for NaN inputs', () => {
+      expect(safeRelativePercent(NaN, 100)).toBe(0)
+      expect(safeRelativePercent(50, NaN)).toBe(0)
+    })
+
+    it('should return 0 for Infinity inputs', () => {
+      expect(safeRelativePercent(Infinity, 100)).toBe(0)
+      expect(safeRelativePercent(50, Infinity)).toBe(0)
+      expect(safeRelativePercent(-Infinity, 100)).toBe(0)
+    })
   })
 
   describe('formatCompactNumber', () => {
