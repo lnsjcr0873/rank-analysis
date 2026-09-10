@@ -107,6 +107,22 @@ describe('championPool', () => {
     expect(pool[0].championId).toBe(5)
   })
 
+  it('重开局（Remake，时长 < 5 分钟）不计入英雄池场次与负场', () => {
+    const remake = makeGame(103, false)
+    remake.gameDuration = 180 // 3 分钟重开
+    const shortSurrender = makeGame(103, false)
+    shortSurrender.gameDuration = 240
+    const normalLoss = makeGame(103, false)
+    normalLoss.gameDuration = 1500
+    const normalWin = makeGame(103, true)
+    normalWin.gameDuration = 1800
+    const pool = aggregateChampionPool([remake, shortSurrender, normalLoss, normalWin])
+    expect(pool).toHaveLength(1)
+    expect(pool[0].count).toBe(2)
+    expect(pool[0].wins).toBe(1)
+    expect(pool[0].losses).toBe(1)
+  })
+
   it('championWinRate 四舍五入为整数百分比', () => {
     const entry: ChampionPoolEntry = {
       championId: 103,

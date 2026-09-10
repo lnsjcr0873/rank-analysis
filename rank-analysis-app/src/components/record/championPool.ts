@@ -23,6 +23,10 @@ export interface ChampionPoolEntry {
 export function aggregateChampionPool(games: Game[]): ChampionPoolEntry[] {
   const map = new Map<number, ChampionPoolEntry>()
   for (const game of games) {
+    // 重开局 / 秒退平局（Remake，时长 < 5 分钟）不计为负场也不计为英雄池场次：
+    // 客户端对此类对局不判定胜负（stats.win 无意义），计入会把胜率虚假拉低，
+    // 进而污染自动 BP 的 Ban 池决策。队列是否记胜负以时长为准（≤180s 更稳，取 300s 保守）。
+    if (game.gameDuration < 300) continue
     const championId = game.participants[0]?.championId
     if (!championId || championId <= 0) continue
     let entry = map.get(championId)
