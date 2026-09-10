@@ -51,10 +51,25 @@ pub(crate) fn match_condition(
     match cond {
         RuleCondition::Position { value } => my_position == Some(*value),
         RuleCondition::AllyChampionsContains { ids } => team_has_any(&session.my_team, ids),
-        RuleCondition::AllyChampionsNotContains { ids } => !team_has_any(&session.my_team, ids),
+        // 取反条件不能「空真」：banning 阶段队友还没亮英雄（championId 全 0）时，
+        // "队友不包含莫甘娜" 会恒真触发误 Ban。必须至少有一位队友已选定英雄
+        // （非 0）才允许对「不包含」做判定——否则条件不匹配。
+        RuleCondition::AllyChampionsNotContains { ids } => {
+            team_has_any_selection(&session.my_team) && !team_has_any(&session.my_team, ids)
+        }
         RuleCondition::EnemyChampionsContains { ids } => team_has_any(&session.their_team, ids),
-        RuleCondition::EnemyChampionsNotContains { ids } => !team_has_any(&session.their_team, ids),
+        RuleCondition::EnemyChampionsNotContains { ids } => {
+            team_has_any_selection(&session.their_team) && !team_has_any(&session.their_team, ids)
+        }
     }
+}
+
+/// 队伍中是否**已有人选定英雄**（任意 championId 非 0）。
+///
+/// 取反条件（NotContains）的前置守卫：全队都没亮英雄时没有可断言的对象，
+/// 若直接取反会空真误命中（如 banning 阶段队友未预选 → 误 Ban 队友想玩的英雄）。
+fn team_has_any_selection(team: &[OnePlayer]) -> bool {
+    team.iter().any(|p| p.champion_id != 0)
 }
 
 /// 检查队伍中是否有英雄 ID 命中给定列表。championId == 0 视为"未选"，不计入。
@@ -263,11 +278,11 @@ mod tests {
     }
 
     #[test]
-    fn enemy_not_contains_matches_when_their_team_empty() {
-        // 无敌方英雄时，取反条件空真成立。
+    fn enemy_not_contains_does_not_match_when_their_team_empty() {
+        // 无敌方英雄时不能「空真」：全队未选英雄 → 取反条件不匹配（防误判）
         let s = make_session_with_enemies(vec![], vec![]);
         let c = RuleCondition::EnemyChampionsNotContains { ids: vec![157] };
-        assert!(match_condition(&c, &s, None));
+        assert!(!match_condition(&c, &s, None));
     }
 
     #[test]
@@ -279,11 +294,35 @@ mod tests {
     }
 
     #[test]
-    fn ally_not_contains_with_empty_ids_returns_true() {
-        // 空列表 "不包含以下任意" — 空真成立。
+    fn ally_not_contains_with_empty_ids_requires_selection() {
+        // 空列表 "不包含以下任意" —— 队友已选英雄时成立；全队未选时不得空真
         let s = make_session(vec![ally_champ(157)]);
         let c = RuleCondition::AllyChampionsNotContains { ids: vec![] };
         assert!(match_condition(&c, &s, None));
+        let none_selected = make_session(vec![ally_champ(0), ally_champ(0)]);
+        assert!(!match_condition(&c, &none_selected, None));
+    }
+
+    #[test]
+    fn ally_not_contains_does_not_fire_before_any_ally_picks() {
+        // banning 阶段队友都没亮英雄（championId 全 0）：
+        // "队友不包含莫甘娜" 若空真会误 Ban 队友想选的英雄，必须不匹配。
+        let s = make_session(vec![ally_champ(0), ally_champ(0), ally_champ(0)]);
+        let c = RuleCondition::AllyChampionsNotContains { ids: vec![25] };
+        assert!(!match_condition(&c, &s, None));
+        // 一旦有人预选（非 25）→ 条件恢复成立
+        let picked = make_session(vec![ally_champ(64), ally_champ(0), ally_champ(0)]);
+        assert!(match_condition(&c, &picked, None));
+    }
+
+    #[test]
+    fn enemy_not_contains_requires_some_enemy_selection() {
+        // 敌方全 0（banning 阶段）不得空真；有人亮英雄后取反正常成立
+        let none = make_session_with_enemies(vec![], vec![enemy_champ(0), enemy_champ(0)]);
+        let c = RuleCondition::EnemyChampionsNotContains { ids: vec![238] };
+        assert!(!match_condition(&c, &none, None));
+        let some = make_session_with_enemies(vec![], vec![enemy_champ(1)]);
+        assert!(match_condition(&c, &some, None));
     }
 
     #[test]
