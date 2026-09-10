@@ -42,11 +42,41 @@ fn launch_target_candidates(root: &Path) -> [PathBuf; 2] {
 }
 
 /// 在安装根目录下定位首个真实存在的登录客户端 exe（Windows 国服）。
+///
+/// 返回前做最小安全校验：路径必须以 `.exe` 结尾且不含空字节（防御 ShellExecuteW
+/// 路径注入——config 可被用户或外部工具篡改）。
 #[cfg(target_os = "windows")]
 fn resolve_launch_target(root: &Path) -> Option<PathBuf> {
     launch_target_candidates(root)
         .into_iter()
-        .find(|p| p.is_file())
+        .find(|p| p.is_file() && is_safe_exe_path(p))
+}
+
+/// 校验可执行文件路径是否安全（供 ShellExecuteW 等高权限启动前使用）。
+///
+/// - 必须以 `.exe` 结尾（不执行非 PE 文件）
+/// - 不含空字节（空字节会截断 ShellExecuteW 宽字符串参数）
+/// - 不包含 `..` 路径段（防止跳出预期安装目录）
+#[cfg(target_os = "windows")]
+fn is_safe_exe_path(p: &Path) -> bool {
+    let Some(name) = p.file_name().and_then(|n| n.to_str()) else {
+        return false;
+    };
+    if !name.eq_ignore_ascii_case(".exe") && !name.ends_with(".exe") {
+        return false;
+    }
+    // 空字节截断检查：Windows Path 内部不允许空字节，但仍显式检查以防外部构造
+    let s = p.to_string_lossy();
+    if s.contains('\0') {
+        return false;
+    }
+    // 防止路径遍历：任何路径段为 ".." 时拒绝
+    for component in p.components() {
+        if matches!(component, std::path::Component::ParentDir) {
+            return false;
+        }
+    }
+    true
 }
 
 /// 读取 config 中记忆的安装根目录（存在且仍是有效目录时才返回）。
@@ -326,12 +356,23 @@ pub async fn close_league() -> Result<(), String> {
 /// （`lpVerb = NULL`）会遵循 exe 清单——需要提权时自动弹 UAC（与 WeGame 启动游戏时
 /// 弹 UAC 一致），普通 exe 则正常启动。路径作为独立宽字符串参数传入，**不加引号**。
 /// 工作目录设为 exe 所在目录，避免其相对依赖的 dll 加载失败。
+///
+/// **安全校验**：ShellExecuteW 以当前用户权限执行传入路径——若路径可被外部篡改
+/// （config 写入、竞态替换），恶意 exe 将被提升执行。调用方 `resolve_launch_target`
+/// 已做 `is_safe_exe_path` 校验，此处做二次确认（defense-in-depth）。
 #[cfg(target_os = "windows")]
 fn spawn_detached(exe: &Path) -> Result<(), String> {
     use std::ffi::OsStr;
     use std::os::windows::ffi::OsStrExt;
     use winapi::um::shellapi::ShellExecuteW;
     use winapi::um::winuser::SW_SHOWNORMAL;
+
+    if !is_safe_exe_path(exe) {
+        return Err(format!(
+            "启动路径校验失败（非 .exe 或路径异常）: {}",
+            exe.display()
+        ));
+    }
 
     let work_dir = exe.parent().ok_or("无法推导启动工作目录")?;
 
