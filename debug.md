@@ -153,7 +153,9 @@ Skip to main content
 
 ### 批次十（19:35 发现）
 
-- [ ] K1 capture.rs GDI 句柄泄露 — 【待修复】
+- [x] K1 capture.rs GDI 句柄泄露 — 【已验证无需修改】
+      `gdi::capture_region_rgba` 每个失败分支（GetWindowDC/DC/位图/BitBlt/GetDIBits）
+      均显式释放 `DeleteObject`/`DeleteDC`/`ReleaseDC`，无提前 return 泄漏。
 - [x] K2 timelineData 帧时间戳对齐 — 【已验证无需修改】
       SGP (match-v5) 帧与事件时间戳均为「对局内毫秒」且起点一致（frames[0]=0），
       时间线折线与事件流用同一基准换算分钟，不存在系统性 1 分钟错位。
@@ -168,8 +170,12 @@ Skip to main content
 ### 批次十一（19:48 发现）
 
 - [ ] M1 purge_login_client_autostart 权限降级 — 【待修复】
-- [ ] M2 capture.rs scale_rect 21:9 畸变 — 【待修复】
-- [ ] M3 LcuListener 幽灵防抖任务 — 【待修复】
+- [x] M2 capture.rs scale_rect 21:9 畸变 — 【已完成】
+      commit: `slot_band_rects` 改统一等比缩放 `f=min(fx,fy)` + 水平居中，
+      带鱼屏不再横向拉伸卡位；配套 3440×1440 居中断言。
+- [x] M3 LcuListener 幽灵防抖任务 — 【已验证无需修改】
+      `start()` 在代际被取代时对 `debounce_handle` 调 `abort()`，旧的防抖协程
+      不会在重连瞬间打断新会话刷新。
 - [ ] M4 PlayerCard !important 主题冲突 — 【待修复】
 - [x] M5 exportMatches CSV 公式注入 — 【已完成】
       commit: `csvEscape` 对 `= + - @` 前缀前置 tab 打断公式语义，配套回归测试。
