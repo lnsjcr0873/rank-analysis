@@ -111,7 +111,20 @@ Skip to main content
       persistNotes / 备份还原两处目标备注落盘改为 safeSetJson 并据结果码弹
       warning/error（备注内存值保留，当前会话不丢）；LAST_BACKUP_KEY 时间戳改
       safeSetItem。其余 localStorage 用户已逐一核查为小体积/有界值，不入本次范围。
-- [ ] S11 AssetTooltipContent v-html XSS — 【待修复】
+- [x] S11 AssetTooltipContent v-html XSS — 【已完成】
+      commit(`fix(asset-tooltip)`): 未采用报告建议的 DOMPurify
+      （白名单外接库依赖+仍需序列化回 innerHTML，治标不治本）。改为彻底
+      移除 `v-html`：解析器 `utils/tooltipParse.ts` 产出结构化节点树
+      （text / br / 白名单色 span），模板经 Vue 插值 `{{ }}` 与
+      `:style` 对象绑定渲染——输入 HTML **永不进入 innerHTML**，从根上
+      消除 DOMParser 解析上下文差异/mXSS 往返重新解析整类风险。白名单规则
+      保留：仅 text、`<br>`、SPAN/FONT 颜色（SAFE_COLOR_RE 校验），其余
+      标签一律剥离外壳；style 只读 color 声明且拒绝 url(/同 `<span style="color:red;background:...">`
+      之类声明注入。新增 `parseTooltipNodes` 单测覆盖 mXSS 载荷
+      （`<math><mtext><table><mglyph><style><!--</style><img onerror=...>`）、
+      script/svg/iframe、style 注入、继承色与空描述；规格 3→8 条，全套 1609
+      全绿，eslint/vue-tsc/prettier 通过。相关组件仅此一处 v-html 渲染外部
+      描述，全局已无该隐患面。
 - [ ] S12 跨区(SGP) 战绩字段差异降级 — 【待修复】
 - [ ] S13 BestPicksPanel 主线程阻塞渲染 — 【待修复】
 - [ ] S14 observability redact_pii 覆盖不足 — 【待修复】
