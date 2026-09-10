@@ -19,11 +19,20 @@ use crate::lcu::api::match_history::Game;
 /// lane/role → SGP 五档 position；无法归一化 → None（该局不出样本）。
 /// pub(crate)：对账命令（command/backtest.rs）复用同一口径。
 pub(crate) fn normalize_position(lane: &str, role: &str) -> Option<&'static str> {
-    match (lane, role) {
+    // lane/role 先 trim + 大写再匹配：LCU/SGP 偶发大小写不一致或带空白。
+    match (
+        lane.trim().to_ascii_uppercase().as_str(),
+        role.trim().to_ascii_uppercase().as_str(),
+    ) {
         ("MID", _) | ("MIDDLE", _) => Some("MIDDLE"),
         ("TOP", _) => Some("TOP"),
         ("JUNGLE", _) => Some("JUNGLE"),
-        ("BOTTOM", "DUO_SUPPORT") | ("UTILITY", _) => Some("UTILITY"),
+        // 辅助位：role 为 DUO_SUPPORT / SUPPORT（LCU 与 SGP 都可能上报 SUPPORT
+        // 而非 DUO_SUPPORT），或 lane 为 UTILITY 一律归 UTILITY；
+        // lane 为 NONE 但 role 辅助（SGP timeline 常见）同样归 UTILITY，
+        // 避免被误判成下路 ADC（BOTTOM）。
+        ("BOTTOM", "DUO_SUPPORT") | ("BOTTOM", "SUPPORT") | ("UTILITY", _) => Some("UTILITY"),
+        ("NONE", "DUO_SUPPORT") | ("NONE", "SUPPORT") => Some("UTILITY"),
         ("BOTTOM", _) => Some("BOTTOM"),
         _ => None,
     }
@@ -221,6 +230,9 @@ mod tests {
         assert_eq!(normalize_position("TOP", "SOLO"), Some("TOP"));
         assert_eq!(normalize_position("JUNGLE", "NONE"), Some("JUNGLE"));
         assert_eq!(normalize_position("BOTTOM", "DUO_SUPPORT"), Some("UTILITY"));
+        assert_eq!(normalize_position("BOTTOM", "SUPPORT"), Some("UTILITY"));
+        assert_eq!(normalize_position("NONE", "DUO_SUPPORT"), Some("UTILITY"));
+        assert_eq!(normalize_position("NONE", "SUPPORT"), Some("UTILITY"));
         assert_eq!(normalize_position("UTILITY", "NONE"), Some("UTILITY"));
         assert_eq!(normalize_position("BOTTOM", "DUO_CARRY"), Some("BOTTOM"));
         assert_eq!(normalize_position("", ""), None);
