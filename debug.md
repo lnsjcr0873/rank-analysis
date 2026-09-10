@@ -154,8 +154,12 @@ Skip to main content
 ### 批次十（19:35 发现）
 
 - [ ] K1 capture.rs GDI 句柄泄露 — 【待修复】
-- [ ] K2 timelineData 帧时间戳对齐 — 【待修复】
-- [ ] K3 Automation updatePickData 乱序覆写 — 【待修复】
+- [x] K2 timelineData 帧时间戳对齐 — 【已验证无需修改】
+      SGP (match-v5) 帧与事件时间戳均为「对局内毫秒」且起点一致（frames[0]=0），
+      时间线折线与事件流用同一基准换算分钟，不存在系统性 1 分钟错位。
+- [x] K3 Automation updatePickData 乱序覆写 — 【已完成】
+      commit: 拖拽重排补 `@update:model-value` 持久化；两个兜底池各加写链
+      串行化，高频连点不再旧数组覆盖新数组。
 - [ ] K4 cloud_sync build_backup_json 明文 Key — 【待修复】
 - [x] K5 mayhem score min_max_norm 全相等 — 【已完成】
       commit: 候选胜率全相等时直接使用共享胜率值而非死锁 0.5 相对值，高位金卡
