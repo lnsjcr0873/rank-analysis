@@ -74,7 +74,8 @@ fn save_entries(path: &Path, entries: &[AiCacheEntry]) -> Result<(), String> {
     let mut tmp_path = path.as_os_str().to_os_string();
     tmp_path.push(".tmp");
     let tmp_path = PathBuf::from(tmp_path);
-    std::fs::write(&tmp_path, json.as_bytes()).map_err(|e| format!("write {}: {}", tmp_path.display(), e))?;
+    std::fs::write(&tmp_path, json.as_bytes())
+        .map_err(|e| format!("write {}: {}", tmp_path.display(), e))?;
     if path.exists() {
         let _ = std::fs::remove_file(path);
     }

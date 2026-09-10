@@ -536,11 +536,7 @@ pub async fn mayhem_assist_tick(
 
         // R09:优先用调用方传入的真实英雄；未传时以后端实时反查代替样例回落
         let champion_id = resolve_assist_champion_id(champion_id).await;
-        let payload = crate::mayhem::pipeline::run_augment_round(
-            texts,
-            champion_id,
-            rerolls_left,
-        )?;
+        let payload = crate::mayhem::pipeline::run_augment_round(texts, champion_id, rerolls_left)?;
         Ok(serde_json::json!({
             "phase": phase, "pushed": true, "payload": payload
         }))

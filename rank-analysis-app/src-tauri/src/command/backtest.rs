@@ -60,7 +60,11 @@ fn parse_game_time_to_epoch_ms(s: &str) -> Option<i64> {
     if let Ok(num) = trimmed.parse::<i64>() {
         if num > 0 {
             // < 1000 亿视为秒，转毫秒；否则视为毫秒
-            return Some(if num < 100_000_000_000 { num * 1000 } else { num });
+            return Some(if num < 100_000_000_000 {
+                num * 1000
+            } else {
+                num
+            });
         }
     }
     iso_to_epoch_ms(trimmed)

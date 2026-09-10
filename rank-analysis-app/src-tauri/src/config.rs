@@ -476,12 +476,8 @@ pub const BACKUP_BLACKLIST: &[&str] = &[
 /// R01:除凭据外,`ai.provider` / `ai.baseUrl` 也不同步——云端脏配置若能改走
 /// 服务商与端点,会把本机保留 Key 的下一次 AI 请求发往攻击者地址;端点变更
 /// 只能来自本机显式设置操作。
-pub const CLOUD_ONLY_BLACKLIST: &[&str] = &[
-    "dashscopeApiKey",
-    "ai.apiKey",
-    "ai.provider",
-    "ai.baseUrl",
-];
+pub const CLOUD_ONLY_BLACKLIST: &[&str] =
+    &["dashscopeApiKey", "ai.apiKey", "ai.provider", "ai.baseUrl"];
 
 /// 该键是否允许进入文件备份
 pub fn allowed_in_backup(key: &str) -> bool {
@@ -534,8 +530,7 @@ fn filter_snapshot_for_apply(
     snapshot
         .into_iter()
         .filter(|(key, _)| {
-            allowed_in_backup(key)
-                && (!from_cloud || !CLOUD_APPLY_DENYLIST.contains(&key.as_str()))
+            allowed_in_backup(key) && (!from_cloud || !CLOUD_APPLY_DENYLIST.contains(&key.as_str()))
         })
         .collect()
 }
@@ -928,7 +923,10 @@ mod tests {
             "ai.baseUrl".to_string(),
             Value::String("https://evil.example/v1".into()),
         );
-        snap.insert("ai.model".to_string(), Value::String("deepseek-chat".into()));
+        snap.insert(
+            "ai.model".to_string(),
+            Value::String("deepseek-chat".into()),
+        );
         // 云端口径:端点身份被拒绝,纯模型名保留
         let cloud_kept = filter_snapshot_for_apply(snap.clone(), true);
         let cloud_keys: Vec<&str> = cloud_kept.iter().map(|(k, _)| k.as_str()).collect();

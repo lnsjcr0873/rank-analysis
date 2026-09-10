@@ -56,7 +56,9 @@ const OVERLAY_MARGIN: f64 = 16.0;
 
 /// 设置当前激活的面板信封
 pub fn set_current_panel(envelope: serde_json::Value) {
-    *CURRENT_PANEL_ENVELOPE.lock().unwrap_or_else(|e| e.into_inner()) = Some(envelope);
+    *CURRENT_PANEL_ENVELOPE
+        .lock()
+        .unwrap_or_else(|e| e.into_inner()) = Some(envelope);
 }
 
 /// 设置当前的 NextAction 建议数据
@@ -66,8 +68,14 @@ pub fn set_current_actions(actions: Vec<crate::live::NextAction>) {
 
 /// 获取当前所有激活的 Overlay 状态快照
 pub fn get_overlay_state() -> serde_json::Value {
-    let panel = CURRENT_PANEL_ENVELOPE.lock().unwrap_or_else(|e| e.into_inner()).clone();
-    let actions = CURRENT_ACTIONS.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    let panel = CURRENT_PANEL_ENVELOPE
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
+    let actions = CURRENT_ACTIONS
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
     serde_json::json!({
         "panel": panel,
         "actions": actions

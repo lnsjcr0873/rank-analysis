@@ -213,7 +213,10 @@ impl MatchHistory {
         let total = history.games.games.len();
         let end = std::cmp::min(end_index.saturating_add(1), total);
         let beg = std::cmp::min(beg_index, end);
-        debug_assert!(beg <= end && end <= total, "slice_page invariant violated: beg={beg} end={end} total={total}");
+        debug_assert!(
+            beg <= end && end <= total,
+            "slice_page invariant violated: beg={beg} end={end} total={total}"
+        );
         MatchHistory {
             games: GamesWrapper {
                 games: history.games.games[beg..end].to_vec(),

@@ -127,8 +127,7 @@ pub fn aggregate_habit_tags(games: &[Game], my_puuid: &str) -> Vec<HabitTag> {
             }
             // R15：相对落后比 = 平均差值 / peer 均值绝对值（消除伤害数千 vs 死亡数个的量纲差，
             // 越小越严重）；peer 均值为 0 时回退 0（不参与排序区分）。
-            let peer_abs =
-                bucket.iter().map(|(_, m, _)| m).sum::<f64>() / bucket.len() as f64;
+            let peer_abs = bucket.iter().map(|(_, m, _)| m).sum::<f64>() / bucket.len() as f64;
             let rel_gap = if peer_abs.abs() < f64::EPSILON {
                 0.0
             } else {
@@ -140,7 +139,10 @@ pub fn aggregate_habit_tags(games: &[Game], my_puuid: &str) -> Vec<HabitTag> {
                 avg_vs_peer: (avg * 100.0).round() / 100.0,
                 rel_gap,
                 streak,
-                first_seen: bucket.first().map(|(_, _, s)| s.clone()).unwrap_or_default(),
+                first_seen: bucket
+                    .first()
+                    .map(|(_, _, s)| s.clone())
+                    .unwrap_or_default(),
                 last_seen: bucket.last().map(|(_, _, s)| s.clone()).unwrap_or_default(),
             })
         })

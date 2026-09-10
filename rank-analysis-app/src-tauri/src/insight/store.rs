@@ -44,7 +44,10 @@ fn migrate_schema(conn: &Connection) -> rusqlite::Result<()> {
             Ok(sql.is_some_and(|s| s.contains("rel_gap")))
         })?;
     if !has_col {
-        conn.execute("ALTER TABLE habit_tags ADD COLUMN rel_gap REAL NOT NULL DEFAULT 0", [])?;
+        conn.execute(
+            "ALTER TABLE habit_tags ADD COLUMN rel_gap REAL NOT NULL DEFAULT 0",
+            [],
+        )?;
     }
     Ok(())
 }

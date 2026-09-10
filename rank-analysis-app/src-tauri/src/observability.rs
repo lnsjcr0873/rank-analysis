@@ -308,8 +308,7 @@ static AUTH_HEADER_RE: LazyLock<Regex> = LazyLock::new(|| {
 
 /// URL 嵌入认证凭据：`https://user:password@host` / `http://...`（如 reqwest 打印错误 URL 时的 `https://riot:bZ8lkkL3wtVEMaXOaBGTxA@127.0.0.1:53970/...`）。
 static URL_CREDENTIALS_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"(https?://[^:\s/@]+:)[^@\s/]+@"#)
-        .expect("valid url-credentials regex")
+    Regex::new(r#"(https?://[^:\s/@]+:)[^@\s/]+@"#).expect("valid url-credentials regex")
 });
 
 /// 对单个字符串做 PII 脱敏。
@@ -435,10 +434,7 @@ mod tests {
     #[test]
     fn should_redact_summoner_id_summoner_name() {
         let out = redact_pii(r#"{"summonerId": 123456789, "summonerName": "Faker"}"#);
-        assert!(
-            !out.contains("123456789"),
-            "summonerId 值应被脱敏: {out}"
-        );
+        assert!(!out.contains("123456789"), "summonerId 值应被脱敏: {out}");
         assert!(!out.contains("Faker"), "summonerName 值应被脱敏: {out}");
     }
 

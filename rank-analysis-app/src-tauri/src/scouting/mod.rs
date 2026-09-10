@@ -367,7 +367,10 @@ pub fn assess_team_threats_with_games(
         }
 
         let encounter_summary = crate::meet_db::query_summary(&enemy.puuid);
-        let encounter_count = encounter_summary.as_ref().map(|s| s.total as u32).unwrap_or(0);
+        let encounter_count = encounter_summary
+            .as_ref()
+            .map(|s| s.total as u32)
+            .unwrap_or(0);
 
         // 若全量对局不足，但存在相遇记录（meet_matches），消费相遇记录补齐样本
         if style.total < MIN_GAMES_FOR_RATING as u32 {

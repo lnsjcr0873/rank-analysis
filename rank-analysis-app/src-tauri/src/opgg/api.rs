@@ -104,11 +104,14 @@ pub async fn fetch_aram_champion_builds(champion_id: i64) -> Result<AramChampion
 
     let resp = client.get(&url).send().await.map_err(|e| e.to_string())?;
     if !resp.status().is_success() {
-        return Err(format!("OP.GG ARAM builds returned status {}", resp.status()));
+        return Err(format!(
+            "OP.GG ARAM builds returned status {}",
+            resp.status()
+        ));
     }
     let body = resp.text().await.map_err(|e| e.to_string())?;
-    let raw: RawAramBuildsResponse = serde_json::from_str(&body)
-        .map_err(|e| format!("OP.GG ARAM builds parse error: {}", e))?;
+    let raw: RawAramBuildsResponse =
+        serde_json::from_str(&body).map_err(|e| format!("OP.GG ARAM builds parse error: {}", e))?;
 
     Ok(AramChampionBuilds {
         champion_id: champion_id as i32,

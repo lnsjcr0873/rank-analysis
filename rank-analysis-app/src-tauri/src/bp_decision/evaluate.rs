@@ -87,7 +87,11 @@ pub fn unavailable_map(session: &SelectSession) -> HashMap<i32, Unavailable> {
 ///   也可能是**我们自己的 hover 正在落库**（PATCH 已生效、但 set_last_hovered
 ///   因时序尚未写入）。因此只有「当前非 0 且 ≠ 我们正要执行的 target」才判定
 ///   接管——等于工具自身目标时显然是自己的动作，不算用户覆盖。
-pub fn detect_override(current_hover: i32, last_hovered: Option<i32>, our_target: Option<i32>) -> bool {
+pub fn detect_override(
+    current_hover: i32,
+    last_hovered: Option<i32>,
+    our_target: Option<i32>,
+) -> bool {
     match last_hovered {
         Some(ours) => current_hover != 0 && current_hover != ours,
         None => current_hover != 0 && our_target != Some(current_hover),
@@ -954,7 +958,10 @@ mod tests {
         );
         assert!(!detect_override(64, Some(64), None), "没变 → 不接管");
         assert!(!detect_override(0, Some(64), None), "撤回成 0 → 不接管");
-        assert!(detect_override(157, None, None), "进入前已有预选 → 尊重用户接管");
+        assert!(
+            detect_override(157, None, None),
+            "进入前已有预选 → 尊重用户接管"
+        );
         assert!(!detect_override(0, None, None), "尚未有预选 → 未接管");
     }
 

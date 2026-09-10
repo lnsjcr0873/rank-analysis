@@ -808,7 +808,10 @@ mod tests {
         // 负毫秒（时钟错误/脏数据）：必须夹到 1970，而不是输出 -001-12-31 这类
         // 让前端 new Date 变 Invalid Date 的非标准串
         assert_eq!(epoch_ms_to_iso(-1), "1970-01-01T00:00:00.000Z");
-        assert_eq!(epoch_ms_to_iso(-999_999_999_999), "1970-01-01T00:00:00.000Z");
+        assert_eq!(
+            epoch_ms_to_iso(-999_999_999_999),
+            "1970-01-01T00:00:00.000Z"
+        );
         // 极未来（远超 9999 年）：夹到 9999 年末，仍可被解析
         let far = epoch_ms_to_iso(9_999_999_999_999_999);
         assert!(far.starts_with("9999-"), "got {far}");

@@ -85,7 +85,10 @@ impl LcuListener {
                     }
                 }
 
-                log::info!("通过 WebSocket 尾沿防抖事件 [{}] 触发 Session 刷新", last_uri);
+                log::info!(
+                    "通过 WebSocket 尾沿防抖事件 [{}] 触发 Session 刷新",
+                    last_uri
+                );
                 if let Err(e) =
                     crate::command::session::get_session_data(app_handle_for_debounce.clone()).await
                 {
@@ -185,8 +188,7 @@ impl LcuListener {
                                                 && array[1] == "OnJsonApiEvent"
                                             {
                                                 let event_data = &array[2];
-                                                self.handle_event(event_data, &debounce_tx)
-                                                    .await;
+                                                self.handle_event(event_data, &debounce_tx).await;
                                             }
                                         }
                                     }

@@ -339,7 +339,8 @@ pub fn wilson_score_lower(wins: i64, total: i64) -> f64 {
     let z = 1.95996; // 95% 置信度
     let z2 = z * z;
 
-    let numerator = p + (z2 / (2.0 * n)) - z * ((p * (1.0 - p) / n + z2 / (4.0 * n * n)).max(0.0).sqrt());
+    let numerator =
+        p + (z2 / (2.0 * n)) - z * ((p * (1.0 - p) / n + z2 / (4.0 * n * n)).max(0.0).sqrt());
     let denominator = 1.0 + (z2 / n);
     (numerator / denominator).max(0.0).min(1.0)
 }
@@ -391,7 +392,11 @@ fn global_augment_stats_in(
     let mut out: Vec<GlobalAugmentStat> = acc
         .into_iter()
         .map(|(augment_id, (games, wins))| {
-            let win_rate = if games > 0 { (wins as f64) / (games as f64) } else { 0.0 };
+            let win_rate = if games > 0 {
+                (wins as f64) / (games as f64)
+            } else {
+                0.0
+            };
             let wilson_lower = wilson_score_lower(wins, games);
             GlobalAugmentStat {
                 augment_id,
@@ -402,7 +407,11 @@ fn global_augment_stats_in(
             }
         })
         .collect();
-    out.sort_by(|a, b| b.wilson_lower.partial_cmp(&a.wilson_lower).unwrap_or(std::cmp::Ordering::Equal));
+    out.sort_by(|a, b| {
+        b.wilson_lower
+            .partial_cmp(&a.wilson_lower)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     Ok(out)
 }
 

@@ -499,11 +499,7 @@ mod tests {
         // 把它们打成 C 档（0.455 → C）。共享值自身应直接映射保持 A 档。
         let t = tables_with(&[(1, 0.62), (2, 0.62), (3, 0.62)], &[], &[]);
         let m = meta_map(&[1, 2, 3]);
-        let hits = [
-            Some(&hit(1, 1.0)),
-            Some(&hit(2, 1.0)),
-            Some(&hit(3, 1.0)),
-        ];
+        let hits = [Some(&hit(1, 1.0)), Some(&hit(2, 1.0)), Some(&hit(3, 1.0))];
         let payload = score_round(hits, &m, &t, None);
         let cands = payload["candidates"].as_array().unwrap();
         for c in cands {

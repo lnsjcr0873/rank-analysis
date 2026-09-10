@@ -328,7 +328,9 @@ async fn probe_lcu_state() -> (Result<Summoner, String>, Result<String, String>)
     // 3s 足够且并发执行，最坏耗时 3s。超时按「未连接（OTHER）」归类，下一轮 tick 会自动恢复。
     tokio::join!(
         async {
-            match tokio::time::timeout(Duration::from_secs(3), Summoner::get_my_summoner_live()).await {
+            match tokio::time::timeout(Duration::from_secs(3), Summoner::get_my_summoner_live())
+                .await
+            {
                 Ok(result) => result,
                 Err(_) => Err("状态检测超时".to_string()),
             }
