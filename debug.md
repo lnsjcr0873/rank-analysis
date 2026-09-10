@@ -125,7 +125,23 @@ Skip to main content
       script/svg/iframe、style 注入、继承色与空描述；规格 3→8 条，全套 1609
       全绿，eslint/vue-tsc/prettier 通过。相关组件仅此一处 v-html 渲染外部
       描述，全局已无该隐患面。
-- [ ] S12 跨区(SGP) 战绩字段差异降级 — 【待修复】
+- [x] S12 跨区(SGP) 战绩字段差异降级 — 【已完成】
+      commit(`fix(record)`): 审查结论——报告点名的 3 类字段差异（gameVersion /
+      championPickIntent / 完整符文列表）在当前实现中已各自兜底：
+      1) `gameVersion` — SGP match-v5 未必返回（Rust 侧默认空串），
+         回放可用性判定 `judge_availability` 对空版本放行而非武断禁用。
+      2) `championPickIntent` — 仅存在于客户端实时选人接口（live/
+         champion-select），对局详情本就不含该字段，LCU 与 SGP 一致。
+      3) 完整符文页 — Rust `map_participant` 已做 perks.styles → 扁平
+         perk0/perkPrimaryStyle/perkSubStyle 回填（`sgp.rs:598-613`），
+         前端 `MatchDetailRunesTab` 在 perks 缺失时 fallback 到扁平三字段
+         并标注「符文页数据缺失」，不会抛错。StatsTab 出装对比行由
+         `myPuuid` 守卫，无样本时提示「该英雄暂无本队推荐样本」。
+      实际修复（界面上未做友好的数据源差异标识）：
+      新增 `matchDataSource.ts`（`resolveMatchDataSource(region, game)`）
+      + 7 条纯函数单测 + `MatchDetailInline.vue` 标题行展示「跨区 · SGP」
+      药丸标签（含 n-tooltip 提示字段可能缺失、子 Tab 已降级兜底）。
+      全套 1616 测试通过，eslint/vue-tsc/prettier 干净。
 - [ ] S13 BestPicksPanel 主线程阻塞渲染 — 【待修复】
 - [ ] S14 observability redact_pii 覆盖不足 — 【待修复】
 
