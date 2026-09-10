@@ -206,10 +206,14 @@ impl MatchHistory {
     /// 此时重拉 LCU 只会拿回整包（warm puuid 的区间参数被忽略，见
     /// [`Self::get_by_puuid`]），曾导致翻页内容整包重复——一律本地切片。
     /// 起始索引越界时返回空页而非报错，让前端翻页自然终止。
+    ///
+    /// **切片安全**：`end` 和 `beg` 均经 `min(total)` 夹紧，保证 `beg ≤ end ≤ total`；
+    /// 空数据时 `total=0` → `end=beg=0` → `0..0` 合法空切片，不会 panic。
     fn slice_page(history: MatchHistory, beg_index: usize, end_index: usize) -> MatchHistory {
         let total = history.games.games.len();
-        let end = std::cmp::min(end_index + 1, total);
+        let end = std::cmp::min(end_index.saturating_add(1), total);
         let beg = std::cmp::min(beg_index, end);
+        debug_assert!(beg <= end && end <= total, "slice_page invariant violated: beg={beg} end={end} total={total}");
         MatchHistory {
             games: GamesWrapper {
                 games: history.games.games[beg..end].to_vec(),
