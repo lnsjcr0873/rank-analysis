@@ -333,7 +333,15 @@ Skip to main content
 - [x] M3 LcuListener 幽灵防抖任务 — 【已验证无需修改】
       `start()` 在代际被取代时对 `debounce_handle` 调 `abort()`，旧的防抖协程
       不会在重连瞬间打断新会话刷新。
-- [ ] M4 PlayerCard !important 主题冲突 — 【待修复】
+- [x] M4 PlayerCard !important 主题冲突 — 【已完成】
+      commit(`fix(theme)`): 移除 `.player-card` 基础样式 + 选人状态（pc-intent /
+      pc-picking / pc-banning）上的 `!important`。旧版注释说明 `!important` 是
+      为防止 CSS 动画覆盖 `box-shadow` 而加，但实际发光动画使用 `filter: drop-shadow`
+      而非 `box-shadow`，故 `!important` 不必要且阻止亮色主题通过 CSS 变量切换
+      正常生效。移除后复合选择器 `.player-card.pc-xxx` 本身特异度已高于基础
+      `.player-card`，层叠正常。`:deep()` 下 naive-ui 标签样式覆盖保留
+      `!important`（符合 CODE_QUALITY.md 白名单规则）。PlayerCard 2 条单测通过。
+
 - [x] M5 exportMatches CSV 公式注入 — 【已完成】
       commit: `csvEscape` 对 `= + - @` 前缀前置 tab 打断公式语义，配套回归测试。
 
