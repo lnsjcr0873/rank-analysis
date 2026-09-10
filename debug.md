@@ -69,8 +69,10 @@ Skip to main content
 - [x] C4 autoAccept 100ms 轮询/backoff — 【已验证无需修改】
       `get_phase` 有 2s 缓存（100ms 轮询多数命中缓存），FailureBackoff 已治理
       客户端未运行时的错误风暴，不存在把 409/500 期间的接受窗口拖爆的场景。
-- [ ] C5 ai.rs SSE \r 残留 — 【待修复】
-- [ ] C6 runTwoStage 无全局超时 — 【待修复】
+- [x] C5 ai.rs SSE \r 残留 — 【待核验】
+- [x] C6 runTwoStage 无全局超时 — 【已完成】
+      commit: Stage 2 加整体超时（默认 120s，可配 `timeoutMs`），流式挂死不再
+      无限转菊花；配套 fake-timer 回归测试。
 - [ ] C7 子窗口监听注销/孤儿进程 — 【待修复】
 - [ ] C8 force_close_overlay 鼠标穿透失效 — 【待修复】
 - [ ] C9 safeRelativePercent NaN 渗透 — 【待修复】
