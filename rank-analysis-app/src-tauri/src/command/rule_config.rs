@@ -28,7 +28,15 @@ pub enum RuleCondition {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct PickAction {
     pub champion_id: i32,
+    /// 缺省视为锁定执行（秒选锁定）；历史/外部导入的旧规则可能没有该字段，
+    /// 缺失时不得让整条规则反序列化失败（那会让用户所有 Pick 规则瞬间消失）。
+    #[serde(default = "default_lock_true")]
     pub lock: bool,
+}
+
+/// `PickAction.lock` 缺失时的默认值：锁定执行。
+fn default_lock_true() -> bool {
+    true
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -128,6 +136,22 @@ mod tests {
         let s = serde_json::to_string(&r).unwrap();
         let back: PickRule = serde_json::from_str(&s).unwrap();
         assert_eq!(back, r);
+    }
+
+    #[test]
+    fn pick_rule_missing_lock_field_defaults_to_locked() {
+        // 历史/外部导入的旧规则可能省略 lock 字段——缺失时必须反序列化成功
+        // 且按「锁定执行」处理，而非整条规则消失（parse_pick_rules_value 返回空）。
+        let json = r#"{
+            "id": "r-legacy",
+            "name": "旧规则",
+            "enabled": true,
+            "conditions": [],
+            "action": { "champion_id": 157 }
+        }"#;
+        let r: PickRule = serde_json::from_str(json).unwrap();
+        assert_eq!(r.action.champion_id, 157);
+        assert!(r.action.lock, "缺失 lock 应默认为 true（锁定执行）");
     }
 
     #[test]
