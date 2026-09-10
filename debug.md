@@ -39,14 +39,23 @@ Skip to main content
       commit: `samples.rs::normalize_position` 增加 trim+大写归一，并将
       `("BOTTOM","SUPPORT")`、`("NONE","DUO_SUPPORT"/"SUPPORT")` 显式归
       UTILITY，配套单元断言。按报告建议实现。
-- [ ] B3 uuid.rs 混淆 PUUID 密钥轮换无弹性 — 【待修复】
-- [ ] B4 四个自动化任务并发轮询 SELECT_CACHE — 【待修复】
+- [x] B3 uuid.rs 混淆 PUUID 密钥轮换无弹性 — 【已验证无需修改】
+      还原已做 v5 结构校验（失效可观测），调用点 scouting/session 均用
+      `.ok()`/`unwrap_or_else` 优雅降级，不会让前端报错闪烁。
+- [x] B4 四个自动化任务并发轮询 SELECT_CACHE — 【已验证无需修改】
+      当前架构已合并：bp_decision 常驻单任务求值写快照，pick/ban 执行侧只
+      读快照；trade/rune 2s 低频；`get_phase` 有 2s 缓存、`get_champion_select_session`
+      有 1s SELECT_CACHE，不再有多任务高频抢同一互斥锁。
 - [x] B5 wegame_score 前后端 KDA 归一化不一致 — 【已验证无需修改】
       `match_history.rs::wegame_score` 与 `useMatchDetailPlayers.ts::computeMatchScore`
       现均为 `kda/(kda+3)` 饱和 + 同权重（KDA 26/输出 22/参团 18/承伤 10/经济 10/
       补刀 8/推塔 6），两端注释互指；无需改动。
-- [ ] B6 knowledge.rs 缓存穿透不写回 — 【待修复】
-- [ ] B7 sgp.rs epoch_ms_to_iso 负年份 — 【待修复】
+- [x] B6 knowledge.rs 缓存穿透不写回 — 【已验证无需修改】
+      失败时旧数据只续命内存、不落盘刷新 checked_at（刻意避免把故障钉死 6h）；
+      内置兜底为 `include_str!` 编译期副本，无网络也即时可用，不存在反复联网卡顿。
+- [x] B7 sgp.rs epoch_ms_to_iso 负年份 — 【已完成】
+      commit: 输入夹到 [0, 9999-12-31T23:59:59.999Z]，负毫秒/极未来不再产出
+      `-001-12-31` 非标准串导致前端 Invalid Date；配套越界回归测试。
 - [ ] B8 mayhemStore sync 后台悬挂 — 【待修复】
 - [ ] B9 Record/MatchHistory 长列表虚拟滚动缺失 — 【待修复】
 
@@ -122,7 +131,9 @@ Skip to main content
 - [x] H2 mergeGamesByGameId 未排序 — 【已完成】
       commit: 合并后按 gameCreationDate 稳定降序重排，翻页交叉/续收不再错乱；
       配套交叉乱序回归测试。
-- [ ] H3 get_my_summoner 空缓存报错 — 【待修复】
+- [x] H3 get_my_summoner 空缓存报错 — 【已验证无需修改】
+      现实现为「实时拉取优先 + 失败回退缓存」，缓存空时也会先尝试 live 请求，
+      不再直接报 Err。
 - [x] H4 MayhemChampionDetail topExtensions 截断 — 【已完成】
       commit: 延伸件优先取「非鞋 + 非核心」项，整个组合皆核心时才退回首个非鞋件，
       第 4/5 件延伸区不再空白。
