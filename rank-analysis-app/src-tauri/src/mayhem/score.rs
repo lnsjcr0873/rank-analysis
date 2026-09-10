@@ -115,6 +115,11 @@ pub struct ScoredCandidate {
     pub reasons: Option<Vec<String>>,
 }
 
+/// 当轮候选 min-max 归一化。
+///
+/// 全部相等时不能再退化为死锁的 0.5：三张冷门/新强化若同为高位胜率（如 0.62），
+/// 强行归一化会让它们全部拿到 0.5 相对值 → 综合分跌到 C 档，误导用户 reroll。
+/// 相等时直接返回该共享值自身（胜率本身就在 0..1），让高分卡留在高档位。
 fn min_max_norm(values: &[f64]) -> Vec<f64> {
     let Some(&min) = values.iter().min_by(|a, b| a.total_cmp(b)) else {
         return Vec::new();
@@ -123,7 +128,7 @@ fn min_max_norm(values: &[f64]) -> Vec<f64> {
         return Vec::new();
     };
     if (max - min).abs() < f64::EPSILON {
-        return vec![0.5; values.len()];
+        return values.iter().map(|v| v.clamp(0.0, 1.0)).collect();
     }
     values
         .iter()
@@ -486,6 +491,26 @@ mod tests {
         assert_eq!(m.len(), 2);
         assert_eq!(m[&1220].rarity_name, "prismatic");
         assert_eq!(m[&1336].name, "升级：无尽之刃");
+    }
+
+    #[test]
+    fn equal_winrates_should_not_deadlock_to_c_grade() {
+        // 三张新强化全服胜率同为高位（0.62）——max==min，不能再各给 0.5 相对值
+        // 把它们打成 C 档（0.455 → C）。共享值自身应直接映射保持 A 档。
+        let t = tables_with(&[(1, 0.62), (2, 0.62), (3, 0.62)], &[], &[]);
+        let m = meta_map(&[1, 2, 3]);
+        let hits = [
+            Some(&hit(1, 1.0)),
+            Some(&hit(2, 1.0)),
+            Some(&hit(3, 1.0)),
+        ];
+        let payload = score_round(hits, &m, &t, None);
+        let cands = payload["candidates"].as_array().unwrap();
+        for c in cands {
+            let s = c["score"].as_f64().unwrap();
+            assert!(s >= 60.0, "同为 62% 胜率不应被打成 C 档，实得 {s}");
+            assert!(c["grade"].as_str().unwrap() != "C");
+        }
     }
 
     #[test]
