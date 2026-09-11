@@ -383,7 +383,7 @@ padStart(2, '0') 对带负号的字符串无效，最终拼出 "-1:-14" 这种�
 code
 TypeScript
 if (secs <= 0) return '00:00'
-10. sanitize.ts 与 Prompt 注入漏洞：玩家自定义备注未经清洗直接拼入 AI 提示词
+10. sanitize.ts 与 Prompt 注入漏洞：玩家自定义备注未经清洗直接拼入 AI 提示词【已完成：buildNoteBrief 源头加 sanitizeUserText（三处拼入点一次覆盖）；附注入单测。prettier/eslint/tsc 全过，7 测试全绿】
 文件路径：
 rank-analysis-app/src/services/ai/prompts/team.ts
 rank-analysis-app/src/services/ai/shared/noteBrief.ts

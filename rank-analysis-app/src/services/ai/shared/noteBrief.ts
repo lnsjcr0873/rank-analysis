@@ -11,6 +11,7 @@
 
 import { usePlayerNotesStore } from '@renderer/features/settings/stores/playerNotes'
 import { getNoteLabelMeta } from '@renderer/types/domain/playerNote'
+import { sanitizeUserText } from '@renderer/services/ai/prompts/sanitize'
 
 /** 备注文本注入 prompt 时的最大长度（字符数） */
 const MAX_NOTE_LENGTH = 50
@@ -27,7 +28,10 @@ const MAX_NOTE_LENGTH = 50
 export function buildNoteBrief(puuid: string): string | undefined {
   const note = usePlayerNotesStore().getNote(puuid)
   if (!note) return undefined
+  // debug4-20：备注是用户自由文本（换行/JSON 闭合/指令注入载荷都可能有），
+  // 拼入 prompt 前必须过 sanitize（名字侧早已处理，唯独备注漏网）。
+  // label 是白名单枚举无需净化；文本侧先截断再净化（注入载荷通常超长）。
   const label = `[${getNoteLabelMeta(note.label).text}]`
-  const text = note.note.trim().slice(0, MAX_NOTE_LENGTH)
+  const text = sanitizeUserText(note.note.trim().slice(0, MAX_NOTE_LENGTH), MAX_NOTE_LENGTH)
   return text ? `${label} ${text}` : label
 }
