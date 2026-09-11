@@ -238,7 +238,8 @@ const kdaText = computed(() => {
 const masteryWinRateText = computed(() => {
   const m = profile.value?.currentChampionMastery
   if (!m) return '--'
-  return `${Math.round(m.winRate * 100)}%`
+  // debug5：winRate 缺失/NaN 时不再输出 "NaN%"，与 kdaText 同口径兜底。
+  return Number.isFinite(m.winRate) ? `${Math.round(m.winRate * 100)}%` : '--'
 })
 
 const POSITION_LABEL: Record<string, string> = {

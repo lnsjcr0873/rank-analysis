@@ -910,6 +910,9 @@ function selectTrendGame(gameId: number) {
   const target = document.querySelector<HTMLElement>(`[data-game-id="${gameId}"]`)
   if (target) {
     highlightedGameId.value = gameId
+    // debug5：与跨页分支统一——命中当前页同样展开详情，不再"只滚不展"。
+    expandedGameIds.value.add(gameId)
+    expandedGameIds.value = new Set(expandedGameIds.value)
     target.scrollIntoView({ behavior: 'smooth', block: 'center' })
     armTimeout(() => {
       if (highlightedGameId.value === gameId) highlightedGameId.value = null

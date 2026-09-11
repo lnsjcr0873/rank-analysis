@@ -620,8 +620,8 @@ return Number.isFinite(m.winRate) ? `${Math.round(m.winRate * 100)}%` : '--'
 2	阻断	AISuggestModal.vue	采纳 AI 推荐标签直接沿用静态 ID，再次采纳时因 ID 重复无法保存	采纳前调用 crypto.randomUUID() 重算 ID
 3	注入/乱码	signals.ts	字符串替换使用带 $ 的用户名，触发 JS replace 模式捕获引发乱码	改用函数回调形式 () => subject.name
 4	网络	fandom/api.rs	爬虫请求缺少基础伪装头，频繁触发 Cloudflare 403 导致大乱斗平衡数据无法拉取	补充 Accept、Referer 等常用 Header【已完成：fetch_aram_balance_data补Accept/Accept-Language/Referer（与patch_notes.rs同口径）；反转词cast time/delay/channel time经核实现已含7词无需改。cargo fmt/clippy(GNU)/check --tests全过，cargo test以CI为权威】
-5	体验	MatchHistory.vue	趋势条点击对局时，当前页不展开、跨页却展开，行为自相矛盾	统一在当前页命中时同样执行展开
-6	UI	PlayerProfileCard.vue	m.winRate 遇 NaN 直接输出 "胜率 NaN%"	增加 Number.isFinite 安全保护兜底显示 "--"
+5	体验	MatchHistory.vue	趋势条点击对局时，当前页不展开、跨页却展开，行为自相矛盾	统一在当前页命中时同样执行展开【已完成：selectTrendGame当前页分支同样add展开（与跨页分支统一）；prettier/eslint/tsc全过】
+6	UI	PlayerProfileCard.vue	m.winRate 遇 NaN 直接输出 "胜率 NaN%"	增加 Number.isFinite 安全保护兜底显示 "--"【已完成：masteryWinRateText加isFinite（与kdaText同口径）；prettier/eslint/tsc全过】
 Model 17:27
 ThinkingThoughts
 Expand to view model thoughts
