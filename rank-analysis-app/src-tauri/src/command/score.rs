@@ -340,6 +340,11 @@ pub fn score_participants(inputs: &[PlayerScoreInput]) -> Vec<PlayerScore> {
 }
 
 /// 缓存：按 gameId 的 LCU 整局评分（局数据不可变，无 TTL，max 500）。
+///
+/// 键 = `{auth指纹}:{game_id}`（debug5-3）：game_id 只在单个 LCU 客户端登录区内
+/// 唯一，用户切号/换区后同数字 game_id 会复用——裸 game_id 作键会把上一个区
+/// 的 10 人评分串到当前对局。与 SGP_DETAIL_CACHE 的 `{platform}:{game_id}` 同款
+/// 思路；LCU 侧无显式 platformId，用认证指纹（token 哈希 + 端口）区分登录区。
 pub static GAME_SCORE_CACHE: LazyLock<Cache<String, Vec<PlayerScore>>> = LazyLock::new(|| {
     Cache::builder()
         .max_capacity(500)
@@ -347,10 +352,19 @@ pub static GAME_SCORE_CACHE: LazyLock<Cache<String, Vec<PlayerScore>>> = LazyLoc
         .build()
 });
 
+/// 评分缓存键：认证指纹缺失（客户端未运行）时退回裸 game_id——此时请求本就
+/// 会失败，无串号风险；正常登录态下指纹恒存在。
+fn score_cache_key(game_id: i64) -> String {
+    match crate::lcu::util::http::auth_fingerprint() {
+        Some((fp, port)) => format!("{fp}:{port}:{game_id}"),
+        None => game_id.to_string(),
+    }
+}
+
 /// 按 LCU 对局 ID 出 10 人评分（moka 缓存，秒出）。
 #[tauri::command]
 pub async fn get_player_scores(game_id: i64) -> Result<Vec<PlayerScore>, String> {
-    let key = game_id.to_string();
+    let key = score_cache_key(game_id);
     if let Some(cached) = GAME_SCORE_CACHE.get(&key).await {
         return Ok(cached);
     }

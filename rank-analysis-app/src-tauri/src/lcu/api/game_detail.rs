@@ -61,21 +61,33 @@ pub struct GameDetailPlayer {
     #[serde(rename = "summonerId")]
     pub summoner_id: i64,
 }
-static GAME_DETAIL_CACHE: LazyLock<Cache<i64, GameDetail>> =
+/// 键 = `{auth指纹}:{game_id}`（debug5-3 衍生）：`GAME_DETAIL_CACHE` 是更底层的
+/// 同类隐患——4 个调用方（match_history enrich / get_game_by_id / replay 版本
+/// 探测）全经它拿详情。切号/换区后同数字 game_id 复用，裸键会串详情。
+/// LCU 侧无显式 platformId，用认证指纹（token 哈希 + 端口）区分登录区。
+static GAME_DETAIL_CACHE: LazyLock<Cache<String, GameDetail>> =
     LazyLock::new(|| Cache::builder().max_capacity(500).build());
+
+/// 详情缓存键：认证指纹缺失（客户端未运行）时退回裸 game_id——此时请求本就
+/// 会失败，无串号风险；正常登录态下指纹恒存在。
+fn detail_cache_key(game_id: &i64) -> String {
+    match crate::lcu::util::http::auth_fingerprint() {
+        Some((fp, port)) => format!("{fp}:{port}:{game_id}"),
+        None => game_id.to_string(),
+    }
+}
 
 impl GameDetail {
     /// 按对局 ID 获取对局详情（带缓存）。
     pub async fn get_game_detail_by_id(game_id: &i64) -> Result<Self, String> {
-        if let Some(cached) = GAME_DETAIL_CACHE.get(game_id).await {
+        let key = detail_cache_key(game_id);
+        if let Some(cached) = GAME_DETAIL_CACHE.get(&key).await {
             return Ok(cached);
         }
         let uri = format!("lol-match-history/v1/games/{}", game_id);
         let game_detail = crate::lcu::util::http::lcu_get::<Self>(&uri).await?;
         // 缓存游戏详情
-        GAME_DETAIL_CACHE
-            .insert(*game_id, game_detail.clone())
-            .await;
+        GAME_DETAIL_CACHE.insert(key, game_detail.clone()).await;
         Ok(game_detail)
     }
 }

@@ -57,7 +57,7 @@ impl Drop for ComGuard {
         unsafe { CoUninitialize(); }
     }
 }
-3. GAME_SCORE_CACHE 缺少大区（Platform）维度分片，导致跨区 GameId 缓存碰撞串号
+3. GAME_SCORE_CACHE 缺少大区（Platform）维度分片，导致跨区 GameId 缓存碰撞串号【已完成：未照搬platform前缀（LCU侧无显式platformId）。改键为{auth指纹}:{game_id}（认证指纹=token哈希+端口，切号换区即变）；衍生同修底层 GAME_DETAIL_CACHE（4个调用方同隐患）。GNU check/clippy/fmt全过】
 文件路径：rank-analysis-app/src-tauri/src/command/score.rs
 问题代码：
 code
