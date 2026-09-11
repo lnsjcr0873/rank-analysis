@@ -238,6 +238,51 @@ describe('buildChampSelectPrompt', () => {
     expect(prompt).toContain('尚未结束')
   })
 
+  it('悬停未锁定不误判全员锁定：championId>0 但 pickState 为空串/none 时仍允许选人建议（debug5-9）', async () => {
+    const session = makeSessionData({})
+    // 选人初期全员悬停英雄：LCU 下发 "" / "none"，绝不能算作锁定
+    session.subteams[0].players[0] = makeMyPlayer({
+      name: '我方甲',
+      puuid: 'p1',
+      championId: 103,
+      pickState: '',
+      tierCn: '钻石IV'
+    })
+    session.subteams[0].players[1] = makeMyPlayer({
+      name: '我方乙',
+      puuid: 'p2',
+      championId: 55,
+      pickState: 'none',
+      tierCn: '铂金II'
+    })
+    const prompt = await buildChampSelectPrompt(session, 'ranked')
+    expect(prompt).toContain('尚未结束')
+    expect(prompt).not.toContain('禁止给出任何选英雄')
+  })
+
+  it('pickState 缺失（undefined）同样视为未锁定（debug5-9）', async () => {
+    const session = makeSessionData({})
+    session.subteams[0].players[0] = makeMyPlayer({
+      name: '我方甲',
+      puuid: 'p1',
+      championId: 103,
+      pickState: 'locked',
+      tierCn: '钻石IV'
+    })
+    const hovering = makeMyPlayer({
+      name: '我方乙',
+      puuid: 'p2',
+      championId: 55,
+      pickState: 'none',
+      tierCn: '铂金II'
+    })
+    delete hovering.pickState
+    session.subteams[0].players[1] = hovering
+    const prompt = await buildChampSelectPrompt(session, 'ranked')
+    expect(prompt).toContain('尚未结束')
+    expect(prompt).not.toContain('禁止给出任何选英雄')
+  })
+
   it('禁止选人类建议 when stage 为 finalization（即使 pickState 数据未跟上）', async () => {
     const session = makeSessionData({})
     session.champSelect!.stage = 'finalization'
