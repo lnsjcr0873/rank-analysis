@@ -268,7 +268,7 @@ describe('detailsTable', () => {
       id == null ? null : ({ itemId: id, count: 5, winCount: 3 } as ItemStat)
     )
 
-    it('按玩家英雄取推荐；英雄不同、列序对应', () => {
+    it('按列（participantId）取推荐；同英雄不同列互不串味', () => {
       const players = [
         makePlayer(0, 100, {
           item0: 101,
@@ -287,16 +287,18 @@ describe('detailsTable', () => {
           item5: 106
         })
       ]
+      // 两列英雄 id 相同（makePlayer 恒 championId=1），但推荐按列给：
+      // 第 1 列（participantId=1）有推荐，第 2 列（participantId=2）无
       const cells = buildCompareRow(players, itemIdsOf, new Map([[1, fullRec]]))
       expect(cells).toHaveLength(2)
-      // 两玩家英雄 id 都是 1 → 都有推荐
       expect(cells[0].recommend).not.toBeNull()
       expect(cells[0].diff.overall).toBe('match')
-      expect(cells[1].recommend).not.toBeNull()
-      expect(cells[1].diff.overall).toBe('swap') // 3/6 命中（<60% ≥30%）
+      // 同英雄、不同列 → 无推荐，不再把第 1 列的习惯套到第 2 列头上
+      expect(cells[1].recommend).toBeNull()
+      expect(cells[1].diff.overall).toBe('none')
     })
 
-    it('无该英雄推荐（Map 无此 championId）→ recommend null + overall none', () => {
+    it('无该列推荐（Map 无此 participantId）→ recommend null + overall none', () => {
       const players = [makePlayer(0, 100, { item0: 101 })]
       const cells = buildCompareRow(players, itemIdsOf, new Map([[999, fullRec]]))
       expect(cells[0].recommend).toBeNull()

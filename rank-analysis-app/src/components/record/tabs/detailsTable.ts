@@ -216,6 +216,10 @@ export interface StatsTablePlayer {
   displayName: string
   championId: number
   win: boolean
+  /** 该列玩家 puuid（出装对比按列查 PUGG 用；缺失时该列无推荐） */
+  puuid?: string
+  /** 是否为"我"（身份缺失时允许回退 myPuuid；他人列永不回退） */
+  isMe?: boolean
   /** 召唤师技能（出装对比行悬停详情用） */
   spell1Id: number
   spell2Id: number
@@ -348,23 +352,24 @@ export interface BuildCompareCell {
 }
 
 /**
- * 装配出装对比行：10 人各自 7 件 vs「该英雄的推荐 7 件」。
+ * 装配出装对比行：10 人各自 7 件 vs「该玩家玩该英雄的推荐 7 件」。
  *
- * 推荐按玩家自身英雄取（recommendByChampion[championId]），每人英雄不同，
- * 所以不允许传单份推荐——必须以英雄 → 推荐槽的映射传入。
+ * 推荐按列（participantId）取（recommendByParticipant[participantId]）：同一英雄
+ * 在我方绝活哥和敌方绝活哥手里的习惯出装完全不同，按英雄聚合会把使用者的
+ * 个人习惯套到对手头上（debug3-B2）。无该列推荐时为 undefined。
  *
  * @param players - 已排序（蓝→红）的 10 人玩家
  * @param itemIdsOf - 取玩家 7 槽装备 id（容器统一口径 ctx.itemIds）
- * @param recommendByChampion - 英雄 id → 推荐 7 槽；无该英雄推荐时为 undefined
+ * @param recommendByParticipant - participantId → 推荐 7 槽；无该列推荐时为 undefined
  * @returns 与 players 一一对应的对比单元格
  */
 export function buildCompareRow(
   players: StatsTablePlayer[],
   itemIdsOf: (stats: ParticipantStats) => number[],
-  recommendByChampion: ReadonlyMap<number, (ItemStat | null)[] | null> = new Map()
+  recommendByParticipant: ReadonlyMap<number, (ItemStat | null)[] | null> = new Map()
 ): BuildCompareCell[] {
   return players.map(player => {
-    const recommend = recommendByChampion.get(player.championId) ?? null
+    const recommend = recommendByParticipant.get(player.participantId) ?? null
     const diff = diffBuild(itemIdsOf(player.stats), recommend)
     return { player, diff, recommend }
   })

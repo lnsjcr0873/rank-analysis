@@ -139,7 +139,7 @@
                 </div>
                 <div v-if="buildLoading" class="match-detail-build-tip-na">推荐数据加载中…</div>
                 <div v-else-if="!cell.recommend" class="match-detail-build-tip-na">
-                  该英雄暂无本队推荐样本（样本 ≥5 场才出推荐）
+                  该玩家此英雄暂无出装样本（本人近 50 场中该英雄 ≥5 场才出推荐）
                 </div>
               </div>
             </template>
@@ -259,7 +259,9 @@ const players = computed<StatsTablePlayer[]>(() =>
       win: p.win,
       spell1Id: p.spell1Id,
       spell2Id: p.spell2Id,
-      stats: p.stats
+      stats: p.stats,
+      puuid: p.puuid,
+      isMe: p.isMe
     }))
 )
 
@@ -319,16 +321,18 @@ function barWidth(value: number, max: number) {
 /** 海克斯/斗魂模式无传统出装（强化槽取代），该行不适用 */
 const augmentMode = computed(() => ctx.usesAugments.value)
 
-/** currentSummary（"我"）的 puuid：PUGG 口径与对局中卡片一致（自有历史聚合） */
+/** currentSummary（"我"）的 puuid：仅用于"我"列兜底与重算触发 */
 const myPuuid = computed(() => ctx.players.mySummary.value?.puuid ?? '')
 
-/** 英雄 id → 推荐 7 槽（ItemStat[] = PUGG 聚合去重净胜权重后的 top1；null = 无样本/失败） */
-const recommendByChampion = ref(new Map<number, (ItemStat | null)[] | null>())
+/** participantId → 推荐 7 槽（ItemStat[] = 该列玩家玩该英雄的 PUGG top1；null = 无样本/失败） */
+const recommendByParticipant = ref(new Map<number, (ItemStat | null)[] | null>())
 const buildLoading = ref(false)
+/** 推荐所属对局：切对局时旧推荐失效，防止跨局串列 */
+const recommendGameId = ref<number | null>(null)
 
 /** 出装对比行单元格（列序与 players 一致） */
 const buildCells = computed<BuildCompareCell[]>(() =>
-  buildCompareRow(players.value, s => ctx.itemIds(s), recommendByChampion.value)
+  buildCompareRow(players.value, s => ctx.itemIds(s), recommendByParticipant.value)
 )
 
 /** 玩家实际 7 槽装备 id（与 diff.slots 索引一一对应） */
@@ -353,26 +357,43 @@ function buildVerdictLabel(cell: BuildCompareCell): string {
   }
 }
 
-/** 每局加载一次：10 人的英雄集合去重后逐英雄拉 PUGG（Rust 侧 moka 缓存命中） */
+/**
+ * 每局加载一次：10 列逐列按该列玩家 puuid 拉 PUGG（Rust 侧 moka 缓存命中）。
+ *
+ * 口径说明（debug3-B2）：此前全场 10 列共用 myPuuid 查推荐——敌方厄斐琉斯列
+ * 显示的是"我"的厄斐琉斯习惯（多半 null），即便对手是千场绝活哥。
+ * 现逐列按各自 puuid 查询；无 puuid 列直接 null（该列"暂无推荐"）。
+ */
 async function loadBuildRecommendations() {
-  const puuid = myPuuid.value
-  if (!puuid || augmentMode.value) return
-
-  const champions = [...new Set(players.value.map(p => p.championId).filter(id => id > 0))]
-  if (!champions.length) return
+  if (augmentMode.value) return
+  const gameId = ctx.game.value?.gameId ?? null
+  if (recommendGameId.value !== gameId) {
+    recommendByParticipant.value = new Map()
+    recommendGameId.value = gameId
+  }
 
   const mode = ctx.game.value?.queueId ?? 0
-  buildLoading.value = true
-  try {
-    const jobs = champions.map(async championId => {
+  const myId = myPuuid.value
+  const jobs = players.value
+    .filter(p => p.championId > 0)
+    .map(async p => {
       // 已有结果（含 null = 无样本，不再重试）直接跳过
-      if (recommendByChampion.value.has(championId)) return
-      const build = await getBuildStats(puuid, championId, mode)
+      if (recommendByParticipant.value.has(p.participantId)) return
+      // 仅"我"列允许回退到 myPuuid（身份缺失时）；他人列无 puuid 直接 null——
+      // 拿我的习惯套对手列正是 B2 要消灭的错位。
+      const columnPuuid = p.puuid || (p.isMe ? myId : '')
+      const build = columnPuuid ? await getBuildStats(columnPuuid, p.championId, mode) : null
       const slots: (ItemStat | null)[] | null = build
         ? build.items.map(slot => slot[0] ?? null)
         : null
-      recommendByChampion.value = new Map(recommendByChampion.value).set(championId, slots)
+      recommendByParticipant.value = new Map(recommendByParticipant.value).set(
+        p.participantId,
+        slots
+      )
     })
+  if (!jobs.length) return
+  buildLoading.value = true
+  try {
     await Promise.all(jobs)
   } finally {
     buildLoading.value = false
@@ -380,8 +401,9 @@ async function loadBuildRecommendations() {
 }
 
 /** "我"切换（段位后进/换队）或对局切换时重算推荐 */
-watch([myPuuid, augmentMode], () => {
-  recommendByChampion.value = new Map()
+watch([myPuuid, augmentMode, () => ctx.game.value?.gameId], () => {
+  recommendByParticipant.value = new Map()
+  recommendGameId.value = ctx.game.value?.gameId ?? null
   void loadBuildRecommendations()
 })
 
