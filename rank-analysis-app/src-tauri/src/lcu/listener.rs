@@ -214,6 +214,28 @@ impl LcuListener {
                                     tokio::time::sleep(Duration::from_secs(2)).await;
                                     break; // 跳出内层循环，进入下一次重连
                                 }
+                                // 心跳/控制帧显式处理（debug3）：此前 `_ => {}` 把
+                                // Ping/Pong/Binary/Frame 静默吞掉——不断连不报错，
+                                // 但系统休眠唤醒后对端若只发 Ping 保活，读循环收不到
+                                // Text 会被 READ_IDLE_TIMEOUT 误判半开而无谓重连。
+                                // write 半仍在作用域内，直接回 Pong 保活。
+                                Ok(Message::Ping(payload)) => {
+                                    log::debug!("LCU WebSocket 收到 Ping，回 Pong 保活");
+                                    if let Err(e) = write.send(Message::Pong(payload)).await {
+                                        log::warn!("回 Pong 失败: {e}，2秒后重连...");
+                                        tokio::time::sleep(Duration::from_secs(2)).await;
+                                        break;
+                                    }
+                                }
+                                Ok(Message::Pong(_)) => {
+                                    log::debug!("LCU WebSocket 收到 Pong（对端存活）");
+                                }
+                                Ok(Message::Binary(payload)) => {
+                                    log::debug!(
+                                        "LCU WebSocket 收到 Binary 帧（{} 字节，忽略）",
+                                        payload.len()
+                                    );
+                                }
                                 Err(e) => {
                                     log::error!("WebSocket 错误: {}，2秒后重连...", e);
                                     tokio::time::sleep(Duration::from_secs(2)).await;
