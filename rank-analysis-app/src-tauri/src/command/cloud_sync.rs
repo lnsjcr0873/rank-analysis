@@ -188,15 +188,21 @@ async fn ensure_session() -> Result<CloudSession, String> {
     Ok(session)
 }
 
-/// puuid 拼进 PostgREST 查询串前的校验：命令边界的不信任输入，限定 UUID 字符集防注入。
+/// puuid 拼进 PostgREST 查询串前的校验：命令边界的不信任输入，防注入。
 ///
 /// 空串必须显式拒绝——`chars().all(...)` 对空串恒真，曾放行空 puuid 读写云端
 /// 以 "" 为键的共享行（所有同状态用户混写一行，跨用户数据串流）。
-/// 正常路径 puuid 来自 LCU，恒为 UUID 格式，不受影响。
+///
+/// 字符集（debug4-14）：国服 LCU 下发 36 位 UUID（16 进制 + 连字符），但 Riot
+/// 国际服新一代 PUUID 是 78 位 Base64URL（`[A-Za-z0-9_-]`，含 g-z/G-Z 与下划线），
+/// 旧校验把合法国际服账号一律判非法。放宽为 Base64URL 字符集 + UUID 连字符；
+/// 注入防护改由调用侧 URL 百分比编码承担（见 `pull_payloads` 的 `urlencoding`）。
 fn validate_puuid(puuid: &str) -> Result<(), String> {
     if puuid.is_empty()
         || puuid.len() >= MAX_PUUID_LEN
-        || !puuid.chars().all(|c| c.is_ascii_hexdigit() || c == '-')
+        || !puuid
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
     {
         return Err("puuid 格式非法".to_string());
     }
@@ -207,8 +213,10 @@ fn validate_puuid(puuid: &str) -> Result<(), String> {
 async fn pull_payloads(puuid: &str, data_type: &str) -> Result<Vec<serde_json::Value>, String> {
     validate_puuid(puuid)?;
     let session = ensure_session().await?;
+    // puuid 直接拼进查询串：即使字符集已限，仍做百分比编码纵深防御。
     let url = format!(
-        "{SUPABASE_URL}/rest/v1/sync_data?puuid=eq.{puuid}&data_type=eq.{data_type}&select=payload"
+        "{SUPABASE_URL}/rest/v1/sync_data?puuid=eq.{}&data_type=eq.{data_type}&select=payload",
+        urlencoding::encode(puuid),
     );
     let resp = http()
         .get(url)
@@ -565,7 +573,16 @@ mod tests {
     fn validate_puuid_rejects_oversize() {
         // S1:巨型字符串不能拼进 PostgREST URL
         assert!(validate_puuid(&"a".repeat(MAX_PUUID_LEN + 1)).is_err());
-        assert!(validate_puuid(&"a".repeat(MAX_PUUID_LEN)).is_err()); // 字符集也不合法
+        assert!(validate_puuid(&"a".repeat(MAX_PUUID_LEN)).is_err()); // 边界：>= 即拒
+    }
+
+    #[test]
+    fn validate_puuid_accepts_riot_base64url_format() {
+        // debug4-14：国际服 78 位 Base64URL（含 g-z/G-Z 与下划线）必须放行
+        let riot = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_".to_string();
+        assert!(riot.len() < MAX_PUUID_LEN);
+        assert!(validate_puuid(&riot).is_ok());
+        assert!(validate_puuid("xyz123_-ABC-def456").is_ok());
     }
 
     #[test]

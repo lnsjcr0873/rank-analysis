@@ -294,7 +294,7 @@ if (!player) {
   throw new Error(`未在对局快照中找到 participantId 为 ${participantId} 的玩家`)
 }
 二、 网络与数据同步隐患 (Medium Severity)
-4. cloud_sync.rs：PUUID 白名单限制过窄，导致国际服/Riot 全球账号同步被拒
+4. cloud_sync.rs：PUUID 白名单限制过窄，导致国际服/Riot 全球账号同步被拒【已完成：字符集放宽为 Base64URL（字母数字+-/_）兼容 78 位 Riot PUUID；pull 侧加 urlencoding 纵深防注入；补单测+修旧注释笔误。GNU check/clippy/fmt 全过】
 文件路径：rank-analysis-app/src-tauri/src/command/cloud_sync.rs
 问题代码：
 code
