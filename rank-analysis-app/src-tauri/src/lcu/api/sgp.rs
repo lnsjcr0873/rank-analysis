@@ -29,7 +29,7 @@ use crate::lcu::util::http::{lcu_get, riot_client_get};
 use moka::future::Cache;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::sync::LazyLock;
+use std::sync::{Arc, LazyLock};
 use std::time::Duration;
 
 /// SGP 单局详情缓存(无 TTL,局数据不可变;max 500 防爆)。
@@ -70,39 +70,42 @@ static LEAGUE_SESSION_TOKEN_CACHE: LazyLock<Cache<(), String>> = LazyLock::new(|
 ///
 /// 该 token 用于 `match-history-query`，且跨大区通用（已验证）。带 30s 短缓存
 /// 削减批量场景的重复往返；401 场景由上层重取主机映射兜底。
+/// 取数经 `get_with` 单飞（debug3-C5）：缓存过期瞬间 10 并发只穿透 1 次，
+/// 不再 10 路齐打本地 LCU 触发 429/连接重置。
 pub async fn get_entitlements_access_token() -> Result<String, String> {
-    if let Some(t) = ENTITLEMENTS_TOKEN_CACHE.get(&()).await {
-        return Ok(t);
-    }
-    #[derive(Deserialize)]
-    struct EntitlementsToken {
-        #[serde(rename = "accessToken", default)]
-        access_token: String,
-    }
-    let t = lcu_get::<EntitlementsToken>("entitlements/v1/token").await?;
-    if t.access_token.is_empty() {
-        return Err("entitlements accessToken 为空（客户端未就绪？）".to_string());
-    }
     ENTITLEMENTS_TOKEN_CACHE
-        .insert((), t.access_token.clone())
-        .await;
-    Ok(t.access_token)
+        .try_get_with((), async {
+            #[derive(Deserialize)]
+            struct EntitlementsToken {
+                #[serde(rename = "accessToken", default)]
+                access_token: String,
+            }
+            let t = lcu_get::<EntitlementsToken>("entitlements/v1/token").await?;
+            if t.access_token.is_empty() {
+                return Err("entitlements accessToken 为空（客户端未就绪？）".to_string());
+            }
+            Ok(t.access_token)
+        })
+        .await
+        .map_err(|e: Arc<String>| e.as_ref().clone())
 }
 
 /// 从本地 LCU 取 SGP 会话 token（`lol-league-session/v1/league-session-token`）。
 ///
 /// 该 token 供会话系端点（`leagues-ledge` 段位等）使用，与 entitlements token 分流
 /// （对齐 LeagueAkari 的双 token 模型）。响应为裸 JSON 字符串。带 30s 短缓存。
+/// 同 entitlements 取数经 `get_with` 单飞（debug3-C5）。
 pub async fn get_league_session_token() -> Result<String, String> {
-    if let Some(t) = LEAGUE_SESSION_TOKEN_CACHE.get(&()).await {
-        return Ok(t);
-    }
-    let t = lcu_get::<String>("lol-league-session/v1/league-session-token").await?;
-    if t.trim().is_empty() {
-        return Err("league-session token 为空（客户端未就绪？）".to_string());
-    }
-    LEAGUE_SESSION_TOKEN_CACHE.insert((), t.clone()).await;
-    Ok(t)
+    LEAGUE_SESSION_TOKEN_CACHE
+        .try_get_with((), async {
+            let t = lcu_get::<String>("lol-league-session/v1/league-session-token").await?;
+            if t.trim().is_empty() {
+                return Err("league-session token 为空（客户端未就绪？）".to_string());
+            }
+            Ok(t)
+        })
+        .await
+        .map_err(|e: Arc<String>| e.as_ref().clone())
 }
 
 // ─────────────────────────── 段位 rankedStats ───────────────────────────
@@ -139,14 +142,16 @@ static SGP_RANKED_CACHE: LazyLock<Cache<String, SgpRankedStats>> = LazyLock::new
         .build()
 });
 
-/// rankedStats 404（未定级/该大区无记录）的**负缓存**（5min TTL）。
+/// rankedStats 404（未定级/该大区无记录）的**负缓存**（15s TTL）。
 ///
 /// 未定级玩家的 404 若不入缓存，批量段位查询会对每个未定级玩家反复打网
-/// （正缓存只收 2xx）。5min 后自动过期重查——定级后能及时看到段位。
+/// （正缓存只收 2xx）。此前 5min 过长：新角色网关同步延迟数秒、晋级赛刚
+/// 打完等场景下，首次瞬时 404 会把该大区封锁 5 分钟假死（debug3-C5）。
+/// 15s 既防批量反复打网，又让晋级/新号秒级可见；前端"强制刷新"可再绕过。
 static SGP_RANKED_NEGATIVE: LazyLock<Cache<String, ()>> = LazyLock::new(|| {
     Cache::builder()
         .max_capacity(500)
-        .time_to_live(Duration::from_secs(5 * 60))
+        .time_to_live(Duration::from_secs(15))
         .build()
 });
 
@@ -230,13 +235,40 @@ async fn sgp_get_resilient<T: serde::de::DeserializeOwned>(
 /// （腾讯区与战绩同主机；国际区为 `{region}-red.lol.sgp.pvp.net`）。
 /// 404（未定级/该大区无记录）返回空结构，前端自然显示「无段位」。
 pub async fn fetch_ranked_stats(platform_id: &str, puuid: &str) -> Result<SgpRankedStats, String> {
+    fetch_ranked_stats_inner(platform_id, puuid, false).await
+}
+
+/// 拉取指定大区某玩家的段位（`leagues-ledge/v2/rankedStats`）。
+///
+/// # 参数
+/// - `platform_id`: 目标大区（如 `HN10` / `NA1`），映射为 SGP common 主机。
+/// - `puuid`: 目标玩家 PUUID（全局唯一，跨区一致）。
+/// - `force_refresh`: 跳过正/负缓存直查（前端"强制刷新"/晋级赛后用）。
+///
+/// 用 **league-session token**（非战绩用的 entitlements token），走 common 主机
+/// （腾讯区与战绩同主机；国际区为 `{region}-red.lol.sgp.pvp.net`）。
+/// 404（未定级/该大区无记录）返回空结构，前端自然显示「无段位」。
+pub async fn fetch_ranked_stats_forced(
+    platform_id: &str,
+    puuid: &str,
+) -> Result<SgpRankedStats, String> {
+    fetch_ranked_stats_inner(platform_id, puuid, true).await
+}
+
+async fn fetch_ranked_stats_inner(
+    platform_id: &str,
+    puuid: &str,
+    force_refresh: bool,
+) -> Result<SgpRankedStats, String> {
     let key = format!("{platform_id}:{puuid}");
-    if let Some(cached) = SGP_RANKED_CACHE.get(&key).await {
-        return Ok(cached);
-    }
-    // 未定级负缓存：404 玩家在 5min 内不再反复打网
-    if SGP_RANKED_NEGATIVE.get(&key).await.is_some() {
-        return Ok(SgpRankedStats::default());
+    if !force_refresh {
+        if let Some(cached) = SGP_RANKED_CACHE.get(&key).await {
+            return Ok(cached);
+        }
+        // 未定级负缓存：404 玩家在 15s 内不再反复打网
+        if SGP_RANKED_NEGATIVE.get(&key).await.is_some() {
+            return Ok(SgpRankedStats::default());
+        }
     }
     let token = get_league_session_token().await?;
     let uri = format!("leagues-ledge/v2/rankedStats/puuid/{}", puuid);

@@ -27,6 +27,10 @@ impl PhaseCache {
     }
 
     /// 缓存是否仍可信：2 秒内且产生缓存时的认证未变。
+    ///
+    /// 拿不到当前认证（客户端未运行/刚退出）时直接不可信（debug3-C5）——
+    /// 此前 `_ => true` 只信时间窗，客户端退出 2 秒内频繁 get_phase 会返回
+    /// 最后一次缓存阶段（"InProgress" 幽灵），前端被踢入对局残留页。
     fn is_valid(&self, now_auth: &Option<(String, String)>) -> bool {
         let Some(cached_at) = self.cached_at else {
             return false;
@@ -36,8 +40,8 @@ impl PhaseCache {
         }
         match (&self.auth_fingerprint, now_auth) {
             (Some(a), Some(b)) => a == b,
-            // 拿不到当前认证（客户端未运行）时只信时间窗本身
-            _ => true,
+            // 无当前认证 = 客户端不在，任何缓存都不可信
+            _ => false,
         }
     }
 }
@@ -62,6 +66,17 @@ pub fn update_phase_cache(phase: String) {
     log::debug!("Phase cache updated via WebSocket: {}", cache.last_phase);
 }
 
+/// 主动失效 phase 缓存（客户端退出/认证轮换感知时调用）。
+///
+/// `get_phase` 无认证时已不再信任缓存（见 `is_valid`），此函数供明确知道
+/// "旧阶段已死"的调用方（token 层认证失败、退出钩子）立即清掉，避免等 2s 窗口。
+pub fn invalidate_phase_cache() {
+    let mut cache = lock_or_recover(&PHASE_CACHE);
+    cache.cached_at = None;
+    cache.auth_fingerprint = None;
+    log::debug!("Phase cache invalidated");
+}
+
 /// 获取当前游戏流程阶段（2 秒内且认证未变时使用缓存）。
 pub async fn get_phase() -> Result<String, String> {
     // 认证指纹在锁外取（auth_fingerprint 内部有自己的锁，避免嵌套）
@@ -75,8 +90,15 @@ pub async fn get_phase() -> Result<String, String> {
 
     // 获取新的阶段（使用 unthrottled 保证探针与状态检测不被批量请求限流队列阻塞）
     let uri = "lol-gameflow/v1/gameflow-phase";
-    let phase = lcu_get_unthrottled::<String>(uri).await?;
-
+    let phase = match lcu_get_unthrottled::<String>(uri).await {
+        Ok(p) => p,
+        Err(e) => {
+            // LCU 已死/不可达：缓存若残留旧阶段就是"幽灵对局"，立即失效，
+            // 下次 get_phase 直接走 Err，不再返回陈旧 InProgress。
+            invalidate_phase_cache();
+            return Err(e);
+        }
+    };
     // 更新缓存
     {
         let mut cache = lock_or_recover(&PHASE_CACHE);
@@ -86,4 +108,57 @@ pub async fn get_phase() -> Result<String, String> {
     }
 
     Ok(phase)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn fp() -> Option<(String, String)> {
+        Some(("tok".to_string(), "1234".to_string()))
+    }
+
+    #[test]
+    fn cache_without_auth_is_never_valid() {
+        // debug3-C5：客户端未运行时（无认证指纹），任何缓存都不可信——
+        // 此前 `_ => true` 只信时间窗，退出 2 秒内返回幽灵 InProgress。
+        let mut c = PhaseCache::new();
+        c.last_phase = "InProgress".to_string();
+        c.auth_fingerprint = fp();
+        c.cached_at = Some(std::time::Instant::now());
+        assert!(!c.is_valid(&None));
+    }
+
+    #[test]
+    fn cache_with_same_auth_is_valid_within_window() {
+        let mut c = PhaseCache::new();
+        c.last_phase = "ChampSelect".to_string();
+        c.auth_fingerprint = fp();
+        c.cached_at = Some(std::time::Instant::now());
+        assert!(c.is_valid(&fp()));
+    }
+
+    #[test]
+    fn cache_rejects_changed_auth() {
+        let mut c = PhaseCache::new();
+        c.last_phase = "ChampSelect".to_string();
+        c.auth_fingerprint = fp();
+        c.cached_at = Some(std::time::Instant::now());
+        let other = Some(("newtok".to_string(), "5678".to_string()));
+        assert!(!c.is_valid(&other));
+    }
+
+    #[test]
+    fn invalidate_clears_cache() {
+        {
+            let mut cache = lock_or_recover(&PHASE_CACHE);
+            cache.last_phase = "InProgress".to_string();
+            cache.auth_fingerprint = fp();
+            cache.cached_at = Some(std::time::Instant::now());
+        }
+        invalidate_phase_cache();
+        let cache = lock_or_recover(&PHASE_CACHE);
+        assert!(!cache.is_valid(&fp()));
+        assert!(!cache.is_valid(&None));
+    }
 }
