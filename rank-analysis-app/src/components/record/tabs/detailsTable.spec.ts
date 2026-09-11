@@ -175,7 +175,8 @@ describe('detailsTable', () => {
       expect(nanTable[0].max).toBe(0)
     })
 
-    it('自定义行定义可覆盖默认（SGP 增强追加行）', () => {      const custom = [
+    it('自定义行定义可覆盖默认（SGP 增强追加行）', () => {
+      const custom = [
         {
           key: 'x',
           label: '自定义',
