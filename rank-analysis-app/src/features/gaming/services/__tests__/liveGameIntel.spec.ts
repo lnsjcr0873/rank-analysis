@@ -170,6 +170,45 @@ describe('liveGameIntel', () => {
       const events = [kill(100, 'a', 'b'), kill(500, 'c', 'd')]
       expect(teamfightClusters(events, ME, { windowSecs: 500, minDeaths: 2 })).toHaveLength(1)
     })
+
+    it('debug5：队友阵亡计入我方（传 myTeamNames），不再误报大胜', () => {
+      const events = [
+        kill(300, 'enemy1', 'ally1'),
+        kill(310, 'enemy2', 'ally2'),
+        kill(315, 'enemy3', 'ally3') // 3 死全是队友，自己幸存
+      ]
+      const clusters = teamfightClusters(events, ME, {
+        myTeamNames: [ME, 'ally1', 'ally2', 'ally3']
+      })
+      expect(clusters).toHaveLength(1)
+      expect(clusters[0].deaths).toBe(3)
+      expect(clusters[0].myDeaths).toBe(3)
+    })
+  })
+
+  describe('goldGap 多队', () => {
+    it('debug5：斗魂多队对比全场非己方平均，非二元', () => {
+      const s = snapshot([
+        player(ME, { team: 'TEAM1', gold: { total: 10000 } }),
+        player('mate', { team: 'TEAM1', gold: { total: 10000 } }),
+        player('e1', { team: 'TEAM2', gold: { total: 30000 } }),
+        player('e2', { team: 'TEAM3', gold: { total: 10000 } })
+      ])
+      const gap = goldGap(s, ME)
+      expect(gap?.multiTeam).toBe(true)
+      expect(gap?.myTeamGold).toBe(20000)
+      // 非己方两人平均：(30000+10000)/2 = 20000
+      expect(gap?.enemyTeamGold).toBe(20000)
+      expect(gap?.diffPct).toBe(0)
+    })
+
+    it('二元对局 multiTeam 为 false，行为不变', () => {
+      const s = snapshot([
+        player(ME, { gold: { total: 11050 } }),
+        player('enemy1', { team: 'CHAOS', gold: { total: 28000 } })
+      ])
+      expect(goldGap(s, ME)?.multiTeam).toBe(false)
+    })
   })
 
   describe('myDeaths', () => {

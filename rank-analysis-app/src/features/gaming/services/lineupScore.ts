@@ -102,6 +102,11 @@ export function playerLineupAdjustment(profile: RecentPlayerProfile): PlayerAdju
     return { playerRate: null, adjustment: 0, reasons: [] }
   }
 
+  // debug5：recentWinRate 缺失/NaN 会击穿整条计算链（NaN 污染 → 强度条 NaN% 消失）。
+  // 非有限值按无画像依据降级（与 total==0 同口径）。
+  if (!Number.isFinite(profile.recentWinRate)) {
+    return { playerRate: null, adjustment: 0, reasons: [] }
+  }
   const wins = Math.round(profile.recentWinRate * totalGames)
   const shrunkRate = (wins + 5) / (totalGames + 10)
   const reasons: string[] = []
@@ -116,7 +121,11 @@ export function playerLineupAdjustment(profile: RecentPlayerProfile): PlayerAdju
     if (mastery.isOnetrick) {
       adjustment += 0.02
       reasons.push('绝活')
-    } else if (mastery.gamesInRecent >= 5 && mastery.winRate >= 0.55) {
+    } else if (
+      mastery.gamesInRecent >= 5 &&
+      Number.isFinite(mastery.winRate) &&
+      mastery.winRate >= 0.55
+    ) {
       adjustment += 0.015
       reasons.push(`近${mastery.gamesInRecent}场${Math.round(mastery.winRate * 100)}%`)
     }
@@ -235,7 +244,9 @@ export function computeLineupScore(champions: LineupScoreInput[]): LineupScore {
   const breakdown: LineupHeroDetail[] = []
 
   for (const c of covered) {
-    const base = c.meta!.winRate || 0
+    // debug5：meta.winRate 非有限（缺失/NaN）时按 0 降级，不让 NaN 穿透到 score。
+    const rawBase = c.meta!.winRate
+    const base = Number.isFinite(rawBase) ? (rawBase as number) : 0
     const detail: LineupHeroDetail = {
       championId: c.championId,
       baseWinRate: round1(base * 100),

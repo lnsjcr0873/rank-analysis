@@ -881,7 +881,7 @@ pub fn prune_stale_pending(older_than_ms: i64)
 1	算法计算	score.rs	治疗维度评分公式将 ratio 再次除以数万点全队血量，治疗得分永远为 0	修正 linear 的 max 参数为比率常量 HEAL_RATIO_MAX
 2	业务逻辑	lineupScore.ts	阈值错把小数胜率差当成百分数（>= 3.0），对位克制提示永远无法生成	将判定阈值修正为 0.03
 3	数据丢失	Growth.vue	导入改错目标备份时由于后端固定插 0，导致已完成状态全部丢失变回复活	增加状态恢复逻辑，还原 done 打卡状态
-4	数据错位	judges.ts	三裁判数据解析按数组下标硬取选手，顺序打乱时战报姓名与战绩全场错位	通过 participantId 建立可靠关联
+4	数据错位	judges.ts	三裁判数据解析按数组下标硬取选手，顺序打乱时战报姓名与战绩全场错位	通过 participantId 建立可靠关联【已完成：judgePlayersFromGame优先按participantId对齐、无id退回下标；附2回归。9单测全绿，prettier/eslint/tsc全过】
 5	业务串号	backtest/store.rs	prune_stale_pending 从未被调用，秒退局孤儿建议长期残留引发跨局误对账	引入定期与对账前过时建议清理机制
 Model 18:24
 ThinkingThoughts
@@ -1023,10 +1023,10 @@ fetchPlayerProfile(...) 与 queryMeetSummary(...)。
 序号	类别	模块 / 文件	核心表现	修复策略
 1	数据丢失	Growth.vue	目标还原未同步 done 状态，打卡记录导入后全部变为未完成	还原时追加已完成状态的打卡补偿
 2	逻辑截断	score/events.rs	评分事件按发生时间升序截取前 12 条，导致中后期团战大失误全被丢弃	改为按重要性（delta.abs()）降序筛选后再按时间排版【已完成：compute_score_events改先按delta.abs()降序取前12再按时间升序排版；衍生审同文件聚类/各维度权重定义不变无同患。附1回归（12前期阵亡+1后期漏团，漏团必留存且有序）。cargo fmt/clippy(GNU)/check --tests全过，cargo test以CI为权威】
-3	数据失真	liveGameIntel.ts	团战阵亡统计由于缺少队伍过滤，我方队友阵亡全被当作敌方阵亡（团灭误报为大胜）	引入对局全员队伍名单比对受害人阵营
+3	数据失真	liveGameIntel.ts	团战阵亡统计由于缺少队伍过滤，我方队友阵亡全被当作敌方阵亡（团灭误报为大胜）	引入对局全员队伍名单比对受害人阵营【已完成：teamfightClusters加myTeamNames参数（liveIntelText内部组快照同side全员），myDeaths口径改为我方全队；goldGap多队对比全场非己方平均并标multiTeam，myPlayer/mySide解二元归一。附3回归。20单测全绿，prettier/eslint/tsc全过】
 4	显示错误	MatchDetailStatsTab.vue	全员得 0 的指标被 row.max > 0 判定为字段缺失，展示全屏横杠 "—"	仅在非有效数字时走缺失展示分支【已完成：buildRowsFromSources新增empty标记（无有效数字=缺失，全员0正常展示）；模板+statsBarDisabled改判empty；附1回归。23+7单测全绿，prettier/eslint/tsc全过】
 5	多屏故障	overlay/mod.rs	悬浮窗坐标未加上副显示器物理原点，副屏游戏时浮窗强行跑到主屏	坐标计算叠加 monitor.position() 偏移【已完成：position_by_anchor最终坐标叠加monitor.position()/scale_factor逻辑原点；主屏原点(0,0)行为不变无回归。cargo fmt/clippy(GNU)/check --tests全过，cargo test以CI为权威】
-6	存储耗尽	stream.ts	AI 文本缓存长期无上限塞入 localStorage，撑爆 5MB 导致持久化崩溃	增加条目淘汰机制或迁移到 SQLite / Rust 侧持久化
+6	存储耗尽	stream.ts	AI 文本缓存长期无上限塞入 localStorage，撑爆 5MB 导致持久化崩溃	增加条目淘汰机制或迁移到 SQLite / Rust 侧持久化【已完成：配额满自救删体积最大一半（key无统一前缀不做定时淘汰）；sessionStorage会话级关窗即清。prettier/eslint/tsc全过】
 7	性能卡顿	PlayerProfilePopover.vue	头像 Popover 预先全部挂载，页面打开瞬间并发执行上百次查询	改造为真正 Hover 时才延迟激活挂载（Lazy Render）
 Model 18:29
 ThinkingThoughts

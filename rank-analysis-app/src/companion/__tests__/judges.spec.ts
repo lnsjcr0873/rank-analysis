@@ -118,4 +118,32 @@ describe('judgePlayersFromGame 适配器', () => {
     })
     expect(players[1].name).toBe('玩家2')
   })
+
+  it('debug5：顺序打乱时按 participantId 对齐，不张冠李戴', () => {
+    const game = {
+      participants: [
+        { participantId: 2, teamId: 100, stats: { kills: 1 } },
+        { participantId: 1, teamId: 100, stats: { kills: 9 } }
+      ],
+      participantIdentities: [
+        { participantId: 1, player: { gameName: 'one' } },
+        { participantId: 2, player: { gameName: 'two' } }
+      ]
+    }
+    const players = judgePlayersFromGame(game)
+    expect(players[0].name).toBe('two')
+    expect(players[0].kills).toBe(1)
+    expect(players[1].name).toBe('one')
+    expect(players[1].kills).toBe(9)
+  })
+
+  it('debug5：无 participantId 时退回下标对齐（LCU 常规）', () => {
+    const game = {
+      participants: [{ teamId: 100 }, { teamId: 200 }],
+      participantIdentities: [{ player: { gameName: 'a' } }, { player: { gameName: 'b' } }]
+    }
+    const players = judgePlayersFromGame(game)
+    expect(players[0].name).toBe('a')
+    expect(players[1].name).toBe('b')
+  })
 })

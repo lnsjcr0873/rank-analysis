@@ -181,6 +181,28 @@ describe('playerLineupAdjustment', () => {
     )
     expect(empty).toEqual({ playerRate: null, adjustment: 0, reasons: [] })
   })
+
+  it('debug5：recentWinRate NaN → 按无画像降级，不污染强度条', () => {
+    const nan = playerLineupAdjustment(profile({ recentWinRate: NaN }))
+    expect(nan).toEqual({ playerRate: null, adjustment: 0, reasons: [] })
+  })
+
+  it('debug5：熟练度 winRate NaN → 跳过该加成，不污染', () => {
+    const adj = playerLineupAdjustment(
+      profile({
+        recentWinRate: 0.5,
+        currentChampionMastery: {
+          gamesInRecent: 10,
+          winRate: NaN,
+          avgKda: 3,
+          isOnetrick: false,
+          isFirstTimeInRecent: false
+        }
+      })
+    )
+    expect(Number.isFinite(adj.adjustment)).toBe(true)
+    expect(adj.adjustment).toBeCloseTo(0, 3)
+  })
 })
 
 describe('computeLineupScore with player profiles', () => {

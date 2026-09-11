@@ -278,28 +278,37 @@ interface RawParticipantLike {
 
 interface RawGameLike {
   participants?: RawParticipantLike[]
-  participantIdentities?: Array<{ player?: { gameName?: string; summonerName?: string } }>
+  participantIdentities?: Array<{
+    participantId?: number
+    player?: { gameName?: string; summonerName?: string }
+  }>
 }
 
 /**
  * 宽松适配：LCU `lol-match-history/v1/games/{id}` 详情结构 → JudgePlayer[]。
- * identities[i] 与 participants[i] 按下标一一对应（LCU 约定）；字段缺失降级为 0。
+ * 身份优先按 participantId 精确对齐（SGP 跨区/掉线/顺序打乱时下标会错位），
+ * 找不到再退回同下标（LCU 常规约定）。
+ * debug5：此前纯下标对齐，顺序打乱时姓名与战绩张冠李戴。
  */
 export function judgePlayersFromGame(game: RawGameLike): JudgePlayer[] {
   const parts = game.participants ?? []
   const ids = game.participantIdentities ?? []
-  return parts.map((p, i) => ({
-    name:
-      ids[i]?.player?.gameName || ids[i]?.player?.summonerName || `玩家${p.participantId ?? i + 1}`,
-    team: p.teamId ?? 0,
-    win: p.stats?.win === true,
-    kills: p.stats?.kills ?? 0,
-    deaths: p.stats?.deaths ?? 0,
-    assists: p.stats?.assists ?? 0,
-    damageDealt: p.stats?.totalDamageDealtToChampions ?? 0,
-    damageTaken: p.stats?.totalDamageTaken ?? 0,
-    turretDamage: p.stats?.damageDealtToTurrets ?? 0,
-    heal: p.stats?.totalHeal ?? 0,
-    goldEarned: p.stats?.goldEarned ?? 0
-  }))
+  return parts.map((p, i) => {
+    const byId =
+      p.participantId != null ? ids.find(id => id.participantId === p.participantId) : undefined
+    const id = byId ?? ids[i]
+    return {
+      name: id?.player?.gameName || id?.player?.summonerName || `玩家${p.participantId ?? i + 1}`,
+      team: p.teamId ?? 0,
+      win: p.stats?.win === true,
+      kills: p.stats?.kills ?? 0,
+      deaths: p.stats?.deaths ?? 0,
+      assists: p.stats?.assists ?? 0,
+      damageDealt: p.stats?.totalDamageDealtToChampions ?? 0,
+      damageTaken: p.stats?.totalDamageTaken ?? 0,
+      turretDamage: p.stats?.damageDealtToTurrets ?? 0,
+      heal: p.stats?.totalHeal ?? 0,
+      goldEarned: p.stats?.goldEarned ?? 0
+    }
+  })
 }

@@ -29,10 +29,10 @@ function sameName(a: string, b: string): boolean {
 export function myPlayer(
   snapshot: LiveGameSnapshot,
   myGameName: string
-): { player: LivePlayer; side: 'ORDER' | 'CHAOS' } | null {
+): { player: LivePlayer; side: string } | null {
   for (const player of snapshot.players) {
     if (sameName(player.summonerName, myGameName)) {
-      return { player, side: player.team === 'ORDER' ? 'ORDER' : 'CHAOS' }
+      return { player, side: player.team }
     }
   }
   return null
@@ -47,25 +47,42 @@ export function teamGold(snapshot: LiveGameSnapshot, side: string): number {
 }
 
 export interface GoldGap {
-  mySide: 'ORDER' | 'CHAOS'
+  mySide: string
   myTeamGold: number
   enemyTeamGold: number
   /** 我方相对敌方的经济差百分比（1 位小数；敌方 0 经济时为 null） */
   diffPct: number | null
+  /** 多队模式（斗魂）时为 true：敌方为全场非己方平均，非二元对照 */
+  multiTeam?: boolean
 }
 
-/** 双方总经济对比（含 0 玩家时的降级）。 */
+/**
+ * 双方总经济对比（含 0 玩家时的降级）。
+ * debug5：多队模式（斗魂 2v2v2v2，非 ORDER/CHAOS 二元）此前只取一支敌队，
+ * 经济差脱离事实。现对比全场其余所有队伍的平均经济，并在结果标注 multiTeam。
+ */
 export function goldGap(snapshot: LiveGameSnapshot, myGameName: string): GoldGap | null {
   const me = myPlayer(snapshot, myGameName)
   if (!me) return null
-  const enemySide = me.side === 'ORDER' ? 'CHAOS' : 'ORDER'
+  const sides = [...new Set(snapshot.players.map(p => p.team))]
+  const multiTeam = sides.length > 2
   const myTeamGold = teamGold(snapshot, me.side)
-  const enemyTeamGold = teamGold(snapshot, enemySide)
+  let enemyTeamGold: number
+  if (!multiTeam) {
+    const enemySide = me.side === 'ORDER' ? 'CHAOS' : 'ORDER'
+    enemyTeamGold = teamGold(snapshot, enemySide)
+  } else {
+    const others = snapshot.players.filter(p => p.team !== me.side)
+    enemyTeamGold =
+      others.length > 0
+        ? Math.round(others.reduce((acc, p) => acc + (p.gold?.total ?? 0), 0) / others.length)
+        : 0
+  }
   const diffPct =
     enemyTeamGold > 0
       ? Math.round(((myTeamGold - enemyTeamGold) / enemyTeamGold) * 1000) / 10
       : null
-  return { mySide: me.side, myTeamGold, enemyTeamGold, diffPct }
+  return { mySide: me.side, myTeamGold, enemyTeamGold, diffPct, multiTeam }
 }
 
 /** 剔除饰品后的主装备（槽位序 = 快照顺序）。 */
@@ -109,7 +126,7 @@ export interface TeamfightCluster {
   timeSecs: number
   /** 团战死亡总数（双方合计） */
   deaths: number
-  /** 其中我方死亡数 */
+  /** 其中我方全队死亡数（需调用方传 myTeamNames，否则仅计自己） */
   myDeaths: number
 }
 
@@ -124,14 +141,19 @@ export interface ClusterOptions {
  * 团战时间点检测：ChampionKill 事件按时间贪婪聚类，窗口内死亡数达到阈值即一团。
  *
  * 从事件流取「击杀=某人死亡」的语义：VictimName 即死亡者。
+ * debug5：myDeaths 口径 = **我方全队**阵亡（此前只计自己一人，队友阵亡被算成
+ * 敌方，"我方被 0 换 4" 会误报成"我方 0 换 4 大胜"）。需调用方传入我方全队
+ * 名单（快照 players 同 side 全员），仅自己时退化为旧口径。
  */
 export function teamfightClusters(
   events: LiveEvent[],
   myGameName: string,
-  options: ClusterOptions = {}
+  options: ClusterOptions & { myTeamNames?: Iterable<string> } = {}
 ): TeamfightCluster[] {
   const windowSecs = options.windowSecs ?? 45
   const minDeaths = options.minDeaths ?? 3
+  const teamNames = new Set([...(options.myTeamNames ?? [])].map(n => n.trim().toLowerCase()))
+  teamNames.add(myGameName.trim().toLowerCase())
   const deaths = events
     .filter(e => e.eventName === 'ChampionKill' && e.eventTime > 0)
     .sort((a, b) => a.eventTime - b.eventTime)
@@ -146,7 +168,7 @@ export function teamfightClusters(
       current = { timeSecs: d.eventTime, deaths: 0, myDeaths: 0 }
     }
     current.deaths += 1
-    if (sameName(d.victimName, myGameName)) {
+    if (teamNames.has(d.victimName.trim().toLowerCase())) {
       current.myDeaths += 1
     }
   }
@@ -240,7 +262,11 @@ export function liveIntelText(
     lines.push(status)
   }
 
-  const clusters = me ? teamfightClusters(snapshot.events, myGameName) : []
+  const clusters = me
+    ? teamfightClusters(snapshot.events, myGameName, {
+        myTeamNames: playersOf(snapshot, me.side).map(p => p.summonerName)
+      })
+    : []
   if (clusters.length > 0) {
     lines.push(`团战时间点：${clusters.slice(-maxItems).map(clusterLine).join('；')}`)
   }

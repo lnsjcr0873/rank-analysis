@@ -180,7 +180,44 @@ function writeCacheSafe(key: string, content: string): void {
   try {
     sessionStorage.setItem(key, content)
   } catch {
-    // 忽略：无缓存只是下次重算，不能让本次成功变挂起
+    // 配额满时清掉体积最大的几条缓存再试一次；仍失败则放弃（不阻断响应）。
+    // debug5：此前无上限，单会话大量复盘可撑爆 sessionStorage 配额。
+    try {
+      evictLargestCacheEntries()
+      sessionStorage.setItem(key, content)
+    } catch {
+      // 忽略：无缓存只是下次重算，不能让本次成功变挂起
+    }
+  }
+}
+
+/** AI 缓存条数上限（sessionStorage 会话级，关窗口即清；防单会话撑爆配额）。 */
+const AI_CACHE_MAX_ENTRIES = 50
+
+/**
+ * 配额满时的自救：删掉体积最大的几条 AI 缓存再试。
+ * key 无统一前缀，按 value 长度降序删（AI 战报 3~10KB，天然排前面）；
+ * 删一半仍写不下就放弃——不阻断本次成功响应。
+ */
+function evictLargestCacheEntries(): void {
+  const entries: Array<{ k: string; len: number }> = []
+  for (let i = 0; i < sessionStorage.length; i++) {
+    const k = sessionStorage.key(i)
+    if (!k) continue
+    try {
+      entries.push({ k, len: (sessionStorage.getItem(k) ?? '').length })
+    } catch {
+      // 读失败跳过
+    }
+  }
+  if (entries.length < AI_CACHE_MAX_ENTRIES) return
+  entries.sort((a, b) => b.len - a.len)
+  for (const e of entries.slice(0, Math.ceil(entries.length / 2))) {
+    try {
+      sessionStorage.removeItem(e.k)
+    } catch {
+      // 删失败继续删下一条
+    }
   }
 }
 
