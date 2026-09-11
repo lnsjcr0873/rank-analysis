@@ -75,8 +75,8 @@ pub struct ThreatRating {
 /// 按 puuid 在单局中定位参与者（口径同 insight::my_participant）。
 ///
 /// 通过 `game_detail.participant_identities` 找到该 puuid 在列表中的索引，
-/// 再在 `game_detail.participants` 中按 `participant_id == idx + 1` 匹配，
-/// 找不到退回同索引取值。
+/// 再在 `game_detail.participants` 中按 `participant_id == idx + 1` 精确匹配；
+/// debug6 去掉同索引回退，对不上即 None（防串人进威胁评估）。
 fn find_participant<'a>(game: &'a Game, puuid: &str) -> Option<&'a Participant> {
     let identities = &game.game_detail.participant_identities;
     let idx = identities.iter().position(|i| i.player.puuid == puuid)?;
@@ -84,7 +84,6 @@ fn find_participant<'a>(game: &'a Game, puuid: &str) -> Option<&'a Participant> 
         .participants
         .iter()
         .find(|p| p.participant_id == idx as i32 + 1)
-        .or_else(|| game.game_detail.participants.get(idx))
 }
 
 /// 从单局中提取玩家评分输入。

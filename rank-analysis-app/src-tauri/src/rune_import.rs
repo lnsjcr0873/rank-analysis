@@ -32,12 +32,17 @@ pub struct RunePageBuild {
 ///
 /// 与 samples.rs 同纪律：完整详情带身份，匹配不到说明本机不在局内
 /// （收集的是别人的局）→ 该局跳过，**不回退** participants[0]（宁缺毋滥）。
+/// debug6：按 participantId 精确对齐（此前同索引取值，SGP 顺序打乱会串人）。
 fn my_participant<'a>(game: &'a Game, my_puuid: &str) -> Option<&'a Participant> {
-    game.game_detail
+    let idx = game
+        .game_detail
         .participant_identities
         .iter()
-        .position(|i| i.player.puuid == my_puuid)
-        .and_then(|idx| game.game_detail.participants.get(idx))
+        .position(|i| i.player.puuid == my_puuid)?;
+    game.game_detail
+        .participants
+        .iter()
+        .find(|p| p.participant_id == idx as i32 + 1)
 }
 
 /// 从一局的完整 perks 提取可写符文页；缺 styles/stat_perks → None（宁缺毋滥）。

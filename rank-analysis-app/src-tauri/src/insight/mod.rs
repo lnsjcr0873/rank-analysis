@@ -38,7 +38,8 @@ fn dim_value(stats: &Stats, dim: &str) -> Option<i32> {
     }
 }
 
-/// 定位本机参与者（口径同 samples.rs：identity 按 participantId 对齐，找不到退回同索引）。
+/// 定位本机参与者（identity 按 participantId 精确对齐；SGP 跨区/掉线顺序打乱时
+/// 同索引会错位，debug6 去掉同索引回退——对不上即 None 整局跳过，宁缺毋滥）。
 fn my_participant<'a>(game: &'a Game, my_puuid: &str) -> Option<&'a Participant> {
     let identities = &game.game_detail.participant_identities;
     let idx = identities.iter().position(|i| i.player.puuid == my_puuid)?;
@@ -46,7 +47,6 @@ fn my_participant<'a>(game: &'a Game, my_puuid: &str) -> Option<&'a Participant>
         .participants
         .iter()
         .find(|p| p.participant_id == idx as i32 + 1)
-        .or_else(|| game.game_detail.participants.get(idx))
 }
 
 /// 单局六维差值（负 = 落后 peer）与 peer 均值；本机缺失或局内无同位置

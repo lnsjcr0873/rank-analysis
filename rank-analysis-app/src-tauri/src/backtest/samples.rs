@@ -43,13 +43,12 @@ fn extract_my_sample(game: &Game, my_puuid: &str) -> Option<LocalSample> {
     let identities = &game.game_detail.participant_identities;
     let identity_idx = identities.iter().position(|i| i.player.puuid == my_puuid)?;
     // participantId 从 1 起且 identity 数组按 participantId 顺序（与前端
-    // buildScoreInputsFromGame 同款对齐），找不到再退回同索引。
+    // buildScoreInputsFromGame 同款对齐）；debug6 去掉同索引回退，对不上即 None。
     let my = game
         .game_detail
         .participants
         .iter()
-        .find(|p| p.participant_id == identity_idx as i32 + 1)
-        .or_else(|| game.game_detail.participants.get(identity_idx))?;
+        .find(|p| p.participant_id == identity_idx as i32 + 1)?;
     let (lane, role) = match &my.timeline {
         Some(t) => (t.lane.as_str(), t.role.as_str()),
         None => ("", ""),

@@ -173,12 +173,12 @@ fn days_from_civil(y: i64, m: u32, d: u32) -> i64 {
     era * 146_097 + doe - 719_468
 }
 
-/// 在局内定位"我"（participantId 从 1 起与 identity 数组对齐，找不到退回同索引）。
+/// 在局内定位"我"（participantId 从 1 起与 identity 数组对齐；debug6 去掉
+/// 同索引回退，对不上即 None，调用方判 not_in_game）。
 fn find_my_participant(participants: &[Participant], idx: usize) -> Option<&Participant> {
     participants
         .iter()
         .find(|p| p.participant_id == idx as i32 + 1)
-        .or_else(|| participants.get(idx))
 }
 
 /// 取敌方同分路的玩家英雄（None = 敌方无同分路，宁缺毋滥不出对账）。
@@ -510,7 +510,7 @@ mod tests {
     }
 
     #[test]
-    fn find_my_participant_aligns_by_id_then_index() {
+    fn find_my_participant_aligns_by_id() {
         let ps = vec![
             participant(1, 100, 101),
             participant(2, 100, 102),
@@ -518,6 +518,14 @@ mod tests {
         ];
         assert_eq!(find_my_participant(&ps, 0).unwrap().champion_id, 101);
         assert_eq!(find_my_participant(&ps, 2).unwrap().champion_id, 103);
+    }
+
+    #[test]
+    fn find_my_participant_rejects_misaligned_index() {
+        // debug6：顺序打乱（idx=0 但 participant_id=9）不再回退同索引，
+        // 直接 None（调用方判 not_in_game），防串人进对账。
+        let ps = vec![participant(9, 100, 109)];
+        assert!(find_my_participant(&ps, 0).is_none());
     }
 
     #[test]
