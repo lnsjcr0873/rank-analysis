@@ -172,7 +172,7 @@ const championToPid = computed(() => {
 })
 原因分析：在盲选、克隆、大乱斗或斗魂竞技场等模式中，敌我双方经常出现相同英雄（例如双方都有亚索）。以 championId 为 Key 存入 Map<number, number> 会导致后遍历的玩家覆盖先遍历的玩家。当用户在事件流上方点击该英雄头像筛选时，另一个相同英雄玩家的所有关键击杀/死亡事件将被完全过滤排除。
 修复方案：将映射调整为 Map<number, number[]>，并在筛选时匹配 pids.some(...)。
-10. command/match_history.rs：get_game_by_id 缺失 queue_name 字段填充
+10. command/match_history.rs：get_game_by_id 缺失 queue_name 字段填充【已完成：验证已修复，无需修改——136-137 行已调用 resolve_queue_name_cn；该函数三级兜底（运行时表→硬编码→gameMode）齐全】
 文件路径：rank-analysis-app/src-tauri/src/command/match_history.rs
 原因分析：当从列表批量查询时，通过 mh.enrich_info_cn() 为每局解析并写入了 queue_name。但是在 get_game_by_id 单局详情获取中，创建 Game 结构体时未调用 resolve_queue_name_cn，也没有给 queue_name 赋值（默认为空串）。当从历史遇见记录等独立入口直接调取单局详情弹窗时，顶部模式名称将显示为空。
 三、 UI/UX 与实现细节问题 (Low Severity / Code Smells)
