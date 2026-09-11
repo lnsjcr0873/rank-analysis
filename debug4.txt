@@ -366,7 +366,7 @@ diffBuild 在比对实际装备与推荐装备时，直接按数组下标逐一�
 cell.diff.slots 对每个下标比对 playerItems[i] 与 recommendItems[i]。
 玩家购买了与推荐完全一致的 3 件核心装，仅仅因为放置在物品栏的顺序不同，就会被系统标上黄色「换装」甚至红色「乱出」，并在战绩总览中闪烁警报。
 修复方案：应采用多重集集合包含判定（Multiset Intersection）代替固定槽位下标强比对，只有在购买了与推荐装备完全无关/相克属性的装备时才标记为「乱出」。
-9. liveGameIntel.ts：对局未开始时游戏时钟为负，输出畸形时钟字符串
+9. liveGameIntel.ts：对局未开始时游戏时钟为负，输出畸形时钟字符串【已完成：验证已修复，无需修改——179 行已有 Math.max(0) 兜底，单测 194 行覆盖负值】
 文件路径：rank-analysis-app/src/features/gaming/services/liveGameIntel.ts
 问题代码：
 code
