@@ -61,4 +61,15 @@ describe('sampleVocab', () => {
     const out = sampleVocab(tiny, { count: 100 })
     expect(out.length).toBe(3)
   })
+
+  it('NaN/Infinity/float seeds fall back to a valid deterministic-able value (no rng collapse)', () => {
+    const vocab = { only: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'] as const }
+    const out = sampleVocab(vocab, { count: 10, seed: Number.NaN })
+    const outFloat = sampleVocab(vocab, { count: 10, seed: 3.7 })
+    const outInf = sampleVocab(vocab, { count: 10, seed: Number.POSITIVE_INFINITY })
+    expect(out).toHaveLength(10)
+    expect(new Set(out).size).toBe(10)
+    expect(outFloat).toHaveLength(10)
+    expect(outInf).toHaveLength(10)
+  })
 })

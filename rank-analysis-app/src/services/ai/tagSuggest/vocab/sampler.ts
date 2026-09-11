@@ -38,7 +38,13 @@ function shuffleInPlace<T>(arr: T[], rng: () => number): T[] {
 }
 
 export function sampleVocab(vocab: VocabRecord, options: SampleOptions = {}): string[] {
-  const seed = options.seed ?? Math.floor(Math.random() * 2147483647)
+  // seed 归一化：NaN/±Infinity/小数会污染 mulberry32（Math.imul 恒 0 → rng 恒 0，
+  // shuffle 坍缩、上层 while(selected.size<count) 死循环）。无效值回退随机。
+  const rawSeed = options.seed
+  const seed =
+    typeof rawSeed === 'number' && Number.isFinite(rawSeed)
+      ? Math.abs(Math.trunc(rawSeed)) % 4294967295
+      : Math.floor(Math.random() * 2147483647)
   const rng = mulberry32(seed)
 
   const requested = options.count ?? 30 + Math.floor(rng() * 21) // 30-50 inclusive
