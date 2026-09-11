@@ -210,6 +210,9 @@ function close() {
 }
 
 function onGlobalKey(e: KeyboardEvent) {
+  // 输入法组词中（isComposing / key === 'Process'）不拦截：中文拼音敲字时
+  // 误触 Ctrl+K 组合会掀翻正在选词的窗口（debug3-C1）
+  if (e.isComposing || e.key === 'Process') return
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
     e.preventDefault()
     show.value = !show.value
