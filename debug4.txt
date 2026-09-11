@@ -83,7 +83,7 @@ onUnmounted(() => {
 原因分析：局内动作建议轮询（nextActions）、大乱斗三选一监听（MayhemAssist）以及 Overlay 悬浮窗控制完全写在 Gaming.vue 的 <script setup> 中。根据 useGameState.ts 的设计，用户在对局中自由切换到「战绩」或「设置」页面是被允许的（且不会被强行切回）。但是一旦用户离开 Gaming 路由，Gaming.vue 触发 onUnmounted，浮窗被立即隐藏，Mayhem 截图/OCR 调度器被强制 stop。
 修复方案：将对局内的常驻服务（Overlay 状态、NextAction 定时轮询、Mayhem 对局监听）提升至全局层（如 Framework.vue 或独立的全局 Pinia/Composable 中管理），与具体的页面路由解耦。
 二、 业务逻辑与一致性缺陷 (Medium Severity)
-5. rule_engine.rs：分路别名归一化不全，导致中路/下路等常见分路规则无法匹配
+5. rule_engine.rs：分路别名归一化不全，导致中路/下路等常见分路规则无法匹配【已完成：parse_position 补别名（mid/bot/adc/support/sup/jng 等）+ trim/大小写不敏感，附单测。GNU check/clippy/fmt 全过】
 文件路径：rank-analysis-app/src-tauri/src/rule_engine.rs
 问题代码：
 code

@@ -31,13 +31,18 @@ pub fn detect_my_position(session: &SelectSession, my_puuid: &str) -> Option<Pos
     parse_position(&me.assigned_position)
 }
 
+/// LCU `assigned_position` → `Position`（debug4-5）。
+///
+/// LCU 选人会话经常下发缩写（最常见 `mid`），此前仅匹配五档全称，
+/// 中路规则在实机选人期永远不匹配。别名口径与 `opgg::data::normalize_position`
+///（MID/ADC/SUPPORT）及前端 `normalizeLcuPosition` 对齐；大小写不敏感。
 pub(crate) fn parse_position(s: &str) -> Option<Position> {
-    match s.to_ascii_lowercase().as_str() {
+    match s.trim().to_ascii_lowercase().as_str() {
         "top" => Some(Position::Top),
-        "jungle" => Some(Position::Jungle),
-        "middle" => Some(Position::Middle),
-        "bottom" => Some(Position::Bottom),
-        "utility" => Some(Position::Utility),
+        "jungle" | "jng" | "jung" => Some(Position::Jungle),
+        "middle" | "mid" => Some(Position::Middle),
+        "bottom" | "bot" | "adc" => Some(Position::Bottom),
+        "utility" | "support" | "sup" | "supp" => Some(Position::Utility),
         _ => None,
     }
 }
@@ -348,6 +353,22 @@ mod tests {
             ids: vec![1, 157, 99],
         };
         assert!(match_condition(&c, &s, None));
+    }
+
+    #[test]
+    fn parse_position_supports_common_aliases() {
+        // debug4-5：LCU 常下发缩写（mid 最常见），大小写/空白不敏感
+        assert_eq!(parse_position("mid"), Some(Position::Middle));
+        assert_eq!(parse_position("MID"), Some(Position::Middle));
+        assert_eq!(parse_position(" middle "), Some(Position::Middle));
+        assert_eq!(parse_position("adc"), Some(Position::Bottom));
+        assert_eq!(parse_position("bot"), Some(Position::Bottom));
+        assert_eq!(parse_position("support"), Some(Position::Utility));
+        assert_eq!(parse_position("sup"), Some(Position::Utility));
+        assert_eq!(parse_position("jng"), Some(Position::Jungle));
+        assert_eq!(parse_position("top"), Some(Position::Top));
+        assert_eq!(parse_position(""), None);
+        assert_eq!(parse_position("captain"), None);
     }
 
     #[test]
