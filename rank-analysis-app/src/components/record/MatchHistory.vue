@@ -723,13 +723,17 @@ watch(
 )
 
 // 下一页 / 上一页（纯客户端切片，50 场窗口内翻页；窗口末尾时跨区/本区都转 SGP 追加拉取）
+//
+// 跨区语义（debug3-B6）：已加载页内优先 page+=1 线性浏览；只有到底
+// （page >= pageCount）才触发追加拉取。此前跨区永远走追加分支并强跳末页，
+// 第 2、3、4…页点"下一页"永远到不了。
 const nextPage = () => {
-  if (region.value || noMoreMatches.value) {
-    if (!sgpRegion.value || isRequestingSgpMore.value || isCollectingAll.value) return
-    loadMoreCrossRegion()
+  if (!noMoreMatches.value) {
+    page.value += 1
     return
   }
-  page.value += 1
+  if (!sgpRegion.value || isRequestingSgpMore.value || isCollectingAll.value) return
+  loadMoreCrossRegion()
 }
 
 /** 深翻页：SGP 无 50 场上限，「收集更多」按 startIndex 追加拉取，gameId 去重合并。
