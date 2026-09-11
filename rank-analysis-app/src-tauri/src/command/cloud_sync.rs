@@ -321,13 +321,23 @@ pub struct ConfigPayload {
 /// S1 加固:两条额外防线——
 /// - 键数上限:正常快照几十个键,超限直接丢弃该行(防巨 map 撑内存/劫持 LWW);
 /// - 时间戳未来漂移上限:攻击者盖 `u64::MAX` 会永久赢下 LWW,后续正常推送
-///   再也覆盖不掉,超限行直接丢弃(本地时钟小时级偏差不受影响)。
+///   再也覆盖不掉。超限行**钳制到上限后参与比较**(debug4-15),而非丢弃:
+///   丢弃会导致 push 侧 `max(local, cloud+1000)` 单调放大出的时间戳一旦超过
+///   本地时钟 + 24h,本设备永远读不到云端配置,两机反复 max() 踩踏死锁。
+///   钳制后:合法漂移行仍能被读到(合并恢复);恶意 `u64::MAX` 行被压到同一
+///   上限,下一次正常推送(local 新时间)即可自然超越覆盖。
 fn pick_latest_config(rows: Vec<serde_json::Value>) -> Option<ConfigPayload> {
     let now_ms = now_unix().saturating_mul(1000);
+    let cap = now_ms.saturating_add(MAX_FUTURE_SKEW_MS);
     rows.into_iter()
         .filter_map(|v| serde_json::from_value::<ConfigPayload>(v).ok())
         .filter(|p| p.config.len() <= MAX_CLOUD_CONFIG_KEYS)
-        .filter(|p| p.updated_at <= now_ms.saturating_add(MAX_FUTURE_SKEW_MS))
+        .map(|mut p| {
+            if p.updated_at > cap {
+                p.updated_at = cap;
+            }
+            p
+        })
         .max_by_key(|p| p.updated_at)
         .map(|mut p| {
             p.config.retain(|k, _| crate::config::allowed_in_cloud(k));
@@ -689,17 +699,20 @@ mod tests {
         let latest = pick_latest_config(rows).unwrap();
         assert_eq!(latest.updated_at, 2);
 
-        // S1:未来时间戳投毒行直接丢弃(攻击者盖 u64::MAX 会永久赢下 LWW)
+        // S1 + debug4-15:未来时间戳行钳制到上限后参与比较(不再丢弃——
+        // 丢弃会让 push 侧 max() 放大出的时间戳超限后永远读不到,两机死锁)。
+        // 钳制后超限行仍赢(上限 > 3),但下一次正常推送即可自然超越覆盖。
         let now_ms = now_unix().saturating_mul(1000);
+        let cap = now_ms + MAX_FUTURE_SKEW_MS;
         let rows = vec![
             serde_json::json!({ "updatedAt": now_ms + MAX_FUTURE_SKEW_MS + 1, "config": { "theme": "evil" } }),
             serde_json::json!({ "updatedAt": 3, "config": { "theme": "good" } }),
         ];
         let latest = pick_latest_config(rows).unwrap();
-        assert_eq!(latest.updated_at, 3);
+        assert_eq!(latest.updated_at, cap);
         assert!(matches!(
             latest.config.get("theme"),
-            Some(crate::config::Value::String(s)) if s == "good"
+            Some(crate::config::Value::String(s)) if s == "evil"
         ));
     }
 }

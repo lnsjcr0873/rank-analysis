@@ -313,7 +313,7 @@ fn validate_puuid(puuid: &str) -> Result<(), String> {
 但 Riot 官方国际服（NA/KR/EUW 等）以及新一代 Riot ID 体系下的 PUUID 是 78 位的 Base64URL 安全字符（包含字母 g-z, G-Z 以及下划线 _）。
 当在国际服或跨区查询国际服账号时，validate_puuid 会将合法的 Riot PUUID 判定为格式非法，导致云同步直接报错拒绝执行。
 修复方案：放宽字符集与长度限制，兼容 Riot 78 位 Base64URL 格式（[A-Za-z0-9_-]）。
-5. cloud_sync.rs：时钟未来漂移保护与增量盖戳冲突，导致多机同步陷入死锁
+5. cloud_sync.rs：时钟未来漂移保护与增量盖戳冲突，导致多机同步陷入死锁【已完成：超限行改丢弃为钳制到上限后参与比较（合法漂移可读、恶意u64::MAX可被下次推送超越）；更新单测。GNU check/clippy/fmt 全过】
 文件路径：rank-analysis-app/src-tauri/src/command/cloud_sync.rs
 原因分析：
 cloud_push_config 采用了防止时间倒退的保护逻辑：
