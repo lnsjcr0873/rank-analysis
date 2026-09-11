@@ -55,7 +55,7 @@
             }"
             @click="togglePlayer(p.participantId)"
           >
-            <span class="match-detail-timeline-player-dot" :style="{ background: teamColor(p) }" />
+            <span class="match-detail-timeline-player-dot" :class="teamDotClass(p)" />
             {{ p.displayName }}
           </button>
           <button
@@ -99,9 +99,7 @@
         <g v-for="p in visiblePlayers" :key="p.participantId">
           <polyline
             :points="polylinePoints(p.participantId)"
-            :stroke="teamColor(p)"
-            class="match-detail-timeline-line"
-            :class="{ 'match-detail-timeline-line--fade': selected.size > 1 && !isMe(p) }"
+            :class="['match-detail-timeline-line', teamLineClass(p)]"
           />
           <circle
             v-for="pt in pointsOf(p.participantId)"
@@ -109,8 +107,7 @@
             :cx="xOf(pt.minute)"
             :cy="yOf(pt.value)"
             r="2"
-            :fill="teamColor(p)"
-            class="match-detail-timeline-dot"
+            :class="['match-detail-timeline-dot', teamDotClass(p)]"
           />
         </g>
       </svg>
@@ -205,11 +202,18 @@ const visiblePlayers = computed(() =>
   ctx.players.detailPlayers.value.filter(p => selected.value.has(p.participantId))
 )
 
-function teamColor(p: DetailPlayer) {
-  if (p.teamId === 100) return '#4f8cff'
-  if (p.teamId === 200) return '#ff5c5c'
-  return '#b0b6c2'
+/**
+ * 队伍配色类（debug6：此前硬编码 #4f8cff/#ff5c5c/#b0b6c2，浅色主题下失真；
+ * 改 CSS 类走 --info/--loss/--text-tertiary token，SVG stroke/fill 走 CSS 同样生效）。
+ */
+function teamClass(p: DetailPlayer): 'team-blue' | 'team-red' | 'team-neutral' {
+  if (p.teamId === 100) return 'team-blue'
+  if (p.teamId === 200) return 'team-red'
+  return 'team-neutral'
 }
+const teamDotClass = (p: DetailPlayer) => `match-detail-timeline-dot--${teamClass(p)}`
+const teamLineClass = (p: DetailPlayer) =>
+  `match-detail-timeline-line--${teamClass(p)}${selected.value.size > 1 && !isMe(p) ? ' match-detail-timeline-line--fade' : ''}`
 
 // ── 坐标换算 ──
 
@@ -382,13 +386,13 @@ const gridLines = computed(() => {
 }
 
 .match-detail-timeline-player--blue.match-detail-timeline-player--active {
-  border-color: color-mix(in srgb, #4f8cff 60%, transparent);
-  background: color-mix(in srgb, #4f8cff 14%, transparent);
+  border-color: color-mix(in srgb, var(--info) 60%, transparent);
+  background: color-mix(in srgb, var(--info) 14%, transparent);
 }
 
 .match-detail-timeline-player--red.match-detail-timeline-player--active {
-  border-color: color-mix(in srgb, #ff5c5c 60%, transparent);
-  background: color-mix(in srgb, #ff5c5c 14%, transparent);
+  border-color: color-mix(in srgb, var(--loss) 60%, transparent);
+  background: color-mix(in srgb, var(--loss) 14%, transparent);
 }
 
 .match-detail-timeline-player-dot {
@@ -396,6 +400,17 @@ const gridLines = computed(() => {
   height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
+}
+
+/* debug6：队伍配色走 token（SVG stroke/fill 经 CSS 同样生效，浅色主题不失真） */
+.match-detail-timeline-dot--team-blue {
+  background: var(--info);
+}
+.match-detail-timeline-dot--team-red {
+  background: var(--loss);
+}
+.match-detail-timeline-dot--team-neutral {
+  background: var(--text-tertiary);
 }
 
 .match-detail-timeline-player--all {
@@ -428,6 +443,26 @@ const gridLines = computed(() => {
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+/* 折线/圆点队伍配色（stroke/fill 走 CSS 类，SVG 同样生效） */
+.match-detail-timeline-line--team-blue {
+  stroke: var(--info);
+}
+.match-detail-timeline-line--team-red {
+  stroke: var(--loss);
+}
+.match-detail-timeline-line--team-neutral {
+  stroke: var(--text-tertiary);
+}
+.match-detail-timeline-dot.match-detail-timeline-dot--team-blue {
+  fill: var(--info);
+}
+.match-detail-timeline-dot.match-detail-timeline-dot--team-red {
+  fill: var(--loss);
+}
+.match-detail-timeline-dot.match-detail-timeline-dot--team-neutral {
+  fill: var(--text-tertiary);
 }
 
 .match-detail-timeline-line--fade {
