@@ -185,6 +185,18 @@ describe('buildIntelContext', () => {
     expect(ctx.modeKnowledgeLines).toEqual([])
   })
 
+  it('debug6：模式知识首行声明知识库版本（防旧规则误导）', async () => {
+    vi.mocked(getKnowledgeBase).mockResolvedValue(knowledgeBase())
+    const ctx = await buildIntelContext({
+      sessionData: sessionData(),
+      profileMap: new Map(),
+      modeKind: 'ranked',
+      queueId: 420
+    })
+    expect(ctx.modeKnowledgeLines[0]).toContain('26.13')
+    expect(ctx.modeKnowledgeLines).toHaveLength(3)
+  })
+
   it('玩家画像明细：有画像的玩家每人一行（近胜率/主玩/英雄池/备注）', async () => {
     vi.mocked(getKnowledgeBase).mockResolvedValue(knowledgeBase())
     const profile: RecentPlayerProfile = {

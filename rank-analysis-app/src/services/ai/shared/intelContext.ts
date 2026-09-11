@@ -56,9 +56,9 @@ export interface IntelContext {
   counterLines: string[]
   /** 关联信号行（来自信号引擎） */
   signalLines: string[]
-  /** 玩家画像明细行（近期胜率/主玩位置/英雄池/备注——AI 引用事实的原料） */
+  /** 玩家画像明细行（近期战绩/主玩位置/英雄池/备注——AI 引用事实的原料） */
   profileLines: string[]
-  /** 模式知识行（知识库，最多 4 条） */
+  /** 模式知识行（知识库，最多 4 条；首行带适用版本标注） */
   modeKnowledgeLines: string[]
 }
 
@@ -194,10 +194,13 @@ export async function buildIntelContext(input: IntelContextInput): Promise<Intel
       .slice(0, 6)
   }
 
-  // 模式知识：按 modeKind + queueId 映射，最多 4 条
+  // 模式知识：按 modeKind + queueId 映射，最多 4 条。
+  // debug6：首行声明知识适用版本（模式规则随版本变，AI 引用时知晓版本边界）。
   const modeKey = input.modeKind ? modeKnowledgeKey(input.modeKind, input.queueId ?? 0) : null
   if (modeKey && knowledge) {
-    ctx.modeKnowledgeLines = (knowledge.modeKnowledge[modeKey] ?? []).slice(0, 4)
+    const lines = (knowledge.modeKnowledge[modeKey] ?? []).slice(0, 4)
+    ctx.modeKnowledgeLines =
+      lines.length > 0 ? [`（以下为知识库 ${knowledge.patch} 版本的模式规则）`, ...lines] : []
   }
 
   return ctx
