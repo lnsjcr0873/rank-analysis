@@ -153,7 +153,15 @@ pub(crate) fn input_from_lcu_participant(
         team_id: p.team_id,
         puuid: identity.map(|i| i.player.puuid.clone()).unwrap_or_default(),
         summoner_name: identity
-            .map(|i| i.player.summoner_name.clone())
+            .map(|i| {
+                // debug5：Riot ID 体系下 LCU 的 summoner_name 常为空串，真实昵称在
+                // game_name；与 sgp.rs map_identity 同口径，优先取 game_name。
+                if i.player.game_name.is_empty() {
+                    i.player.summoner_name.clone()
+                } else {
+                    i.player.game_name.clone()
+                }
+            })
             .unwrap_or_default(),
         win: p.stats.win,
         kills: p.stats.kills,
@@ -655,5 +663,35 @@ mod tests {
         assert_eq!(input.puuid, "PUUID-1");
         assert_eq!(input.participant_id, 3);
         assert!(input.win);
+    }
+
+    /// debug5 回归：Riot ID 体系下优先取 game_name（summoner_name 为空时不丢名）。
+    #[test]
+    fn lcu_participant_mapping_prefers_game_name() {
+        let p = Participant {
+            participant_id: 1,
+            champion_id: 1,
+            team_id: 100,
+            stats: crate::lcu::api::model::Stats::default(),
+            ..Default::default()
+        };
+        let mut identity = ParticipantIdentity::default();
+        identity.player.summoner_name = String::new();
+        identity.player.game_name = "Faker".to_string();
+        let input = input_from_lcu_participant(&p, Some(&identity), 1800);
+        assert_eq!(input.summoner_name, "Faker");
+
+        // 双空时退回空串（不编造）；旧数据只有 summoner_name 时照用。
+        let empty = ParticipantIdentity::default();
+        assert_eq!(
+            input_from_lcu_participant(&p, Some(&empty), 1800).summoner_name,
+            ""
+        );
+        let mut legacy = ParticipantIdentity::default();
+        legacy.player.summoner_name = "旧名".to_string();
+        assert_eq!(
+            input_from_lcu_participant(&p, Some(&legacy), 1800).summoner_name,
+            "旧名"
+        );
     }
 }
