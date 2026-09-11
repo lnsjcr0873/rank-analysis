@@ -159,6 +159,7 @@ import {
   EVENT_FILTER_OPTIONS,
   EVENT_KIND_LABEL,
   countEventKinds,
+  destroyerTeamOf,
   eventInvolves,
   involvedParticipantIds,
   kindOfEvent,
@@ -410,7 +411,9 @@ function buildEventRow(ev: SgpFrameEvent, index: number, frameTs: number): Event
       ? `${Math.floor(ev.timestamp / 60000)}:${String(Math.round((ev.timestamp % 60000) / 1000)).padStart(2, '0')}`
       : `${Math.floor(frameTs / 60000)}:00`
   const kind = kindOfEvent(ev)
-  const team = teamLabel(ev.teamId)
+  // 建筑/塔皮的 teamId 是受害方：主语用摧毁方（debug5-events），中立/其他沿用原值
+  const team =
+    kind === 'building' || kind === 'plate' ? teamLabel(destroyerTeamOf(ev)) : teamLabel(ev.teamId)
 
   let text = ''
   let details: EventRow['details'] = null

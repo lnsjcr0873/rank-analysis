@@ -7,6 +7,7 @@ import {
   EVENT_FILTER_OPTIONS,
   EVENT_KIND_LABEL,
   countEventKinds,
+  destroyerTeamOf,
   eventInvolves,
   kindOfEvent,
   summarizeEvents
@@ -121,7 +122,8 @@ describe('eventInvolves', () => {
 })
 
 describe('summarizeEvents', () => {
-  it('统计击杀/特殊击杀/塔皮（按队伍）/建筑（按队伍）/中立（龙族细分优先）', () => {
+  it('统计击杀/特殊击杀/塔皮（按摧毁方）/建筑（按摧毁方）/中立（龙族细分优先）', () => {
+    // teamId 是受害方：teamId=100 的塔/塔皮 = 红方(200)拿下
     const events = [
       { type: 'CHAMPION_KILL' },
       { type: 'CHAMPION_KILL' },
@@ -137,8 +139,8 @@ describe('summarizeEvents', () => {
     const summary = summarizeEvents(events)
     expect(summary.kills).toBe(2)
     expect(summary.specialKills).toBe(1)
-    expect(summary.plates).toEqual({ 100: 2, 200: 1 })
-    expect(summary.buildings).toEqual({ 100: 1 })
+    expect(summary.plates).toEqual({ 200: 2, 100: 1 })
+    expect(summary.buildings).toEqual({ 200: 1 })
     expect(summary.monsters).toEqual({ FIRE_DRAGON: 2, BARON_NASHOR: 1 })
   })
 
@@ -159,5 +161,33 @@ describe('summarizeEvents', () => {
       buildings: {},
       monsters: {}
     })
+  })
+
+  it('非标准 teamId 的建筑/塔皮不计入（未知摧毁方，不编造）', () => {
+    const summary = summarizeEvents([
+      { type: 'BUILDING_KILL', teamId: null },
+      { type: 'TURRET_PLATE_DESTROYED', teamId: 300 }
+    ])
+    expect(summary.buildings).toEqual({})
+    expect(summary.plates).toEqual({})
+  })
+})
+
+describe('destroyerTeamOf（debug5-events）', () => {
+  it('建筑/塔皮翻转：teamId 是受害方，摧毁者为对立方', () => {
+    expect(destroyerTeamOf({ type: 'BUILDING_KILL', teamId: 100 })).toBe(200)
+    expect(destroyerTeamOf({ type: 'BUILDING_KILL', teamId: 200 })).toBe(100)
+    expect(destroyerTeamOf({ type: 'TURRET_PLATE_DESTROYED', teamId: 100 })).toBe(200)
+    expect(destroyerTeamOf({ type: 'TURRET_PLATE_DESTROYED', teamId: 200 })).toBe(100)
+  })
+
+  it('非标准 teamId 返回 null（不编造摧毁方）', () => {
+    expect(destroyerTeamOf({ type: 'BUILDING_KILL', teamId: null })).toBeNull()
+    expect(destroyerTeamOf({ type: 'TURRET_PLATE_DESTROYED', teamId: 300 })).toBeNull()
+  })
+
+  it('非建筑/塔皮事件原样返回 teamId（中立归属语义不变）', () => {
+    expect(destroyerTeamOf({ type: 'ELITE_MONSTER_KILL', teamId: 100 })).toBe(100)
+    expect(destroyerTeamOf({ type: 'CHAMPION_KILL', teamId: null })).toBeNull()
   })
 })

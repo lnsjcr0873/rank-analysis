@@ -57,6 +57,24 @@ export const EVENT_FILTER_OPTIONS: EventFilterOption[] = [
   { value: 'other', label: '其他', match: ev => kindOfEvent(ev) === 'other' }
 ]
 
+/**
+ * 建筑/塔皮事件的摧毁方队伍（debug5-events）。
+ *
+ * match-v5 帧事件语义：`BUILDING_KILL` / `TURRET_PLATE_DESTROYED` 的 `teamId`
+ * 是被摧毁建筑的所属方（受害方），摧毁者是其对立阵营。直接拿 `teamId` 当主语，
+ * 会把"红方塔被蓝方推掉"显示成"红方摧毁上路外塔"。
+ * 中立生物事件不受影响（`teamId` 即拿下中立的一方）。
+ *
+ * @param ev - 帧事件（只需 type + teamId）
+ * @returns 摧毁方 teamId；仅 100/200 互反，非标准值返回 null（未知，不编造）
+ */
+export function destroyerTeamOf(ev: Pick<SgpFrameEvent, 'type' | 'teamId'>): number | null {
+  if (ev.type !== 'BUILDING_KILL' && ev.type !== 'TURRET_PLATE_DESTROYED') return ev.teamId ?? null
+  if (ev.teamId === 100) return 200
+  if (ev.teamId === 200) return 100
+  return null
+}
+
 /** 按筛选值统计各选项命中数（含 'all'，即事件总数） */
 export function countEventKinds(
   events: Pick<SgpFrameEvent, 'type'>[]
@@ -97,15 +115,20 @@ export interface EventSummary {
   kills: number
   /** 特殊击杀（一血/多杀/团灭）总数 */
   specialKills: number
-  /** teamId → 摧毁塔皮数 */
+  /** 摧毁方 teamId → 拿下塔皮数（原始 teamId 是受害方，已翻转） */
   plates: Record<number, number>
-  /** teamId → 摧毁建筑数 */
+  /** 摧毁方 teamId → 推掉建筑数（原始 teamId 是受害方，已翻转） */
   buildings: Record<number, number>
   /** 中立生物击杀统计：优先 monsterSubType（龙族细分），否则 monsterType */
   monsters: Record<string, number>
 }
 
-/** 事件流汇总（统计条纯函数层）：塔皮/建筑按队伍、中立生物按类型、击杀计数 */
+/**
+ * 事件流汇总（统计条纯函数层）：塔皮/建筑按**摧毁方**队伍、中立生物按类型、击杀计数。
+ *
+ * 建筑/塔皮的 `teamId` 是受害方（见 [`destroyerTeamOf`]），统计键必须翻转，
+ * 否则"红方掉塔皮"会被记成"红方拿塔皮"。
+ */
 export function summarizeEvents(
   events: Pick<SgpFrameEvent, 'type' | 'teamId' | 'monsterType' | 'monsterSubType'>[]
 ): EventSummary {
@@ -118,12 +141,16 @@ export function summarizeEvents(
       case 'CHAMPION_SPECIAL_KILL':
         out.specialKills++
         break
-      case 'TURRET_PLATE_DESTROYED':
-        if (ev.teamId) out.plates[ev.teamId] = (out.plates[ev.teamId] ?? 0) + 1
+      case 'TURRET_PLATE_DESTROYED': {
+        const destroyer = destroyerTeamOf(ev)
+        if (destroyer) out.plates[destroyer] = (out.plates[destroyer] ?? 0) + 1
         break
-      case 'BUILDING_KILL':
-        if (ev.teamId) out.buildings[ev.teamId] = (out.buildings[ev.teamId] ?? 0) + 1
+      }
+      case 'BUILDING_KILL': {
+        const destroyer = destroyerTeamOf(ev)
+        if (destroyer) out.buildings[destroyer] = (out.buildings[destroyer] ?? 0) + 1
         break
+      }
       case 'ELITE_MONSTER_KILL': {
         const key = ev.monsterSubType ?? ev.monsterType ?? 'MONSTER'
         out.monsters[key] = (out.monsters[key] ?? 0) + 1
