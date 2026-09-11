@@ -67,8 +67,7 @@ export type TwoStageResult<S1, S2> =
  *
  * Stage 1 失败（网络错误）：不重试，直接返回 stage1Error。
  * Stage 1 解析失败：重试 `stage1.retry`（默认 1）次后仍失败则返回 stage1ParseError。
- *   带 cacheKey 时重试前会先失效缓存——requestAIContent 会把解析不过的坏产物也缓存，
- *   不失效的话重试只会拿回同一份坏内容，重试等于空转。
+ *   `shouldCache` 把关下残缺产物不进缓存，重试即真网络请求。
  * Stage 2 失败（网络错误）：返回 stage2Error，附带 stage1 数据。
  * Stage 2 解析失败：返回 stage2ParseError，附带 stage1 数据，调用方可降级渲染。
  *
@@ -92,7 +91,13 @@ export async function runTwoStage<Stage1Out, Stage2Out>(opts: {
       cacheKey,
       opts.stage1.systemPrompt,
       opts.stage1.model,
-      { jsonMode: opts.stage1.jsonMode, onUsage: opts.stage1.onUsage }
+      {
+        jsonMode: opts.stage1.jsonMode,
+        onUsage: opts.stage1.onUsage,
+        // 写缓存前先过 stage parse：残缺 JSON 不固化，重试即真网络请求，
+        // 不再需要解析失败后手动 removeItem 失效缓存（debug3 带毒缓存）。
+        shouldCache: raw => opts.stage1.parse(raw).ok
+      }
     )
     if (!resp) {
       // Defensive: treat missing response as transient — fall through to parse retry
@@ -111,12 +116,7 @@ export async function runTwoStage<Stage1Out, Stage2Out>(opts: {
       break
     }
     lastErr = parsed.error
-    // 解析失败：坏产物已被 requestAIContent 写进缓存，失效后下一轮才是真重试
-    try {
-      sessionStorage.removeItem(cacheKey)
-    } catch {
-      // ignore (SSR / no storage)
-    }
+    // shouldCache 已保证残缺产物不进缓存：此处无需再 removeItem，重试即真请求。
     // continue to next attempt
   }
   if (stage1Out === null) {

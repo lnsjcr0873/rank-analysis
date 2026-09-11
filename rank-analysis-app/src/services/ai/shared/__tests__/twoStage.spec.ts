@@ -195,14 +195,18 @@ describe('runTwoStage', () => {
     })
 
     // requestAIContent(prompt, cacheKey, systemPrompt, model, opts)
-    expect(mockRequest.mock.calls[0][4]).toEqual({ jsonMode: true })
+    expect(mockRequest.mock.calls[0][4]).toEqual(expect.objectContaining({ jsonMode: true }))
+    // shouldCache 门：stage parse 即校验器
+    const shouldCache = mockRequest.mock.calls[0][4].shouldCache as (raw: string) => boolean
+    expect(typeof shouldCache).toBe('function')
     // requestAIContentStream(prompt, callbacks, systemPrompt, model, opts)
     expect(mockStream.mock.calls[0][4]).toEqual({ jsonMode: true })
   })
 
-  it('invalidates the stage 1 cacheKey before retrying on parse error', async () => {
-    // requestAIContent 会把解析不过的坏产物也写缓存；不失效的话重试只会拿回同一份坏内容
-    sessionStorage.setItem('s1_cache_key', 'invalid')
+  it('retries on parse error without pre-poisoned cache (shouldCache gate)', async () => {
+    // shouldCache 门下残缺产物不进缓存：重试即真请求，不再需要手动 removeItem。
+    // 此处 requestAIContent 被 mock（不经过真实缓存层），断言传进去的
+    // shouldCache 对坏/好产物判别正确，且重试后成功。
     mockRequest
       .mockResolvedValueOnce({ success: true, content: 'invalid' })
       .mockResolvedValueOnce({ success: true, content: '{"foo":2}' })
@@ -229,7 +233,10 @@ describe('runTwoStage', () => {
     })
 
     expect(result.kind).toBe('ok')
-    expect(sessionStorage.getItem('s1_cache_key')).toBeNull()
+    const shouldCache = mockRequest.mock.calls[0][4].shouldCache as (raw: string) => boolean
+    expect(shouldCache('invalid')).toBe(false)
+    expect(shouldCache('{"foo":2}')).toBe(true)
+    expect(mockRequest).toHaveBeenCalledTimes(2)
   })
 
   it('streamCallback receives chunks during stage 2', async () => {

@@ -273,6 +273,33 @@ describe('requestAIContent 缓存容错（R12）', () => {
       spy.mockRestore()
     }
   })
+
+  it('shouldCache=false 时残缺产物不写缓存，重试走真网络（debug3 带毒缓存）', async () => {
+    await driveSuccess()
+    // 坏产物：shouldCache 判 false → 不固化
+    const bad = await requestAIContent('p', 'poison-key', 'sys', 'qwen-flash', {
+      shouldCache: () => false
+    })
+    expect(bad).toEqual({ success: true, content: 'hello' })
+    expect(sessionStorage.getItem('poison-key')).toBeNull()
+    // 好产物：shouldCache 判 true → 照常缓存
+    const good = await requestAIContent('p', 'clean-key', 'sys', 'qwen-flash', {
+      shouldCache: () => true
+    })
+    expect(good).toEqual({ success: true, content: 'hello' })
+    expect(sessionStorage.getItem('clean-key')).toBe('hello')
+  })
+
+  it('shouldCache 抛错按不通过处理，绝不固化坏产物', async () => {
+    await driveSuccess()
+    const ret = await requestAIContent('p', 'throw-key', 'sys', 'qwen-flash', {
+      shouldCache: () => {
+        throw new Error('parse crashed')
+      }
+    })
+    expect(ret).toEqual({ success: true, content: 'hello' })
+    expect(sessionStorage.getItem('throw-key')).toBeNull()
+  })
 })
 
 describe('requestAIContentStream 透传服务商配置（D-P4）', () => {

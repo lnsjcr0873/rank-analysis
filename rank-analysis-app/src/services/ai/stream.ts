@@ -94,6 +94,16 @@ export interface AiRequestOptions {
   jsonMode?: boolean
   /** D-P1：流末 token 用量回调（非流式聚合场景也转发给调用方） */
   onUsage?: (usage: AiUsage) => void
+  /**
+   * 写缓存前的结构校验门：返回 false 则本次产物不持久化。
+   *
+   * 背景（debug3 带毒缓存）：流式结束即写缓存时尚未做结构验证；若模型输出
+   * 残缺 JSON（Token 截断），坏产物被固化，重试命中同一缓存瞬间返回坏数据，
+   * 重试链路被锁死。调用方（如 twoStage）把 stage parse 传进来，
+   * 只有解析通过的产物才进缓存；失败的不写，下轮重试才是真网络请求。
+   * 不传则保持原行为（成功即写）。
+   */
+  shouldCache?: (content: string) => boolean
 }
 
 export async function requestAIContentStream(
@@ -195,8 +205,20 @@ export async function requestAIContent(
           fullContent += chunk
         },
         onDone: () => {
+          // 先验证再持久化：结构不过的残缺产物不进缓存，否则重试被同一份
+          // 坏数据锁死（debug3）。校验抛错按不通过处理，绝不让坏产物固化。
           if (fullContent) {
-            writeCacheSafe(cacheKey, fullContent)
+            let cacheable = true
+            if (opts.shouldCache) {
+              try {
+                cacheable = opts.shouldCache(fullContent)
+              } catch {
+                cacheable = false
+              }
+            }
+            if (cacheable) {
+              writeCacheSafe(cacheKey, fullContent)
+            }
           }
           resolve({ success: true, content: fullContent })
         },
