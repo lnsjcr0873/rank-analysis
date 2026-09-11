@@ -29,8 +29,8 @@
     <n-card title="手动备份" size="small">
       <n-space vertical>
         <n-text :depth="3" style="font-size: var(--font-size-sm)">
-          导出全量备份(应用设置 + 玩家备注)为 JSON 文件,或从备份文件恢复。 备份文件包含你填写的 API
-          key,请妥善保管。
+          导出全量备份(应用设置 + 玩家备注)为 JSON 文件,或从备份文件恢复。 备份文件不含 API
+          Key(恢复后沿用本机已有 Key),可放心分享；旧备份含 Key 仍可导入。
         </n-text>
         <n-space>
           <n-button size="small" @click="handleExport">导出全量备份</n-button>

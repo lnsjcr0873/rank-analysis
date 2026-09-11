@@ -399,9 +399,22 @@ pub async fn apply_config_snapshot(
     crate::config::apply_config_snapshot_map(snapshot, from_cloud).await
 }
 
+/// 备份 appConfig 导出过滤:剥离明文 API 凭据(debug6)。
+/// 纯函数,便于单测;恢复侧不走此函数(旧备份向前兼容)。
+fn strip_credentials_for_backup(
+    mut app_config: std::collections::HashMap<String, crate::config::Value>,
+) -> std::collections::HashMap<String, crate::config::Value> {
+    for key in crate::config::CREDENTIAL_KEYS {
+        app_config.remove(*key);
+    }
+    app_config
+}
+
 /// 导出 v2 全量备份文件:{version, type, exportedAt, playerNotes, appConfig}。
 ///
-/// appConfig 用文件口径快照(含 dashscopeApiKey——文件由用户自己保管);
+/// appConfig 用文件口径快照,但明文 API 凭据(`CREDENTIAL_KEYS`)在导出时显式
+/// 剥离——debug6:备份 JSON 常被发给朋友/网盘/Issue,带 Key 等于费用泄露。
+/// 恢复时无此键 = 不覆盖 = 本地已有 Key 保留;旧备份含 Key 仍可恢复(向前兼容)。
 /// playerNotes 从 config 读出并解掉 `{value:...}` 包装,与前端 importNotes
 /// 期望的裸 PlayerNotesMap 形状一致。
 async fn build_backup_json() -> Result<String, String> {
@@ -412,12 +425,13 @@ async fn build_backup_json() -> Result<String, String> {
             .unwrap_or(crate::config::Value::Map(std::collections::HashMap::new())),
         _ => crate::config::Value::Map(std::collections::HashMap::new()),
     };
+    let app_config = strip_credentials_for_backup(crate::config::config_snapshot(false).await);
     let backup = json!({
         "version": 2,
         "type": "rank-analysis-backup",
         "exportedAt": now_unix() * 1000,
         "playerNotes": notes,
-        "appConfig": crate::config::config_snapshot(false).await,
+        "appConfig": app_config,
     });
     serde_json::to_string_pretty(&backup).map_err(|e| e.to_string())
 }
@@ -603,6 +617,28 @@ mod tests {
         assert_eq!(today_iso_from_unix(0), "1970-01-01");
         // 2000-02-29（世纪闰年）
         assert_eq!(today_iso_from_unix(951_782_400), "2000-02-29");
+    }
+
+    #[test]
+    fn backup_export_strips_api_credentials_but_keeps_other_keys() {
+        // debug6:导出备份不得含明文 Key(费用泄露);普通键保留;恢复侧不受影响
+        let mut cfg = std::collections::HashMap::new();
+        cfg.insert(
+            "theme".to_string(),
+            crate::config::Value::String("dark".into()),
+        );
+        cfg.insert(
+            "dashscopeApiKey".to_string(),
+            crate::config::Value::String("sk-secret".into()),
+        );
+        cfg.insert(
+            "ai.apiKey".to_string(),
+            crate::config::Value::String("sk-ai".into()),
+        );
+        let out = strip_credentials_for_backup(cfg);
+        assert!(out.contains_key("theme"));
+        assert!(!out.contains_key("dashscopeApiKey"));
+        assert!(!out.contains_key("ai.apiKey"));
     }
 
     #[test]

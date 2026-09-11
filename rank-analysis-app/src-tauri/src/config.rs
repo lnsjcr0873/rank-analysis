@@ -461,8 +461,13 @@ pub const BACKUP_BLACKLIST: &[&str] = &[
     "playerNotes",
 ];
 
+/// 凭据键(明文 API Key):绝不得写入备份文件——JSON 一旦外发即费用泄露。
+/// 导出时由 `build_backup_json` 显式剥离;恢复时仍允许写入(旧备份向前兼容,
+/// 新备份无此键 = 不覆盖 = 本地已有 Key 保留)。
+pub const CREDENTIAL_KEYS: &[&str] = &["dashscopeApiKey", "ai.apiKey"];
+
 /// 仅云端额外排除的键:云端按 puuid 寻址、任何人可读,API key 放上去等于公开;
-/// 文件备份由用户自己保管,保留。
+/// 文件备份同样不含凭据(见 BACKUP_BLACKLIST),此处保留作纵深防御。
 ///
 /// R01:除凭据外,`ai.provider` / `ai.baseUrl` 也不同步——云端脏配置若能改走
 /// 服务商与端点,会把本机保留 Key 的下一次 AI 请求发往攻击者地址;端点变更
@@ -482,7 +487,7 @@ pub fn allowed_in_cloud(key: &str) -> bool {
 
 /// 取黑名单过滤后的配置快照(值保持存储形状原样,含 `{value:...}` 包装)。
 ///
-/// - `for_cloud = false`:文件备份口径(保留 dashscopeApiKey)
+/// - `for_cloud = false`:文件备份口径(凭据同样排除,见 BACKUP_BLACKLIST)
 /// - `for_cloud = true`:云同步口径(额外剔除 CLOUD_ONLY_BLACKLIST)
 ///
 /// 过滤收口在 Rust 侧:前端拿不到未过滤快照,杜绝前端漏过滤导致凭据外泄。
@@ -535,7 +540,8 @@ fn filter_snapshot_for_apply(
 ///
 /// - `from_cloud = true`:云端快照口径,叠加拒绝 AI 端点身份键(R01),
 ///   切换云配置不能改变已有 Key 的网络目的地;
-/// - `from_cloud = false`:备份文件口径,用户自有备份可完整恢复。
+/// - `from_cloud = false`:备份文件口径,用户自有备份可完整恢复
+///   (凭据键不在快照里 = 不覆盖 = 本地已有 Key 保留;旧备份含 Key 仍恢复)。
 pub async fn apply_config_snapshot_map(
     snapshot: HashMap<String, Value>,
     from_cloud: bool,

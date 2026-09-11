@@ -80,12 +80,16 @@ impl AiProviderKind {
 /// - `dashscope`: 固定官方端点，忽略 base_url
 /// - `openai`: 完整 endpoint 原样用；服务基址/`/v1` 结尾自动补齐（R07），缺省 `DEFAULT_OPENAI_URL`
 /// - `ollama`: `{base_url}/v1/chat/completions`，base_url 缺省用 `DEFAULT_OLLAMA_BASE_URL`
-fn provider_endpoint(kind: AiProviderKind, base_url: Option<&str>) -> String {
+///
+/// debug6 端点安全策略(SSRF 边界):`openai` 只允许公网 https(禁 http/内网/file 等
+/// scheme 与目标);`ollama` 是显式本地模型档,允许 loopback/局域网 http,但同样
+/// 禁止非 http(s) scheme。校验失败返回 Err(调用方转可读错误,不发起请求)。
+fn provider_endpoint(kind: AiProviderKind, base_url: Option<&str>) -> Result<String, String> {
     match kind {
-        AiProviderKind::DashScope => DASHSCOPE_URL.to_string(),
+        AiProviderKind::DashScope => Ok(DASHSCOPE_URL.to_string()),
         AiProviderKind::OpenAICompatible => {
             let base = base_url.map(str::trim).filter(|s| !s.is_empty());
-            match base {
+            let url = match base {
                 None => DEFAULT_OPENAI_URL.to_string(),
                 Some(b) => {
                     let trimmed = b.trim_end_matches('/');
@@ -97,7 +101,9 @@ fn provider_endpoint(kind: AiProviderKind, base_url: Option<&str>) -> String {
                         format!("{trimmed}/v1/chat/completions")
                     }
                 }
-            }
+            };
+            validate_public_https(&url)?;
+            Ok(url)
         }
         AiProviderKind::Ollama => {
             let base = base_url
@@ -105,8 +111,76 @@ fn provider_endpoint(kind: AiProviderKind, base_url: Option<&str>) -> String {
                 .filter(|s| !s.is_empty())
                 .unwrap_or(DEFAULT_OLLAMA_BASE_URL)
                 .trim_end_matches('/');
-            format!("{}/v1/chat/completions", base)
+            let url = format!("{}/v1/chat/completions", base);
+            validate_local_endpoint(&url)?;
+            Ok(url)
         }
+    }
+}
+
+/// `openai` 端点校验:仅公网 https。禁非 https scheme、禁回环/私网/link-local/
+/// 未指定 IP(0.0.0.0)/域名解析失败兜底(解析不出 IP 时按主机名字面规则拦截
+/// localhost/局域网常用名,避免 DNS 绕过)。
+fn validate_public_https(url: &str) -> Result<(), String> {
+    let parsed = url::Url::parse(url).map_err(|_| format!("AI 端点地址非法: {url}"))?;
+    if parsed.scheme() != "https" {
+        return Err(format!(
+            "自定义 AI 端点仅允许 https(当前: {})",
+            parsed.scheme()
+        ));
+    }
+    let host = parsed.host_str().unwrap_or_default().to_ascii_lowercase();
+    if host.is_empty() {
+        return Err(format!("AI 端点缺少主机名: {url}"));
+    }
+    if is_loopback_or_private_host(&host) {
+        return Err("自定义 AI 端点不得指向内网/本地地址(请用 ollama 本地模型档)".to_string());
+    }
+    Ok(())
+}
+
+/// `ollama` 端点校验:显式本地模型档,允许 http(s) + 回环/局域网,但禁止
+/// 非 http(s) scheme(如 file://)与空主机。
+fn validate_local_endpoint(url: &str) -> Result<(), String> {
+    let parsed = url::Url::parse(url).map_err(|_| format!("Ollama 地址非法: {url}"))?;
+    if parsed.scheme() != "http" && parsed.scheme() != "https" {
+        return Err(format!(
+            "Ollama 地址仅允许 http(s)(当前: {})",
+            parsed.scheme()
+        ));
+    }
+    if parsed.host_str().unwrap_or_default().is_empty() {
+        return Err(format!("Ollama 地址缺少主机名: {url}"));
+    }
+    Ok(())
+}
+
+/// 回环/私网主机判定:IP 字面量按段判;域名按常见本地名拦截(localhost/*.local)。
+/// 纯数字点分畸形写法保守拦截;真正的 DNS 解析绕过超出桌面应用边界(见注释)。
+fn is_loopback_or_private_host(host: &str) -> bool {
+    if host == "localhost" || host.ends_with(".localhost") || host.ends_with(".local") {
+        return true;
+    }
+    // IPv4 字面量(含 Url 已剥离的括号外 IPv6 由下式处理)
+    if let Ok(ip) = host
+        .trim_start_matches('[')
+        .trim_end_matches(']')
+        .parse::<std::net::IpAddr>()
+    {
+        return is_private_ip(ip);
+    }
+    // 纯数字点分(Url 未识别为 IP 的畸形写法)保守拦截
+    if host.split('.').all(|p| p.parse::<u8>().is_ok()) {
+        return true;
+    }
+    false
+}
+
+fn is_private_ip(ip: std::net::IpAddr) -> bool {
+    use std::net::IpAddr::{V4, V6};
+    match ip {
+        V4(v4) => v4.is_loopback() || v4.is_private() || v4.is_link_local() || v4.is_unspecified(),
+        V6(v6) => v6.is_loopback() || v6.is_unspecified() || v6.is_unique_local(),
     }
 }
 
@@ -158,7 +232,7 @@ struct ResolvedAiRequest {
 /// 密钥缺失时返回带环境变量提示的可读错误。
 fn resolve_ai_request(request: &AiStreamRequest) -> Result<ResolvedAiRequest, String> {
     let kind = AiProviderKind::parse(request.provider.as_deref());
-    let endpoint = provider_endpoint(kind, request.base_url.as_deref());
+    let endpoint = provider_endpoint(kind, request.base_url.as_deref())?;
     let runtime_env = match kind {
         AiProviderKind::DashScope => std::env::var("DASHSCOPE_API_KEY").ok(),
         AiProviderKind::OpenAICompatible => std::env::var("OPENAI_API_KEY").ok(),
@@ -825,11 +899,11 @@ mod tests {
     #[test]
     fn endpoint_dashscope_is_fixed_and_ignores_base_url() {
         assert_eq!(
-            provider_endpoint(AiProviderKind::DashScope, Some("http://evil:1")),
+            provider_endpoint(AiProviderKind::DashScope, Some("http://evil:1")).unwrap(),
             "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
         );
         assert_eq!(
-            provider_endpoint(AiProviderKind::DashScope, None),
+            provider_endpoint(AiProviderKind::DashScope, None).unwrap(),
             "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
         );
     }
@@ -838,14 +912,16 @@ mod tests {
     fn endpoint_openai_normalizes_base_url_to_chat_completions() {
         // R07:UI 示例填服务基址/尾斜杠时自动补齐,不再 404
         assert_eq!(
-            provider_endpoint(AiProviderKind::OpenAICompatible, Some(" https://x.dev/v1 ")),
+            provider_endpoint(AiProviderKind::OpenAICompatible, Some(" https://x.dev/v1 "))
+                .unwrap(),
             "https://x.dev/v1/chat/completions"
         );
         assert_eq!(
             provider_endpoint(
                 AiProviderKind::OpenAICompatible,
                 Some("https://api.deepseek.com/v1/")
-            ),
+            )
+            .unwrap(),
             "https://api.deepseek.com/v1/chat/completions"
         );
         // 完整 endpoint 原样使用
@@ -853,40 +929,66 @@ mod tests {
             provider_endpoint(
                 AiProviderKind::OpenAICompatible,
                 Some("https://x.dev/v1/chat/completions")
-            ),
+            )
+            .unwrap(),
             "https://x.dev/v1/chat/completions"
         );
         // 裸 host 补全默认路径
         assert_eq!(
-            provider_endpoint(AiProviderKind::OpenAICompatible, Some("https://x.dev")),
+            provider_endpoint(AiProviderKind::OpenAICompatible, Some("https://x.dev")).unwrap(),
             "https://x.dev/v1/chat/completions"
         );
         // 空白 base_url 视为未配置
         assert_eq!(
-            provider_endpoint(AiProviderKind::OpenAICompatible, Some("  ")),
+            provider_endpoint(AiProviderKind::OpenAICompatible, Some("  ")).unwrap(),
             "https://api.deepseek.com/chat/completions"
         );
         assert_eq!(
-            provider_endpoint(AiProviderKind::OpenAICompatible, None),
+            provider_endpoint(AiProviderKind::OpenAICompatible, None).unwrap(),
             "https://api.deepseek.com/chat/completions"
         );
     }
 
     #[test]
+    fn endpoint_openai_rejects_private_and_non_https() {
+        // debug6:SSRF 边界——内网/本地/http/file 一律拒绝,不发起请求
+        for bad in [
+            Some("http://x.dev/v1"),
+            Some("http://127.0.0.1:11434"),
+            Some("https://192.168.1.5/v1"),
+            Some("https://10.0.0.1/v1"),
+            Some("https://localhost:8080/v1"),
+            Some("file:///etc/passwd"),
+            Some("https://0.0.0.0/v1"),
+        ] {
+            assert!(
+                provider_endpoint(AiProviderKind::OpenAICompatible, bad).is_err(),
+                "应拒绝: {bad:?}"
+            );
+        }
+    }
+
+    #[test]
     fn endpoint_ollama_appends_v1_and_uses_default_host() {
         assert_eq!(
-            provider_endpoint(AiProviderKind::Ollama, Some("http://192.168.1.5:11434")),
+            provider_endpoint(AiProviderKind::Ollama, Some("http://192.168.1.5:11434")).unwrap(),
             "http://192.168.1.5:11434/v1/chat/completions"
         );
         // 尾斜杠去除，避免双斜杠
         assert_eq!(
-            provider_endpoint(AiProviderKind::Ollama, Some("http://127.0.0.1:11434/")),
+            provider_endpoint(AiProviderKind::Ollama, Some("http://127.0.0.1:11434/")).unwrap(),
             "http://127.0.0.1:11434/v1/chat/completions"
         );
         assert_eq!(
-            provider_endpoint(AiProviderKind::Ollama, None),
+            provider_endpoint(AiProviderKind::Ollama, None).unwrap(),
             "http://127.0.0.1:11434/v1/chat/completions"
         );
+    }
+
+    #[test]
+    fn endpoint_ollama_rejects_non_http_scheme() {
+        // debug6:ollama 显式本地档允许 http(s),但 file 等 scheme 仍拒绝
+        assert!(provider_endpoint(AiProviderKind::Ollama, Some("file:///x")).is_err());
     }
 
     #[test]
