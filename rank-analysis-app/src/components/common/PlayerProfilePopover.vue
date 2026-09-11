@@ -6,11 +6,20 @@
     :delay="250"
     :flip="true"
     :style="{ padding: '0', background: 'var(--bg-elevated)' }"
+    @update:show="onShowChange"
   >
     <template #trigger>
       <slot />
     </template>
-    <PlayerProfileCard :puuid="puuid" :name="name" :champion-id="championId" :region="region" />
+    <!-- debug5：画像卡只在弹层真正打开后挂载。Naive 的默认插槽会 eager 预挂载，
+      战绩列表上百个头像会瞬间并发上百次画像查询；v-if 保证不 hover 零请求。 -->
+    <PlayerProfileCard
+      v-if="opened"
+      :puuid="puuid"
+      :name="name"
+      :champion-id="championId"
+      :region="region"
+    />
   </n-popover>
   <slot v-else />
 </template>
@@ -26,7 +35,7 @@
  */
 import PlayerProfileCard from '@renderer/components/common/PlayerProfileCard.vue'
 import { NPopover } from 'naive-ui'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
 const props = withDefaults(
   defineProps<{
@@ -42,4 +51,10 @@ const props = withDefaults(
 )
 
 const active = computed(() => props.puuid.length > 0)
+/** 弹层是否打开过（打开后保持挂载，避免二次 hover 闪烁重查，LRU 缓存兜底） */
+const opened = ref(false)
+
+function onShowChange(show: boolean): void {
+  if (show) opened.value = true
+}
 </script>

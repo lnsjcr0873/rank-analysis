@@ -28,7 +28,7 @@
 import { computed, onMounted, ref, watch, type ComputedRef } from 'vue'
 import { getConfigByIpc, putConfigByIpc } from '@renderer/services/ipc'
 import { CONFIG_KEYS } from '@renderer/services/configKeys'
-import { lcuConnected } from '@renderer/composables/useGameState'
+import { lcuConnected, useGameState } from '@renderer/composables/useGameState'
 import { isMainWindow } from '@renderer/utils/windows'
 
 /** 队列里的弹窗标识 */
@@ -72,8 +72,19 @@ export function useStartupDialogs(): {
    */
   const consentShown = ref(true)
 
+  // 对局阶段（单例监听维护）：ChampSelect/GameStart/InProgress 视为"局内"。
+  const { currentPhase } = useGameState()
+
+  /** 局内阶段不弹阻塞启动窗（与 useGameState.isGamingPhase 同口径） */
+  function isGamingPhase(phase: string | null): boolean {
+    return phase === 'ChampSelect' || phase === 'GameStart' || phase === 'InProgress'
+  }
+
   const active = computed<StartupDialogKey | null>(() => {
     if (!gateOpen.value) return null
+    // debug5：对局中（ChampSelect/GameStart/InProgress）不弹阻塞窗，
+    // 等回到大厅再问——弹窗 mask-closable=false 会遮挡局内信息。
+    if (isGamingPhase(currentPhase.value)) return null
     if (!consentShown.value) return 'errorReportingConsent'
     return null
   })

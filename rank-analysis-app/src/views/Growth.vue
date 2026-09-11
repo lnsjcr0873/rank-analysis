@@ -419,6 +419,25 @@ async function importGoalsFile(file: File): Promise<void> {
       }
     }
     await loadGoals()
+    // debug5：后端 add_habit_goal 恒插 done=0，新建目标的完成态需按备份补回。
+    // 已存在目标不碰（用户可能故意改了状态），仅对本轮新建且备份 done=true 的补 toggle。
+    let restored = 0
+    if (created > 0) {
+      const keyOf = (g: { dimension: string; title: string }) => `${g.dimension}::${g.title}`
+      const doneByKey = new Map<string, boolean>()
+      for (const g of backup.goals) {
+        if (g.done) doneByKey.set(keyOf(g), true)
+      }
+      if (doneByKey.size > 0) {
+        for (const cur of goals.value) {
+          if (!cur.done && doneByKey.has(keyOf(cur))) {
+            await toggleHabitGoal(cur.id)
+            restored += 1
+          }
+        }
+        if (restored > 0) await loadGoals()
+      }
+    }
     const remapped = remapNotesByTitleKey(backup, goals.value)
     goalNotes.value = { ...goalNotes.value, ...remapped }
     const noteRes = safeSetJson(GOAL_NOTES_KEY, goalNotes.value)
@@ -429,7 +448,9 @@ async function importGoalsFile(file: File): Promise<void> {
     }
     // 短板卡数据源与本清单同源（习惯标签），还原后同步刷新保持一致
     void refreshAll()
-    message.success(`还原完成：新建 ${created} 个目标，回填 ${Object.keys(remapped).length} 条备注`)
+    message.success(
+      `还原完成：新建 ${created} 个目标${restored > 0 ? `，恢复 ${restored} 个已完成` : ''}，回填 ${Object.keys(remapped).length} 条备注`
+    )
   } catch (err) {
     message.error(
       err instanceof Error && err.message.includes('备份')

@@ -19,21 +19,32 @@ vi.mock('@renderer/services/ipc', () => ({
   getConfigByIpc: vi.fn(),
   putConfigByIpc: vi.fn(() => Promise.resolve())
 }))
-// LCU 连接状态用可写 ref 顶替，便于模拟「连接建立」时刻
+// LCU 连接/阶段状态用可写 ref 顶替（ref 必须在 mock 工厂内经同模块 vue 创建，
+// 否则与实现侧 computed 不在同一响应式系统内，跨实例 ref 无法触发更新）。
 vi.mock('@renderer/composables/useGameState', async () => {
-  const { ref } = await import('vue')
-  return { lcuConnected: ref(false) }
+  const vue = await import('vue')
+  const lcuConnected = vue.ref(false)
+  const currentPhase = vue.ref<string | null>(null)
+  ;(globalThis as unknown as { __mockGameState: object }).__mockGameState = {
+    lcuConnected,
+    currentPhase
+  }
+  return {
+    lcuConnected,
+    useGameState: () => ({ currentPhase })
+  }
 })
+
+function mockRefs(): { lcuConnected: Ref<boolean>; currentPhase: Ref<string | null> } {
+  return (globalThis as unknown as { __mockGameState: never }).__mockGameState
+}
 
 import { getConfigByIpc, putConfigByIpc } from '@renderer/services/ipc'
 import { CONFIG_KEYS } from '@renderer/services/configKeys'
-import { lcuConnected } from '@renderer/composables/useGameState'
 import { useStartupDialogs, GATE_SETTLE_MS, GATE_FALLBACK_MS } from './useStartupDialogs'
 
 const mockGet = vi.mocked(getConfigByIpc)
 const mockPut = vi.mocked(putConfigByIpc)
-/** mock 后的 lcuConnected 实际是可写 ref，收窄类型便于测试赋值 */
-const mockConnected = lcuConnected as unknown as Ref<boolean>
 
 /** 让 pending 的 promise 链走完（fake timers 不冻结微任务，循环 await 即可放行） */
 async function flushAsync(): Promise<void> {
@@ -78,7 +89,8 @@ describe('useStartupDialogs', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.useFakeTimers()
-    mockConnected.value = false
+    mockRefs().lcuConnected.value = false
+    mockRefs().currentPhase.value = null
   })
 
   afterEach(() => {
@@ -105,7 +117,7 @@ describe('useStartupDialogs', () => {
     await flushAsync()
     expect(result.active.value).toBeNull()
 
-    mockConnected.value = true
+    mockRefs().lcuConnected.value = true
     await nextTick()
     expect(result.active.value).toBeNull()
 
@@ -158,6 +170,18 @@ describe('useStartupDialogs', () => {
     expect(mockPut).toHaveBeenCalledWith(CONFIG_KEYS.errorReportingEnabled, true)
     expect(mockPut).toHaveBeenCalledWith(CONFIG_KEYS.errorReportingConsentShown, true)
     expect(result.active.value).toBeNull()
+    unmount()
+  })
+
+  it('debug5：对局中（InProgress）不弹阻塞窗，回到大厅后恢复', async () => {
+    mockFlags(undefined)
+    mockRefs().currentPhase.value = 'InProgress'
+    const { result, unmount } = await mountWithGateOpen()
+    expect(result.active.value).toBeNull()
+
+    mockRefs().currentPhase.value = 'Lobby'
+    await nextTick()
+    expect(result.active.value).toBe('errorReportingConsent')
     unmount()
   })
 

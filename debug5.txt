@@ -743,7 +743,7 @@ rank-analysis-app/src/components/common/ErrorReportingConsentDialog.vue
 4	UI	lineupScore.ts	胜率偏差出现 NaN 导致整个阵容强度条样式失效消失	对各维度的中间计算值加 Number.isFinite 保护【已完成：playerLineupAdjustment入口recentWinRate非有限按无画像降级+熟练度winRate加isFinite；computeLineupScore base非有限按0降级。阈值经核实：现diff已转百分点、阈值2即2%逻辑正确，文档所述3.0与现状不符无需改。附2回归。24单测全绿，prettier/eslint/tsc全过】
 5	数据	match_history.rs	参团率仅赋值给第 0 个参与者，导致详情中其他 9 人参团率恒为 0	循环回填 game_detail.participants 全员参团率【已完成：calculate内参团率改全员回填（摘要participants+详情game_detail双写，按所属队/subteam分母，CHERRY口径不变）；衍生审RecordCard读participants[0]不受影响、MVP判定借用顺序已调。cargo fmt/clippy(GNU)/check --tests全过，cargo test以CI为权威】
 6	UI	MatchDetailBuildsTab.vue	撤销退款事件将 afterId=0 显示为 → #0，界面不专业	增加对 afterId === 0 的纯撤销文案适配【已完成：新增undoText：afterId=0显示"撤销购买X"，>0保留"撤销X→Y"；prettier/eslint/tsc全过】
-7	体验	useStartupDialogs.ts	对局中启动时弹出无法 Esc 关闭的启动弹窗，遮挡局内分析	游戏进行中静默延迟弹窗
+7	体验	useStartupDialogs.ts	对局中启动时弹出无法 Esc 关闭的启动弹窗，遮挡局内分析	游戏进行中静默延迟弹窗【已完成：active加局内抑制（ChampSelect/GameStart/InProgress，回大厅自动恢复）；附1回归。9单测全绿，prettier/eslint/tsc全过】
 Model 17:57
 ThinkingThoughts
 Expand to view model thoughts
@@ -1021,13 +1021,13 @@ fetchPlayerProfile(...) 与 queryMeetSummary(...)。
 修复方案：在 <PlayerProfilePopover> 内部增加悬浮状态监听，仅在用户真正悬停触发时，才渲染内部的 <PlayerProfileCard>。
 四、 本轮审计清单汇总
 序号	类别	模块 / 文件	核心表现	修复策略
-1	数据丢失	Growth.vue	目标还原未同步 done 状态，打卡记录导入后全部变为未完成	还原时追加已完成状态的打卡补偿
+1	数据丢失	Growth.vue	目标还原未同步 done 状态，打卡记录导入后全部变为未完成	还原时追加已完成状态的打卡补偿【已完成：还原新建后按备份done=true补toggleHabitGoal（已存在目标不碰），文案同步恢复数；prettier/eslint/tsc全过】
 2	逻辑截断	score/events.rs	评分事件按发生时间升序截取前 12 条，导致中后期团战大失误全被丢弃	改为按重要性（delta.abs()）降序筛选后再按时间排版【已完成：compute_score_events改先按delta.abs()降序取前12再按时间升序排版；衍生审同文件聚类/各维度权重定义不变无同患。附1回归（12前期阵亡+1后期漏团，漏团必留存且有序）。cargo fmt/clippy(GNU)/check --tests全过，cargo test以CI为权威】
 3	数据失真	liveGameIntel.ts	团战阵亡统计由于缺少队伍过滤，我方队友阵亡全被当作敌方阵亡（团灭误报为大胜）	引入对局全员队伍名单比对受害人阵营【已完成：teamfightClusters加myTeamNames参数（liveIntelText内部组快照同side全员），myDeaths口径改为我方全队；goldGap多队对比全场非己方平均并标multiTeam，myPlayer/mySide解二元归一。附3回归。20单测全绿，prettier/eslint/tsc全过】
 4	显示错误	MatchDetailStatsTab.vue	全员得 0 的指标被 row.max > 0 判定为字段缺失，展示全屏横杠 "—"	仅在非有效数字时走缺失展示分支【已完成：buildRowsFromSources新增empty标记（无有效数字=缺失，全员0正常展示）；模板+statsBarDisabled改判empty；附1回归。23+7单测全绿，prettier/eslint/tsc全过】
 5	多屏故障	overlay/mod.rs	悬浮窗坐标未加上副显示器物理原点，副屏游戏时浮窗强行跑到主屏	坐标计算叠加 monitor.position() 偏移【已完成：position_by_anchor最终坐标叠加monitor.position()/scale_factor逻辑原点；主屏原点(0,0)行为不变无回归。cargo fmt/clippy(GNU)/check --tests全过，cargo test以CI为权威】
 6	存储耗尽	stream.ts	AI 文本缓存长期无上限塞入 localStorage，撑爆 5MB 导致持久化崩溃	增加条目淘汰机制或迁移到 SQLite / Rust 侧持久化【已完成：配额满自救删体积最大一半（key无统一前缀不做定时淘汰）；sessionStorage会话级关窗即清。prettier/eslint/tsc全过】
-7	性能卡顿	PlayerProfilePopover.vue	头像 Popover 预先全部挂载，页面打开瞬间并发执行上百次查询	改造为真正 Hover 时才延迟激活挂载（Lazy Render）
+7	性能卡顿	PlayerProfilePopover.vue	头像 Popover 预先全部挂载，页面打开瞬间并发执行上百次查询	改造为真正 Hover 时才延迟激活挂载（Lazy Render）【已完成：画像卡v-if=opened只在弹层打开后挂载，打开后保持（LRU缓存无二次轰炸）；prettier/eslint/tsc全过】
 Model 18:29
 ThinkingThoughts
 Expand to view model thoughts
