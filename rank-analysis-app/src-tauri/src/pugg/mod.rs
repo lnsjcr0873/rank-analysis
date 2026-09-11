@@ -11,7 +11,7 @@
 //!
 //! 聚合规则（见 [`aggregate`]）：
 //! - 按 `champion_id` + `queue_id`(可选) 分组；
-//! - 「我」的定位：先按 `puuid` 匹配身份数组，匹配不上回退 `participants[0]`
+//! - 「我」的定位：按 `puuid` 匹配身份数组，匹配不上整局跳过（debug6：不再回退 `participants[0]`）
 //!   （与 `MatchHistory::calculate` 的既有约定一致）；
 //! - 胜场权重 2x：同一出装/符文出现在胜局里权重翻倍，排序优先；
 //! - 样本 < 5 场不输出（防小样本噪声）；

@@ -110,23 +110,23 @@ fn finalize_freq<T>(mut stats: Vec<(i32, u32, u32)>, map: impl Fn(i32, u32, u32)
 
 /// 取「我」在该局的 participant 引用。
 ///
-/// 身份数组按 puuid 匹配；无身份信息（异常数据）时回退参与者[0]（SGP 映射层
-/// 与 LCU 摘要的既有约定）；身份数组存在但匹配不到我的 puuid → 本局没有我。
+/// 身份数组按 puuid 匹配；无身份信息（异常数据）时返回 None（debug6：此前
+/// 回退 participants[0]，会把别人的对局算进"我的"出装统计，整套推荐建立在
+/// 错误身份上；调用方 filter_map 本就跳过 None，宁缺毋滥）；身份数组存在但
+/// 匹配不到我的 puuid → 本局没有我。
 fn my_participant<'a>(game: &'a Game, my_puuid: &str) -> Option<&'a Participant> {
-    let me_idx = if game.participant_identities.is_empty() {
-        0
-    } else {
-        game.participant_identities
-            .iter()
-            .position(|i| i.player.puuid == my_puuid)?
-    };
+    let me_idx = game
+        .participant_identities
+        .iter()
+        .position(|i| i.player.puuid == my_puuid)?;
     game.participants.get(me_idx)
 }
 
 /// 把对局摘要聚合成指定英雄、指定分路的 BuildStats。
 ///
 /// # 规则
-/// - 只统计「我」的对局：先按 `my_puuid` 匹配 identities，回退 `participants[0]`；
+/// - 只统计「我」的对局：按 `my_puuid` 匹配 identities，匹配不上整局跳过
+///   （debug6：不再回退 `participants[0]`）；
 /// - `mode` 非 0 时只统计 `queue_id == mode` 的对局；英雄不匹配的对局跳过；
 /// - `position` 非空时分路桶只取 `timeline.lane` 归一为该分路的对局；该分路
 ///   样本 < [`MIN_SAMPLES`] 时**自动回退全部分路**（结果 `position` 为空串，
@@ -457,11 +457,21 @@ mod tests {
 
     #[test]
     fn ignores_games_where_query_player_absent() {
-        // 身份数组里没有我的 puuid：participants[0] 回退也拿不到匹配英雄
+        // 身份数组里没有我的 puuid：整局跳过（debug6：不再回退 participants[0]）
         let g = game_with(1, 86, 420, &full_items(), true, "someone-else");
         let games = vec![g; 6];
         let got = aggregate_build_stats(&games, 86, MY_PUUID, 0, "");
         assert!(got.is_none(), "非我参与的对局应全部跳过（样本 0）");
+    }
+
+    #[test]
+    fn ignores_games_with_empty_identities() {
+        // debug6：身份数组为空（异常数据）同样跳过，不得把 participants[0] 当成我
+        let mut g = game_with(1, 86, 420, &full_items(), true, MY_PUUID);
+        g.participant_identities.clear();
+        let games = vec![g; 6];
+        let got = aggregate_build_stats(&games, 86, MY_PUUID, 0, "");
+        assert!(got.is_none(), "无身份信息时宁缺毋滥");
     }
 
     /// 造 n 场同英雄同 lane 的对局。
