@@ -115,7 +115,7 @@ pub fn visible_queues() -> Vec<(u32, String)> {
 排序按 ID 升序排列（830 < 870），遍历到中文标签相同的条目时，seen.insert 成功记录了 830，随后将现行的 870 当作重复项直接剔除。
 结果：前端拿到的模式列表绑定的是 7.19 版本就已弃用的废弃队列 ID，传给客户端发起自动化或查询时容易发生不兼容错误。
 修复方案：现行队列具有更高优先级，去重时应按 constant::game::canonical_queue_id 降序或优先保留现行生效 ID。
-6. BestPicksPanel.vue：poolEntries 缓存未响应召唤师变更，切号后残留上一个账号的英雄池
+6. BestPicksPanel.vue：poolEntries 缓存未响应召唤师变更，切号后残留上一个账号的英雄池【已完成：watch(mySummonerName)重置双池+清owned缓存重拉；衍生修ownedIds同残留（60s TTL）+世代守卫防迟到覆盖（load时name快照+回包双校验，切回旧号秒回）；附3回归单测。prettier/eslint/tsc全过，20测试全绿】
 文件路径：rank-analysis-app/src/components/gaming/BestPicksPanel.vue
 问题代码：
 code

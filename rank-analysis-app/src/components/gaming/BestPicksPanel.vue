@@ -230,7 +230,10 @@ import { useBestPicks } from '@renderer/composables/useCounterIntel'
 import { getChampionName } from '@renderer/services/ai/champion-names'
 import { TIER_OPTIONS, type OpggTier } from '@renderer/services/opgg'
 import { getConfigByIpc, putConfigByIpc } from '@renderer/services/ipc'
-import { getOwnedChampionIds } from '@renderer/features/gaming/services/ownedChampions'
+import {
+  clearOwnedChampionsCache,
+  getOwnedChampionIds
+} from '@renderer/features/gaming/services/ownedChampions'
 import {
   aggregateChampionPool,
   filterChampionPoolByThresholds,
@@ -370,9 +373,18 @@ const filterHint = computed(() => {
   return ''
 })
 
+/**
+ * 世代守卫（debug5-6 衍生）：切号时在途旧请求迟到作废，避免旧号结果覆盖新号。
+ * 口径与 MatchDetailScoreTab 的 scoreGeneration / useMinuteCurve 的 generation 一致。
+ */
+let ownedGeneration = 0
+let poolGeneration = 0
+
 async function loadOwned(): Promise<void> {
   if (ownedUnavailable.value || ownedIds.value !== null) return
+  const gen = ++ownedGeneration
   const ids = await getOwnedChampionIds()
+  if (gen !== ownedGeneration) return
   if (ids === null) {
     ownedUnavailable.value = true
     return
@@ -380,35 +392,43 @@ async function loadOwned(): Promise<void> {
   ownedIds.value = ids
 }
 
+let poolLoadingName: string | null = null
+
 async function loadMyPool(): Promise<void> {
-  if (
-    !props.mySummonerName ||
-    poolLoading.value ||
-    poolUnavailable.value ||
-    poolEntries.value !== null
-  ) {
+  const name = props.mySummonerName
+  if (!name || poolUnavailable.value || poolEntries.value !== null) {
     return
   }
+  const cached = myPoolCache.get(name)
+  if (cached) {
+    poolEntries.value = cached
+    return
+  }
+  // 同号重复触发去重（切号时 watcher 已 +1 作废旧世代，不会被这行拦住）
+  if (poolLoading.value && poolLoadingName === name) return
+  const gen = ++poolGeneration
+  poolLoadingName = name
   poolLoading.value = true
   try {
-    const cached = myPoolCache.get(props.mySummonerName)
-    if (cached) {
-      poolEntries.value = cached
-      return
-    }
     const mh = await invoke<MatchHistory>('get_match_history_by_name', {
-      name: props.mySummonerName,
+      name,
       begIndex: 0,
       endIndex: 49
     })
     const entries = aggregateChampionPool(mh?.games?.games ?? [])
-    myPoolCache.set(props.mySummonerName, entries)
+    // 按请求时的名字落缓存：迟到回包不污染当前账号的分键
+    myPoolCache.set(name, entries)
+    if (gen !== poolGeneration || props.mySummonerName !== name) return
     poolEntries.value = entries
   } catch (e) {
     console.warn('[bestPicks] 英雄池拉取失败，降级为不筛英雄池:', e)
+    if (gen !== poolGeneration || props.mySummonerName !== name) return
     poolUnavailable.value = true
   } finally {
-    poolLoading.value = false
+    if (gen === poolGeneration) {
+      poolLoading.value = false
+      poolLoadingName = null
+    }
   }
 }
 
@@ -444,6 +464,30 @@ watch(onlyOwned, checked => {
 watch(poolOnly, checked => {
   if (checked) void loadMyPool()
 })
+
+/**
+ * 切号重置（debug5-6）：同一窗口切游戏账号时，`poolEntries !== null` 的早退
+ * 会让面板残留上一个账号的英雄池。召唤师名实质变更即清空本地池并重拉
+ * （模块级 myPoolCache 按名分键保留，切回去秒回）；`ownedIds` 走当前登录
+ * 账号实时查，同样清缓存重拉（60s TTL 否则残留旧号）。
+ */
+watch(
+  () => props.mySummonerName,
+  () => {
+    // 先作废在途旧请求（onlyOwned/poolOnly 关闭时不重拉，也不能让旧回包落地）
+    ownedGeneration++
+    poolGeneration++
+    poolLoading.value = false
+    poolLoadingName = null
+    poolEntries.value = null
+    poolUnavailable.value = false
+    ownedIds.value = null
+    ownedUnavailable.value = false
+    clearOwnedChampionsCache()
+    if (poolOnly.value) void loadMyPool()
+    if (onlyOwned.value) void loadOwned()
+  }
+)
 
 // 筛选状态落配置持久化（与 displayCount 同模式，失败静默）
 async function persistFilter(key: string, value: boolean | number): Promise<void> {
