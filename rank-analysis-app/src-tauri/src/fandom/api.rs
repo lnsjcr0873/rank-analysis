@@ -16,8 +16,13 @@ pub async fn fetch_aram_balance_data(
         .build()?;
 
     log::info!("Fetching Fandom API: {}", DATA_URL);
+    // debug5：Fandom 前有 Cloudflare，仅 UA 太"裸"易吃 403 挑战页；
+    // 与 patch_notes.rs 同口径补 Accept/Accept-Language/Referer。
     let resp = client
         .get(DATA_URL)
+        .header("Accept", "application/json, text/plain, */*")
+        .header("Accept-Language", "en-US,en;q=0.9")
+        .header("Referer", "https://leagueoflegends.fandom.com/")
         .send()
         .await?
         .json::<serde_json::Value>()
