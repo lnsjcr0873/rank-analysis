@@ -81,8 +81,10 @@ pub fn unavailable_map(session: &SelectSession) -> HashMap<i32, Unavailable> {
 /// 用户接管检测。
 ///
 /// 记住我们最后一次 hover 的英雄 ID：
-/// - 若此前已主动 hover（`last_hovered` 为 `Some(ours)`）：当且仅当非 0 且
-///   不等于我们记录的值时判定接管（用户手动改选了别的英雄）；
+/// - 若此前已主动 hover（`last_hovered` 为 `Some(ours)`）：当前 hover 只要不再等于
+///   我们记录的值（包括**清空成 0**——用户手动点取消/清空）即判定用户接管。
+///   否则上一轮「点取消立即被脚本弹回原英雄」的按键争夺会复现：用户清空后
+///   工具在下一 tick 又把目标 hover 写回去。
 /// - 若此前尚未主动 hover（`None`）：此时 `current_hover` 可能是用户自主预选，
 ///   也可能是**我们自己的 hover 正在落库**（PATCH 已生效、但 set_last_hovered
 ///   因时序尚未写入）。因此只有「当前非 0 且 ≠ 我们正要执行的 target」才判定
@@ -93,7 +95,7 @@ pub fn detect_override(
     our_target: Option<i32>,
 ) -> bool {
     match last_hovered {
-        Some(ours) => current_hover != 0 && current_hover != ours,
+        Some(ours) => current_hover != ours,
         None => current_hover != 0 && our_target != Some(current_hover),
     }
 }
@@ -957,7 +959,8 @@ mod tests {
             "我们 hover 盲僧、变成亚索 → 接管"
         );
         assert!(!detect_override(64, Some(64), None), "没变 → 不接管");
-        assert!(!detect_override(0, Some(64), None), "撤回成 0 → 不接管");
+        // 用户点取消/清空悬停（当前 0）→ 视为接管，勿被脚本弹回原英雄
+        assert!(detect_override(0, Some(64), None), "撤回成 0 → 用户接管");
         assert!(
             detect_override(157, None, None),
             "进入前已有预选 → 尊重用户接管"
