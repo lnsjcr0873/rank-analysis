@@ -466,8 +466,9 @@ pub const BACKUP_BLACKLIST: &[&str] = &[
 /// 新备份无此键 = 不覆盖 = 本地已有 Key 保留)。
 pub const CREDENTIAL_KEYS: &[&str] = &["dashscopeApiKey", "ai.apiKey"];
 
-/// 仅云端额外排除的键:云端按 puuid 寻址、任何人可读,API key 放上去等于公开;
-/// 文件备份同样不含凭据(见 BACKUP_BLACKLIST),此处保留作纵深防御。
+/// 仅云端额外排除的键:云端按 puuid 寻址、任何人可读,API key 放上去等于公开。
+/// 文件备份快照仍含凭据(恢复旧备份向前兼容),但导出时由 build_backup_json
+/// 显式剥离 CREDENTIAL_KEYS,此处保留作纵深防御。
 ///
 /// R01:除凭据外,`ai.provider` / `ai.baseUrl` 也不同步——云端脏配置若能改走
 /// 服务商与端点,会把本机保留 Key 的下一次 AI 请求发往攻击者地址;端点变更
@@ -487,7 +488,7 @@ pub fn allowed_in_cloud(key: &str) -> bool {
 
 /// 取黑名单过滤后的配置快照(值保持存储形状原样,含 `{value:...}` 包装)。
 ///
-/// - `for_cloud = false`:文件备份口径(凭据同样排除,见 BACKUP_BLACKLIST)
+/// - `for_cloud = false`:文件备份口径(含凭据,供恢复兼容;导出时再剥离)
 /// - `for_cloud = true`:云同步口径(额外剔除 CLOUD_ONLY_BLACKLIST)
 ///
 /// 过滤收口在 Rust 侧:前端拿不到未过滤快照,杜绝前端漏过滤导致凭据外泄。
