@@ -837,19 +837,27 @@ fn get_current_streak(match_history: &MatchHistory) -> i32 {
 
 /// 将数字转换为中文。
 ///
-/// 只支持 0-9 的数字，其他数字返回原字符串。
-///
-/// # 参数
-///
-/// - `num`: 数字
-///
-/// # 返回值
-///
-/// 中文数字或原数字字符串
+/// 数字转中文（0~99）：连败/连胜标签字宽统一为汉字，十以上不再混半角数字。
+/// 三位数以上回退阿拉伯数字（现实连败场数到不了三位数，不断言全中文）。
 fn number_to_chinese(num: i32) -> String {
     let chinese_digits = ["零", "一", "二", "三", "四", "五", "六", "七", "八", "九"];
     if (0..10).contains(&num) {
         return chinese_digits[num as usize].to_string();
+    }
+    if (10..100).contains(&num) {
+        let ten = num / 10;
+        let one = num % 10;
+        // 十/十一~十九/二十~九十九（十位为 1 时省"一"，口语习惯）
+        let ten_part = if ten == 1 {
+            "十".to_string()
+        } else {
+            format!("{}十", chinese_digits[ten as usize])
+        };
+        return if one == 0 {
+            ten_part
+        } else {
+            format!("{}{}", ten_part, chinese_digits[one as usize])
+        };
     }
     format!("{}", num)
 }
@@ -1376,6 +1384,24 @@ mod tests {
             .into_iter()
             .find(|t| t.id == id)
             .unwrap_or_else(|| panic!("默认标签不存在: {}", id))
+    }
+
+    #[test]
+    fn number_to_chinese_covers_tens() {
+        // 个位不变
+        assert_eq!(number_to_chinese(0), "零");
+        assert_eq!(number_to_chinese(3), "三");
+        assert_eq!(number_to_chinese(9), "九");
+        // 十：口语省"一"
+        assert_eq!(number_to_chinese(10), "十");
+        assert_eq!(number_to_chinese(11), "十一");
+        assert_eq!(number_to_chinese(15), "十五");
+        // 整十与几十几
+        assert_eq!(number_to_chinese(20), "二十");
+        assert_eq!(number_to_chinese(25), "二十五");
+        assert_eq!(number_to_chinese(99), "九十九");
+        // 三位数回退阿拉伯数字
+        assert_eq!(number_to_chinese(100), "100");
     }
 
     #[test]

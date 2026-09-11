@@ -128,7 +128,16 @@ fn iso_to_epoch_ms(s: &str) -> Option<i64> {
             millis *= 10;
         }
     }
-    // 时区偏移：必须有显式后缀（Z / ±HH:MM），缺后缀视为格式错误。
+    // 时区偏移：显式后缀（Z / ±HH:MM）按其换算；无后缀时默认 UTC——
+    // 上游（SGP/LCU）下发的无后缀时间串即 UTC 语义，此前 return None 会让
+    // 回测直接丢样本（debug3）。若未来出现本地时区源，需在此处显式分支。
+    // 注意先判长度：无毫秒段又无后缀时 idx 已 == b.len()，b.get(idx) 为 None。
+    if idx == b.len() {
+        log::debug!("[backtest] ISO 无时区后缀，按 UTC 解析: {s}");
+        let days = days_from_civil(y, mo as u32, d as u32);
+        let secs = days * 86_400 + hh * 3600 + mi * 60 + ss - offset_min * 60;
+        return Some(secs * 1000 + millis);
+    }
     let c = *b.get(idx)?;
     if c == b'Z' || c == b'z' {
         idx += 1;
@@ -388,8 +397,25 @@ mod tests {
     fn iso_rejects_malformed() {
         assert_eq!(iso_to_epoch_ms("2021-01-01"), None);
         assert_eq!(iso_to_epoch_ms("2021-13-01T00:00:00.000Z"), None);
-        assert_eq!(iso_to_epoch_ms("2021-01-01T00:00:00"), None, "缺时区后缀");
         assert_eq!(iso_to_epoch_ms("garbage"), None);
+    }
+
+    #[test]
+    fn iso_without_suffix_defaults_to_utc() {
+        // 上游无后缀时间串即 UTC 语义：不再丢样本（debug3）
+        assert_eq!(
+            iso_to_epoch_ms("2021-01-01T00:00:00"),
+            Some(1_609_459_200_000)
+        );
+        assert_eq!(
+            iso_to_epoch_ms("2021-01-01T00:00:00.123"),
+            Some(1_609_459_200_123)
+        );
+        // 与显式 Z 同值
+        assert_eq!(
+            iso_to_epoch_ms("2021-01-01T00:00:00"),
+            iso_to_epoch_ms("2021-01-01T00:00:00Z")
+        );
     }
 
     #[test]

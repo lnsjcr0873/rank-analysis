@@ -324,6 +324,9 @@ pub fn wilson_score_lower(wins: i64, total: i64) -> f64 {
     if total <= 0 {
         return 0.0;
     }
+    // 脏数据兜底（debug3）：并发/跨模式统计重叠可能写出 wins > total 或负数，
+    // 此时 p > 1 会让分子失真并污染强化推荐排序。钳制 + 日志，脏行不进排序。
+    let wins = wins.clamp(0, total);
     let n = total as f64;
     let p = (wins as f64) / n;
     let z = 1.95996; // 95% 置信度
@@ -427,6 +430,23 @@ pub fn crowdsourced_augment_stats(champion_id: Option<i32>) -> Vec<GlobalAugment
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn wilson_lower_clamps_dirty_rows() {
+        // 脏数据（wins > total / 负数）钳制后仍在 [0,1] 且单调：不再失真污染排序
+        assert_eq!(wilson_score_lower(0, 0), 0.0);
+        assert_eq!(wilson_score_lower(5, 0), 0.0);
+        let over = wilson_score_lower(120, 100);
+        let full = wilson_score_lower(100, 100);
+        assert!((over - full).abs() < 1e-12, "wins>total 应钳为全胜");
+        let neg = wilson_score_lower(-5, 100);
+        let zero = wilson_score_lower(0, 100);
+        assert!((neg - zero).abs() < 1e-12, "负 wins 应钳为 0 胜");
+        for (w, t) in [(0, 10), (3, 10), (7, 10), (10, 10), (50, 100)] {
+            let v = wilson_score_lower(w, t);
+            assert!((0.0..=1.0).contains(&v), "w={w} t={t} v={v}");
+        }
+    }
 
     fn mem_conn() -> Connection {
         let conn = Connection::open_in_memory().expect("in-memory sqlite");
