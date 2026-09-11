@@ -4,6 +4,7 @@
 
 import { extractPlayerDeepDive, type PlayerInsightSource } from '../player-insight'
 import { buildNoteBrief } from '../shared/noteBrief'
+import { sanitizeUserText } from './sanitize'
 import { getChampionName } from '../champion-names'
 import { getChampionPatchNote } from '@renderer/services/patchNotes'
 import { assignedPositionCn } from './shared/opggIntel'
@@ -44,7 +45,7 @@ export async function buildPlayerAnalysisPrompt(
   return `你是LOL资深分析师，请详细分析这个玩家：
 
 【玩家基本信息】
-名称：${player.summoner?.gameName || '未知'} #${player.summoner?.tagLine}
+名称：${sanitizeUserText(player.summoner?.gameName) || '未知'} #${sanitizeUserText(player.summoner?.tagLine) || ''}
 等级：${player.summoner?.summonerLevel}
 段位：${player.rank?.queueMap?.RANKED_SOLO_5x5?.tierCn || '无'}
 本局英雄：${currentChampion}

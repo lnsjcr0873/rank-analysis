@@ -7,6 +7,7 @@
  */
 
 import { extractPlayerInsight } from '../player-insight'
+import { sanitizeUserText } from './sanitize'
 import { buildNoteBrief } from '../shared/noteBrief'
 import { buildPatchNotesBlock, PATCH_NOTES_SECTION_HEADER } from './shared/patchNotes'
 import {
@@ -56,7 +57,7 @@ function buildPreGroupBlock(
       const name = p.preGroupMarkers?.name
       if (!name) continue
       const list = groups.get(name) ?? []
-      list.push(p.summoner?.gameName || '未知')
+      list.push(sanitizeUserText(p.summoner?.gameName) || '未知')
       groups.set(name, list)
     }
     for (const [groupName, members] of groups) {
@@ -79,7 +80,7 @@ function buildMeetGamesBlock(
       if (meets.length === 0) continue
       const sameTeam = meets.filter(m => m.isMyTeam).length
       lines.push(
-        `- ${sideOf(st.subteamId, mySubteamId)}${p.summoner?.gameName || '未知'}：遇见过 ${meets.length} 次（同队 ${sameTeam}，对阵 ${meets.length - sameTeam}）`
+        `- ${sideOf(st.subteamId, mySubteamId)}${sanitizeUserText(p.summoner?.gameName) || '未知'}：遇见过 ${meets.length} 次（同队 ${sameTeam}，对阵 ${meets.length - sameTeam}）`
       )
     }
   }
