@@ -33,6 +33,19 @@ static LISTENER_GENERATION: AtomicU64 = AtomicU64::new(0);
 /// 超时说明客户端正在退出或端口已失效，不值得久等。
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// 重连退避下限：客户端启动后 ≤1s 内重连，灵敏度足够。
+const RETRY_BASE: Duration = Duration::from_millis(1000);
+/// 重连退避上限：客户端长时间关闭时，把进程扫描/连接尝试频率压下来，
+/// 避免每 2s 一次的快照遍历空耗 CPU 与临时端口。
+const RETRY_MAX: Duration = Duration::from_secs(15);
+
+/// 指数退避睡眠：1s → 2s → 4s → … → [`RETRY_MAX`]。调用方负责在成功连接后
+/// 将 backoff 复位为 [`RETRY_BASE`]。
+async fn sleep_backoff(backoff: &mut Duration) {
+    tokio::time::sleep(*backoff).await;
+    *backoff = (*backoff * 2).min(RETRY_MAX);
+}
+
 /// 读空闲超时：超过该时长未收到任何帧（LCU 正常时会周期推送事件）视为半开连接，
 /// 主动断开进入重连循环。
 const READ_IDLE_TIMEOUT: Duration = Duration::from_secs(60);
@@ -100,6 +113,7 @@ impl LcuListener {
         });
 
         // 重连循环
+        let mut backoff = RETRY_BASE;
         loop {
             // 代际检查点：已有更新的监听器接管，本实例立即退出，
             // 不再对已失效的端口制造每 2 秒一次的失败连接。
@@ -115,20 +129,20 @@ impl LcuListener {
                 Ok(pair) => pair,
                 Err(crate::lcu::util::token::AuthError::NotRunning) => {
                     log::debug!("LCU 客户端未运行，等待启动...");
-                    tokio::time::sleep(Duration::from_secs(2)).await;
+                    sleep_backoff(&mut backoff).await;
                     continue;
                 }
                 Err(e) => {
-                    log::warn!("获取 LCU 认证信息失败: {}，2秒后重试...", e);
-                    tokio::time::sleep(Duration::from_secs(2)).await;
+                    log::warn!("获取 LCU 认证信息失败: {}，重试...", e);
+                    sleep_backoff(&mut backoff).await;
                     continue;
                 }
             };
             let port: u16 = match port_str.parse() {
                 Ok(p) => p,
                 Err(_) => {
-                    log::error!("解析端口失败: {}，2秒后重试...", port_str);
-                    tokio::time::sleep(Duration::from_secs(2)).await;
+                    log::error!("解析端口失败: {}，重试...", port_str);
+                    sleep_backoff(&mut backoff).await;
                     continue;
                 }
             };
@@ -143,6 +157,8 @@ impl LcuListener {
             {
                 Ok(Ok(ws_stream)) => {
                     log::info!("LCU WebSocket 已连接");
+                    // 连接成功：退避复位，后续断连用基础间隔尽早恢复
+                    backoff = RETRY_BASE;
                     let (mut write, mut read) = ws_stream.split();
 
                     // 订阅 OnJsonApiEvent (code 5)
@@ -209,15 +225,15 @@ impl LcuListener {
                     }
                 }
                 Ok(Err(e)) => {
-                    log::error!("连接 LCU WebSocket 失败: {}，2秒后重试...", e);
-                    tokio::time::sleep(Duration::from_secs(2)).await;
+                    log::error!("连接 LCU WebSocket 失败: {}，重试...", e);
+                    sleep_backoff(&mut backoff).await;
                 }
                 Err(_) => {
                     log::error!(
-                        "连接 LCU WebSocket 超时（>{}s），2秒后重试...",
+                        "连接 LCU WebSocket 超时（>{}s），重试...",
                         CONNECT_TIMEOUT.as_secs()
                     );
-                    tokio::time::sleep(Duration::from_secs(2)).await;
+                    sleep_backoff(&mut backoff).await;
                 }
             }
         }
