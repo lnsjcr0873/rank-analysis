@@ -283,6 +283,14 @@ const focusGameId = ref<number | null>(null)
 const championFilterCmd = ref(0)
 /** 战绩列表当前生效的英雄筛选（MatchHistory 上抛，用于英雄池选中态） */
 const activeChampion = ref(0)
+
+/** 英雄池换源（切模式/换召唤师）后，被过滤的英雄可能已不在新池中——
+ *  不复位会让战绩列表停留在旧英雄筛选，显示「没有匹配的对局」。 */
+watch(championPool, pool => {
+  if (activeChampion.value && !pool.some(e => e.championId === activeChampion.value)) {
+    activeChampion.value = 0
+  }
+})
 </script>
 <style scoped>
 /* 整页 token 覆盖:所有子组件 var(--font-size-*) 自动跟随 viewport 缩放 (1100→2200) */
