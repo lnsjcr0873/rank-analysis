@@ -487,7 +487,7 @@ function scoreLevel(total: number) {
   gap: 2px;
 }
 .match-detail-score-bar-label {
-  font-size: 9px;
+  font-size: var(--font-size-2xs); /* debug6:禁9px，10px起步 */
   color: var(--n-text-color-3, #999);
   text-align: center;
 }
@@ -519,7 +519,7 @@ function scoreLevel(total: number) {
   }
 }
 .match-detail-score-bar-value {
-  font-size: 9px;
+  font-size: var(--font-size-2xs); /* debug6:禁9px，10px起步 */
   text-align: center;
   color: var(--n-text-color-2, #ccc);
 }

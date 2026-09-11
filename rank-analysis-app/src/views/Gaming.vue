@@ -1063,7 +1063,7 @@ onMounted(async () => {
 }
 .sig-badge {
   font-family: var(--font-num);
-  font-size: 9px;
+  font-size: var(--font-size-2xs); /* debug6:禁9px，10px起步 */
   color: var(--info);
   margin-left: 3px;
 }

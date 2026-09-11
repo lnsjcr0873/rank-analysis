@@ -865,7 +865,7 @@ onUnmounted(() => {
   position: absolute;
   top: -4px;
   right: -4px;
-  font-size: 9px;
+  font-size: var(--font-size-2xs); /* debug6:禁9px，10px起步 */
   font-weight: 800;
   padding: 0 4px;
   height: 13px;
@@ -911,7 +911,7 @@ onUnmounted(() => {
 }
 
 .mdp-card-hand-tag {
-  font-size: 9px;
+  font-size: var(--font-size-2xs); /* debug6:禁9px，10px起步 */
   padding: 0 4px;
   border-radius: 2px;
   color: #fbbf24;
@@ -949,7 +949,7 @@ onUnmounted(() => {
 }
 
 .mdp-balance-chip {
-  font-size: 8px;
+  font-size: var(--font-size-2xs); /* debug6:禁8px，10px起步 */
   padding: 0 3px;
   border-radius: 2px;
   line-height: 11px;

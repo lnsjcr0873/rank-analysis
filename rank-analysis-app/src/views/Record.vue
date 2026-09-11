@@ -345,7 +345,7 @@ watch(championPool, pool => {
   position: absolute;
   top: var(--space-8);
   left: var(--space-8);
-  z-index: 20;
+  z-index: var(--z-dock); /* debug6:禁ad-hoc 20，dock档 */
   color: var(--text-secondary);
   background: var(--glass-bg-mid);
   border: 1px solid var(--glass-border);
@@ -367,7 +367,7 @@ watch(championPool, pool => {
   position: absolute;
   right: var(--space-8);
   bottom: var(--space-16);
-  z-index: 30;
+  z-index: var(--z-dock); /* debug6:禁ad-hoc 30，dock档 */
   color: var(--text-secondary);
   background: var(--glass-bg-mid);
   border: 1px solid var(--glass-border);

@@ -273,7 +273,7 @@ function tileSide() {
 }
 .rail__sec {
   display: none;
-  font-size: 9px;
+  font-size: var(--font-size-2xs); /* debug6:禁9px，10px起步 */
   letter-spacing: var(--tracking-label);
   text-transform: uppercase;
   color: var(--text-tertiary);

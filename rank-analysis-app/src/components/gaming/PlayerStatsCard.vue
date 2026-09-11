@@ -134,7 +134,7 @@ const hasGames = computed(
   right: 0;
   /* 240px: 展开态固定宽度，避免抖动 */
   width: 240px;
-  z-index: 100;
+  z-index: var(--z-modal); /* debug6:禁ad-hoc 100，modal档 */
   background: var(--bg-elevated);
   border-color: color-mix(in srgb, var(--semantic-win) 25%, transparent);
   /* 外圈 2px 底色"暗缝"把浮层从下方内容里切出来，再叠常规投影 */

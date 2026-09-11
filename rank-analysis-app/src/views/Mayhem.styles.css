@@ -189,7 +189,7 @@
   position: absolute;
   top: -2px;
   right: -4px;
-  font-size: 9px;
+  font-size: var(--font-size-2xs); /* debug6:禁9px，10px起步 */
   font-weight: var(--font-weight-bold);
   padding: 0 4px;
   background: #141416;

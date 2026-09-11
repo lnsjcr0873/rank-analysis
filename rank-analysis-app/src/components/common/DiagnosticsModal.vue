@@ -249,7 +249,7 @@ function onClose() {
   inset: 0;
   background: rgba(0, 0, 0, 0.75);
   backdrop-filter: blur(4px);
-  z-index: 99999;
+  z-index: var(--z-modal); /* debug6:禁ad-hoc 99999，modal档 */
   display: flex;
   align-items: center;
   justify-content: center;

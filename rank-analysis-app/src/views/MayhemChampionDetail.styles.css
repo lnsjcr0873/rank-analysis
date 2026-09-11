@@ -759,7 +759,7 @@
 }
 .skillbar i {
   font-style: normal;
-  font-size: 9px;
+  font-size: var(--font-size-2xs); /* debug6:禁9px，10px起步 */
   line-height: 1;
   width: 15px;
   padding: 3px 0;

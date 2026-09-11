@@ -157,7 +157,7 @@ function scoreText(c: MayhemAugmentCandidate | null): string {
   opacity: 0.55;
 }
 .m3c__slot {
-  font-size: 9px;
+  font-size: var(--font-size-2xs); /* debug6:禁9px，10px起步 */
   color: var(--text-tertiary);
   letter-spacing: 0.08em;
 }

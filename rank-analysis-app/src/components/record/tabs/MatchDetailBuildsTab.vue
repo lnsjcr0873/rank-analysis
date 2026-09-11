@@ -437,7 +437,7 @@ const builds = computed<BuildCollection>(() => collectBuildEvents(ctx.sgpDetail.
   border-radius: var(--radius-pill);
   background: var(--bg-overlay-strong, rgba(0, 0, 0, 0.72));
   color: var(--text-primary);
-  font-size: 8px;
+  font-size: var(--font-size-2xs); /* debug6:禁8px，10px起步 */
   line-height: 12px;
   text-align: center;
   font-variant-numeric: tabular-nums;

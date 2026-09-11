@@ -462,7 +462,7 @@ function openDetail() {
 }
 
 .record-card-mode {
-  font-size: 9px;
+  font-size: var(--font-size-2xs); /* debug6:禁9px，10px起步 */
   font-weight: 700;
   color: var(--text-tertiary);
 }
@@ -527,7 +527,7 @@ function openDetail() {
   padding: 0 3px;
   height: 11px;
   font-weight: 800;
-  font-size: 8px;
+  font-size: var(--font-size-2xs); /* debug6:禁8px，10px起步 */
   line-height: 11px;
   border-radius: var(--radius-pill);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
@@ -572,7 +572,7 @@ function openDetail() {
 }
 
 .record-card-cs {
-  font-size: 9px;
+  font-size: var(--font-size-2xs); /* debug6:禁9px，10px起步 */
   font-weight: 650;
   color: var(--text-tertiary);
   white-space: nowrap;
