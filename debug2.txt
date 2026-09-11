@@ -6,30 +6,30 @@ debug2.txt 修复进度（按 debug2 报告逐项，一项一 commit）
 - [x] #3 session.rs SESSION_TASK_SEQ / CURRENT_SESSION_TASK 竞态 —— 9c1311c 序列号领取与旧任务中止并入同一锁
 - [x] #4 useSessionSync.ts 事件监听器未全量注销 —— 【已验证无需修改】unlisteners 数组 + onUnmounted 全量 off()（line 433-434）；useGameState/useMatchReplay 同样已注销
 - [x] #5 Gaming/OverlayView nextActionTimer 生命周期 —— 【已验证无需修改】单例守卫 + phase 退出分支与 onUnmounted 双清理（S9 已审）
-- [ ] #6 main.rs asset:// 协议路径未解码/host/反斜杠
-- [ ] #7 windows.ts macOS 未守卫
+- [x] #6 main.rs asset:// 协议路径未解码/host/反斜杠 —— 7d0e0f3 percent-decode + \\ 归一 + 空段剔除
+- [x] #7 windows.ts macOS 未守卫 —— f213026 applyOverlayHotkey 非 Windows 直接 no-op；tileWindowsSideBySide 使用 Tauri2 跨平台窗口 API（LogicalPosition/Size 在 macOS 均支持），无需守卫
 - [ ] #8 cloud_sync 明文/无鉴权（E2EE）——范围大，另行评估
-- [ ] #9 parse_game_time_to_epoch_ms 精度（微秒/ISO 边缘）
+- [x] #9 parse_game_time_to_epoch_ms 精度（微秒/ISO 边缘） —— b66deab 秒/毫秒/微秒三级判定 + ISO 超 3 位小数截断，+3 单测
 - [ ] #10 team.ts 玩家名注入 AI prompt
-- [ ] #11 autoBpHint.ts 空目标判定
+- [x] #11 autoBpHint.ts 空目标判定 —— 【已验证无需修改】静态配置空目标已正确判定（hasNoExecutableTarget，仅规则与兜底均空才报警）；「运行态被 Ban/被抢导致无目标」属对局实时阶段逻辑（gaming BP 决策层处理回退），设置页仅做静态配置校验，不可也无从感知实时可用性
 - [ ] #12 lcu/http.rs get_auth 阻塞 async worker
 - [ ] #13 meet_db 单连接 Mutex 大写入卡读（WAL/分页）
 - [ ] #14 cloud_sync MAX_PULL vs MAX_PUSH 自锁
 - [ ] #15 detect_override current_hover=0 用户取消被弹回
 - [ ] #16 champion_select my_bans/their_bans 去重
-- [ ] #17 UnifiedTagRow \r\n 换行比对
+- [x] #17 UnifiedTagRow \r\n 换行比对 —— 7afe29c 去重前归一 CRLF/CR，+1 单测
 - [ ] #18 PlayerProfileCard requestSeq 跨实例
 - [ ] #19 observability 转义引号 \" 脱敏
 - [ ] #20 listener.rs WebSocket 重试无退避
 - [ ] #21 phase.rs auth_fingerprint 前缀 8 位幽灵缓存
 - [ ] #22 match_history 缓存全量 enrich 内存暴涨
-- [ ] #23 sampler.ts mulberry32 种子污染
+- [x] #23 sampler.ts mulberry32 种子污染 —— 677bd78 NaN/Infinity/小数 seed 归一化，+1 单测
 - [ ] #24 sgp_league_servers config_is_newer 字符串比较
 - [ ] #25 sgp gameCreation 缺失 → 1970 排最后
 - [x] #26 min_max_norm 浮点下溢 —— 4f947c9 已按 0.5pp 阈值均分（score.rs）
 - [ ] #27 mayhem AssistScheduler remake 未复位
 - [ ] #28 twoStage 孤儿 Promise/超时未中止
-- [ ] #29 validator.ts Markdown 代码块提取
+- [x] #29 validator.ts Markdown 代码块提取 —— 【已验证无需修改】stripFencedCodeBlock 已实现「首个 { → 末个 }」模糊提取（line 209-213），模型前后夹带思考/自然语言也能取出 JSON
 - [ ] #30 timelineData fillSeries 稀疏分钟越界
 - [ ] #31 score/events cluster_teamfights 除零/负时长
 - [ ] #32 asset.rs ensure_offline_assets alias/字符串 ID
