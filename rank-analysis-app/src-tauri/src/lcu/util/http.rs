@@ -94,15 +94,27 @@ fn get_auth_pair() -> Result<(String, String), String> {
 /// 当前**已缓存**认证的指纹 `(token 前 8 位, port)`。
 ///
 /// 供 phase 缓存等调用方判断「客户端是否重启过（认证换没换）」，只读缓存、
-/// 绝不触发进程扫描；尚未取得过认证时返回 None。token 只取前缀，
-/// 避免完整凭据扩散出本模块。
+/// 绝不触发进程扫描；尚未取得过认证时返回 None。完整 token 不扩散出本模块：
+/// 只用其确定性哈希（DefaultHasher 固定 key，跨进程/重启可复现）做指纹，
+/// 避免 8 字符前缀在重新登录后撞相同前缀导致「幽灵 phase 缓存」。
 pub(crate) fn auth_fingerprint() -> Option<(String, String)> {
     let auth = AUTH.get()?;
     let guard = lock_or_recover(auth);
     if guard.0.is_empty() || guard.1.is_empty() {
         return None;
     }
-    Some((guard.0.chars().take(8).collect(), guard.1.clone()))
+    Some((hash_auth_fingerprint(&guard.0, &guard.1), guard.1.clone()))
+}
+
+/// 全量 token + port 的 64 位指纹（十六进制）。DefaultHasher 用固定种子，
+/// 同一认证字符串在任意进程/重启后哈希相同，可跨调用比较。
+fn hash_auth_fingerprint(token: &str, port: &str) -> String {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+    let mut h = DefaultHasher::new();
+    token.hash(&mut h);
+    port.hash(&mut h);
+    format!("{:016x}", h.finish())
 }
 
 fn refresh_auth() -> Result<(String, String), String> {
