@@ -159,6 +159,41 @@ pub fn mode_display_name(mode: i32) -> String {
         .unwrap_or_else(|| "未知模式".to_string())
 }
 
+/// 去重保留组内最大 ID（现行队列）的纯内核（debug5-5）。
+///
+/// 背景：同玩法多队列 ID 同名（如人机入门 830 旧 / 870 现行）时，旧实现
+/// 按 ID 升序 first-wins 保留了已下线的旧队列——前端下拉绑旧 ID，传给客户端
+/// 发起自动化/查询时不兼容。新队列 ID 更大是既定事实，同组留最大即留现行。
+/// 注意与 [`crate::constant::game::canonical_queue_id`] 的分工：后者取代表 ID
+/// （最小值）只用于**分组比较**（过滤语义），不决定下拉选项值。
+/// 调用方：`visible_queues`（按展示 label 分组）与 `get_game_modes`（按 canonical 分组）。
+/// 输出保持输入顺序（调用方先升序排，输出即升序）。
+pub(crate) fn dedupe_keep_newest<T, K: Eq + std::hash::Hash>(
+    items: Vec<T>,
+    id_of: impl Fn(&T) -> u32,
+    key_of: impl Fn(&T) -> K,
+) -> Vec<T> {
+    use std::collections::{HashMap, HashSet};
+    let mut best: HashMap<K, (u32, usize)> = HashMap::new();
+    for (i, item) in items.iter().enumerate() {
+        let k = key_of(item);
+        let id = id_of(item);
+        match best.get(&k) {
+            Some((max_id, _)) if *max_id >= id => {}
+            _ => {
+                best.insert(k, (id, i));
+            }
+        }
+    }
+    let keep: HashSet<usize> = best.into_values().map(|(_, i)| i).collect();
+    items
+        .into_iter()
+        .enumerate()
+        .filter(|(i, _)| keep.contains(i))
+        .map(|(_, item)| item)
+        .collect()
+}
+
 /// 当前客户端可选的队列（供模式筛选下拉）。
 ///
 /// **由 LCU 决定「列哪些」，由 [`queue_name`] 决定「叫什么」**——前者让下拉随客户端
@@ -168,8 +203,8 @@ pub fn mode_display_name(mode: i32) -> String {
 /// - **云顶之弈**：本工具只分析英雄联盟对局
 /// - **自定义房**：客户端有 13 个（召唤师峡谷/嚎哭深渊 的自选、征召、全随机、比赛…），
 ///   没人拿它们筛战绩，混进来只会淹没常用模式
-/// - **重名**：LCU 里确实存在同名不同 ID（如 4310/4320 都叫「经典模式」），
-///   保留较小 ID，与 `canonical_queue_id` 取代表 ID 的规则一致
+/// - **重名**：LCU 里确实存在同名不同 ID（如人机入门 830 旧 / 870 现行），
+///   同名留最大 ID（现行队列，debug5-5；旧实现留最小即下线旧队列，不兼容）
 ///
 /// 缓存为空时返回空 vec，调用方回落硬编码表。
 pub fn visible_queues() -> Vec<(u32, String)> {
@@ -182,10 +217,7 @@ pub fn visible_queues() -> Vec<(u32, String)> {
         .map(|(id, info)| (*id, queue_name(*id).unwrap_or_else(|| info.name.clone())))
         .collect();
     out.sort_by_key(|(id, _)| *id);
-    // 同名只留最小 ID（out 已按 ID 升序，first-wins 即最小）
-    let mut seen = std::collections::HashSet::new();
-    out.retain(|(_, label)| seen.insert(label.clone()));
-    out
+    dedupe_keep_newest(out, |(id, _)| *id, |(_, label)| label.clone())
 }
 
 /// 是否为云顶之弈相关玩法。
@@ -237,5 +269,41 @@ mod tests {
     #[test]
     fn visible_queues_empty_without_cache() {
         assert!(visible_queues().is_empty());
+    }
+
+    #[test]
+    fn dedupe_keep_newest_prefers_current_queue() {
+        // debug5-5：人机入门 830（旧）/870（现行）同名 → 留 870
+        let out = dedupe_keep_newest(
+            vec![
+                (830u32, "人机(入门)".to_string()),
+                (870u32, "人机(入门)".to_string()),
+                (420u32, "单双排".to_string()),
+            ],
+            |(id, _)| *id,
+            |(_, label)| label.clone(),
+        );
+        assert_eq!(
+            out,
+            vec![
+                (870u32, "人机(入门)".to_string()),
+                (420u32, "单双排".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn dedupe_keep_newest_groups_by_custom_key() {
+        // 匹配组 400/430/490 按 canonical 合一 → 留最大（现行 490）
+        let out = dedupe_keep_newest(
+            vec![
+                (400u32, "a".into()),
+                (430u32, "b".into()),
+                (490u32, "c".into()),
+            ],
+            |m: &(u32, String)| m.0,
+            |m: &(u32, String)| crate::constant::game::canonical_queue_id(m.0),
+        );
+        assert_eq!(out, vec![(490u32, "c".to_string())]);
     }
 }

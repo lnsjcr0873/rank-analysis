@@ -185,8 +185,14 @@ pub fn get_game_modes() -> Vec<GameModeOption> {
     };
 
     modes.sort_by_key(|k| k.value);
-    let mut seen = std::collections::HashSet::new();
-    modes.retain(|m| seen.insert(constant::game::canonical_queue_id(m.value as u32)));
+    // debug5-5：同组留最大 ID（现行队列），与 visible_queues 一致。
+    // 分组键用 canonical（匹配组 400/430/490 合一）；代表 ID 取最小是后端
+    // 过滤语义（queue_ids_same_group），不决定下拉选项值。
+    let modes = crate::lcu::api::game_queue::dedupe_keep_newest(
+        modes,
+        |m| m.value as u32,
+        |m| constant::game::canonical_queue_id(m.value as u32),
+    );
     options.extend(modes);
 
     options

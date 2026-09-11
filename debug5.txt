@@ -98,7 +98,7 @@ export function summarizeMinuteCurve(curve: AggregatedMinuteCurve | null): Minut
 输出特征变成了：15分钟补刀: 110，25分钟补刀: 110。
 后续喂给 AI 模型时，AI 会严格依据这两个数值生成严厉批判：「该玩家在 15 至 25 分钟之间一刀未补，经济发育出现严重断崖式停滞」，产生严重幻觉误判。
 修复方案：当下标超出实际游戏最大分钟数时，应返回 null 或携带有效标记，并在 Prompt 中显式声明该时间节点对局已结束。
-5. visible_queues 升序去重缺陷：永远保留过时的人机队列，剔除现行正式队列
+5. visible_queues 升序去重缺陷：永远保留过时的人机队列，剔除现行正式队列【已完成：新增 dedupe_keep_newest 内核（同组留最大=现行），visible_queues 与 get_game_modes 共用；同步 canonical 代表ID注释分工；附2单测。GNU check/clippy/fmt全过】
 文件路径：rank-analysis-app/src-tauri/src/lcu/api/game_queue.rs
 问题代码：
 code
