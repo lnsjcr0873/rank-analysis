@@ -42,9 +42,25 @@ const hasContent = computed(
  * （overlay.ts 里 `createApp(OverlayView).mount`），`immediate` 会在 setup 阶段——早于
  * onMounted 拉 `get_overlay_state` 快照——就以空内容触发一次，把 Rust 端刚 show 出来的
  * 窗口立刻隐藏；而缺 show 分支则意味着随后数据到位也永远不会再显示出来。
+ *
+ * debug6：hide 加 300ms 防抖——轮询抖动/气泡 6s 超时会导致 show/hide 交替，
+ * Windows 无边框透明窗口频繁 Show/Hide 会 DWM 闪烁甚至抢焦点。show 立即执行
+ * （内容到位不延迟），hide 延迟（抖动回填时直接取消）。
  */
+let hideTimer: ReturnType<typeof setTimeout> | null = null
 watch(hasContent, async val => {
-  await invoke(val ? 'show_overlay_window' : 'hide_overlay_window').catch(() => {})
+  if (hideTimer) {
+    clearTimeout(hideTimer)
+    hideTimer = null
+  }
+  if (val) {
+    await invoke('show_overlay_window').catch(() => {})
+    return
+  }
+  hideTimer = setTimeout(() => {
+    hideTimer = null
+    void invoke('hide_overlay_window').catch(() => {})
+  }, 300)
 })
 
 /** 屏幕高度自适应：每条约 26px，预留头部与边距，避免低分辨率下溢出屏幕 */
@@ -129,6 +145,10 @@ onUnmounted(() => {
   unlistenConfig?.()
   unlistenPanel?.()
   window.removeEventListener('resize', updateMaxByHeight)
+  if (hideTimer) {
+    clearTimeout(hideTimer)
+    hideTimer = null
+  }
 })
 </script>
 
