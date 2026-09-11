@@ -602,6 +602,15 @@ async fn start_trade_automation() {
             continue;
         }
 
+        // 换人（trade）只存在于可换人的征召/选人模式：ARAM/自定义房间不走 trade 流，
+        // 明确关闭自动同意——防止「随便一个队友的换人请求就把你摇到的英雄换走」
+        // （大乱斗/轮换模式误同意即时生效，debug2 #39）。
+        if let Ok(lobby) = crate::lcu::api::lobby::Lobby::get_lobby().await {
+            if lobby.game_config.is_custom || lobby.game_config.queue_id == 450 {
+                continue;
+            }
+        }
+
         let session = match crate::lcu::api::champion_select::get_champion_select_session().await {
             Ok(s) => s,
             Err(e) => {
