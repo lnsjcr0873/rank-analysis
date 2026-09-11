@@ -292,8 +292,10 @@ static LONG_TOKEN_RE: LazyLock<Regex> =
 /// 的"遇空格即停"值类只会洗掉 scheme（Bearer/Basic）漏掉 token，改由 [`AUTH_HEADER_RE`]
 /// 整体脱敏。
 static PII_PARAM_RE: LazyLock<Regex> = LazyLock::new(|| {
+    // `\\?"?`：兼容普通双引号与序列化嵌套字符串里的转义引号（`\"gameName\":\"Uzi\"`）。
+    // 真实 LCU/SGP 日志常把嵌套响应作为已转义字符串输出，只有普通引号的旧正则漏网。
     Regex::new(
-        r#"(?i)("?\b(?:riot_?id_?game_?name|riot_?id_?tag_?line|game_?name|tag_?line|summoner_?name|summoner_?id|display_?name|riot_?id|puuid|account|name|auth_?token|access_?token|token|password|secret)"?\s*[:=]\s*"?)([^"&,\s}\])]+)"#,
+        r#"(?i)(\\?"?\b(?:riot_?id_?game_?name|riot_?id_?tag_?line|game_?name|tag_?line|summoner_?name|summoner_?id|display_?name|riot_?id|puuid|account|name|auth_?token|access_?token|token|password|secret)\\?"?\s*[:=]\s*\\?"?)([^"&,\s}\])]+)"#,
     )
     .expect("valid pii-param regex")
 });
@@ -302,7 +304,7 @@ static PII_PARAM_RE: LazyLock<Regex> = LazyLock::new(|| {
 /// LCU 用 Basic）。值类**允许空格**，把 scheme + token 整体脱敏，避免只洗 scheme 漏 token。
 /// 停在引号 / 换行（JSON 形态在闭合引号处停，行形态吃到行尾，均安全）。
 static AUTH_HEADER_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"(?i)("?\bauthorization"?\s*[:=]\s*"?)([^"\r\n]+)"#)
+    Regex::new(r#"(?i)(\\?"?\bauthorization\\?"?\s*[:=]\s*\\?"?)([^"\r\n]+)"#)
         .expect("valid auth-header regex")
 });
 
@@ -414,6 +416,20 @@ mod tests {
         assert!(!out.contains("Faker"), "gameName 应被脱敏: {out}");
         assert!(!out.contains("KR1"), "tagLine 应被脱敏: {out}");
         assert!(out.contains("level"), "非敏感字段应保留: {out}");
+    }
+
+    #[test]
+    fn should_redact_escaped_quote_nested_json() {
+        // 序列化嵌套字符串的日志形态：字段/值均带转义引号，旧正则匹配不到
+        let out = redact_pii(r#"{"raw": "{\"gameName\":\"Uzi\",\"summonerId\":123456}"}"#);
+        assert!(
+            !out.contains("Uzi"),
+            "转义引号内的 gameName 应被脱敏: {out}"
+        );
+        assert!(
+            !out.contains("123456"),
+            "转义引号内的 summonerId 应被脱敏: {out}"
+        );
     }
 
     #[test]
