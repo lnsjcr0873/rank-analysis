@@ -191,6 +191,8 @@ pub fn layout(app: &tauri::AppHandle, width: f64, height: f64, anchor: &str) {
 /// 双屏场景游戏常跑在副屏：固定取主显示器会把浮窗画到玩家看不到的屏上。
 /// 优先 `current_monitor`（浮窗当前所在屏，Tauri 已按逻辑坐标换算，
 /// 无混合 DPI 二次缩放的歧义），拿不到时回退主显示器。
+/// debug5：虚拟桌面坐标系下副屏原点非 (0,0)（如右侧副屏 (1920,0)），
+/// 必须叠加 `monitor.position()` 逻辑原点，否则副屏游戏时浮窗被画到主屏。
 fn position_by_anchor(app: &tauri::AppHandle, width: f64, anchor: &str) {
     let Some(w) = get_window() else {
         return;
@@ -216,7 +218,12 @@ fn position_by_anchor(app: &tauri::AppHandle, width: f64, anchor: &str) {
         "top-right" => 64.0, // 避开顶栏窗控按钮区域（最小化/最大化/关闭）
         _ => OVERLAY_MARGIN,
     };
-    let _ = w.set_position(Position::Logical(tauri::LogicalPosition::new(x, y)));
+    let origin = monitor.position();
+    let final_x = origin.x as f64 / scale_factor + x;
+    let final_y = origin.y as f64 / scale_factor + y;
+    let _ = w.set_position(Position::Logical(tauri::LogicalPosition::new(
+        final_x, final_y,
+    )));
 }
 
 /// 切换鼠标穿透。

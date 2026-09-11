@@ -1025,7 +1025,7 @@ fetchPlayerProfile(...) 与 queryMeetSummary(...)。
 2	逻辑截断	score/events.rs	评分事件按发生时间升序截取前 12 条，导致中后期团战大失误全被丢弃	改为按重要性（delta.abs()）降序筛选后再按时间排版【已完成：compute_score_events改先按delta.abs()降序取前12再按时间升序排版；衍生审同文件聚类/各维度权重定义不变无同患。附1回归（12前期阵亡+1后期漏团，漏团必留存且有序）。cargo fmt/clippy(GNU)/check --tests全过，cargo test以CI为权威】
 3	数据失真	liveGameIntel.ts	团战阵亡统计由于缺少队伍过滤，我方队友阵亡全被当作敌方阵亡（团灭误报为大胜）	引入对局全员队伍名单比对受害人阵营
 4	显示错误	MatchDetailStatsTab.vue	全员得 0 的指标被 row.max > 0 判定为字段缺失，展示全屏横杠 "—"	仅在非有效数字时走缺失展示分支
-5	多屏故障	overlay/mod.rs	悬浮窗坐标未加上副显示器物理原点，副屏游戏时浮窗强行跑到主屏	坐标计算叠加 monitor.position() 偏移
+5	多屏故障	overlay/mod.rs	悬浮窗坐标未加上副显示器物理原点，副屏游戏时浮窗强行跑到主屏	坐标计算叠加 monitor.position() 偏移【已完成：position_by_anchor最终坐标叠加monitor.position()/scale_factor逻辑原点；主屏原点(0,0)行为不变无回归。cargo fmt/clippy(GNU)/check --tests全过，cargo test以CI为权威】
 6	存储耗尽	stream.ts	AI 文本缓存长期无上限塞入 localStorage，撑爆 5MB 导致持久化崩溃	增加条目淘汰机制或迁移到 SQLite / Rust 侧持久化
 7	性能卡顿	PlayerProfilePopover.vue	头像 Popover 预先全部挂载，页面打开瞬间并发执行上百次查询	改造为真正 Hover 时才延迟激活挂载（Lazy Render）
 Model 18:29
