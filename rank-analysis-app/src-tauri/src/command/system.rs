@@ -104,9 +104,16 @@ pub fn relaunch_as_admin(app: tauri::AppHandle) -> Result<(), String> {
     }
 
     // 提权实例已拉起，退出当前普通权限实例，避免两份同时运行。
+    //
+    // 必须用 `std::process::exit` 强行终止：`app.exit(0)` 是 Tauri 异步平滑退出，
+    // 会先跑 `RunEvent::Exit` 钩子（shard dispose 等长驻任务收敛可能耗时数秒），
+    // 老进程在此期间仍占着 SQLite/单例锁；新提权进程启动即撞锁闪退，
+    // 用户看到的就是"点了提权重启，软件直接消失"。
+    // 进程级 exit 由 OS 立即回收全部句柄锁；且 UAC 确认本身就有数秒缓冲，
+    // 新进程真正初始化时老进程早已释放锁。
     log::info!("已拉起提权实例，退出当前普通权限实例");
     app.exit(0);
-    Ok(())
+    std::process::exit(0);
 }
 
 /// 以管理员身份重新启动本程序（非 Windows 平台占位）。

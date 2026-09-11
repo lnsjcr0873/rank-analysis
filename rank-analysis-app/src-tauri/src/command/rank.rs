@@ -242,7 +242,9 @@ pub fn calculate_win_rate(wins: i32, losses: i32) -> f32 {
     if total == 0 {
         0.0
     } else {
-        (wins as f32 / total as f32 * 100.0).round().clamp(0.0, 100.0)
+        (wins as f32 / total as f32 * 100.0)
+            .round()
+            .clamp(0.0, 100.0)
     }
 }
 
