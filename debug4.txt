@@ -48,7 +48,7 @@ if uri == "/lol-gameflow/v1/gameflow-phase" {
         crate::lcu::api::phase::update_phase_cache(phase.to_string());
     }
 }
-3. automation.rs & champion_select.rs：选人会话 1 秒缓存导致自动 BP 产生自发性误判接管（False Override）
+3. automation.rs & champion_select.rs：选人会话 1 秒缓存导致自动 BP 产生自发性误判接管（False Override）【已完成：bug 真实存在。修复：新增 invalidate_select_session_cache，patch_session_action/swap_bench_champion/accept_trade/decline_trade 成功后失效缓存（spells 不在会话结构内，跳过）。GNU check/clippy/fmt 全过】
 文件路径：
 rank-analysis-app/src-tauri/src/lcu/api/champion_select.rs
 rank-analysis-app/src-tauri/src/automation.rs

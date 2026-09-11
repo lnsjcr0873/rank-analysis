@@ -396,6 +396,16 @@ struct PatchData {
     completed: bool,
 }
 
+/// 主动失效选人会话缓存。
+///
+/// 任何改变选人会话的写操作（PATCH action、bench swap）成功后必须调用：
+/// 否则下一 tick 仍读到 1s 窗口内的旧会话，`detect_override` 会把我们自己
+/// 刚写下的 hover 误判为「用户手动接管」并永久退让（debug4-3）。
+pub fn invalidate_select_session_cache() {
+    let mut cache = SELECT_CACHE.lock().unwrap_or_else(|e| e.into_inner());
+    cache.last_fetch_time = None;
+}
+
 pub async fn patch_session_action(
     action_id: i32,
     champion_id: i32,
@@ -410,6 +420,8 @@ pub async fn patch_session_action(
     };
 
     lcu_patch::<(), _>(&uri, &patch_data).await?;
+    // 写成功后旧缓存即毒化：下一读必须是 LCU 实时值，否则自发误判接管。
+    invalidate_select_session_cache();
     Ok(())
 }
 
@@ -446,6 +458,8 @@ pub async fn patch_session_spells(
 pub async fn accept_trade(trade_id: i32) -> Result<(), String> {
     let uri = format!("lol-champ-select/v1/session/trades/{}/accept", trade_id);
     lcu_post::<(), _>(&uri, &()).await?;
+    // 交易改变会话 trades 状态：失效缓存。
+    invalidate_select_session_cache();
     Ok(())
 }
 
@@ -453,6 +467,8 @@ pub async fn accept_trade(trade_id: i32) -> Result<(), String> {
 pub async fn decline_trade(trade_id: i32) -> Result<(), String> {
     let uri = format!("lol-champ-select/v1/session/trades/{}/decline", trade_id);
     lcu_post::<(), _>(&uri, &()).await?;
+    // 同上：交易状态变化，失效缓存。
+    invalidate_select_session_cache();
     Ok(())
 }
 
@@ -463,6 +479,8 @@ pub async fn decline_trade(trade_id: i32) -> Result<(), String> {
 pub async fn swap_bench_champion(champion_id: i32) -> Result<(), String> {
     let uri = format!("lol-champ-select/v1/session/bench/swap/{}", champion_id);
     lcu_put::<(), _>(&uri, &()).await?;
+    // bench 换人同样改变会话：失效缓存，下一 tick 读实时值。
+    invalidate_select_session_cache();
     Ok(())
 }
 
