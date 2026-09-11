@@ -510,11 +510,21 @@ pub struct SgpGameDetailResponse {
     pub json: Option<SgpGameDetail>,
 }
 
+/// DETAILS 路径里的对局标识(`{region}_{game_id}`)。
+///
+/// 别名区（PBE/EUW/JP）的 SGP 子区参数与 platformId 不同（debug5-sgp 时间线
+/// 大区映射）：直拼原始 platformId 会 404。主机解析不受影响（按原始 key 查表）。
+pub fn sgp_details_match_id(platform_id: &str, game_id: i64) -> String {
+    let region = crate::constant::game::get_sgp_region_path_param(platform_id);
+    format!("{region}_{game_id}")
+}
+
 /// 拉取指定大区某局对局的详情(帧数据/事件流/伤害明细)。
 ///
 /// # 参数
 /// - `platform_id`: 目标大区(如 `HN10`),映射为 SGP 主机。
-/// - `game_id`: 对局 ID(SGP 路径格式为 `{platform_id}_{game_id}`,如 `HN10_8537174104`)。
+/// - `game_id`: 对局 ID(SGP 路径格式为 `{region}_{game_id}`,如 `HN10_8537174104`;
+///   别名区走子区参数，如 PBE→`PBE1_xxx`)。
 ///
 /// 返回类型化结构(serde 全字段 default 容错)。身份/汇总字段在 SUMMARY 里,本端点只出帧。
 ///
@@ -529,8 +539,8 @@ pub async fn fetch_match_detail(
     }
     let token = get_entitlements_access_token().await?;
     let uri = format!(
-        "match-history-query/v1/products/lol/{}_{}/DETAILS",
-        platform_id, game_id
+        "match-history-query/v1/products/lol/{}/DETAILS",
+        sgp_details_match_id(platform_id, game_id)
     );
     let raw = sgp_get_resilient::<SgpGameDetailResponse>(platform_id, &uri, &token, false).await?;
     SGP_DETAIL_CACHE.insert(key, raw.clone()).await;
@@ -871,6 +881,17 @@ mod tests {
         );
         assert!(split_riot_id("名字").is_err());
         assert!(split_riot_id("名字#").is_err());
+    }
+
+    #[test]
+    fn details_match_id_applies_region_path_param_aliases() {
+        // debug5-sgp 时间线大区映射：别名区走子区参数，否则 DETAILS 404
+        assert_eq!(sgp_details_match_id("PBE", 123), "PBE1_123");
+        assert_eq!(sgp_details_match_id("EUW", 123), "EUW1_123");
+        assert_eq!(sgp_details_match_id("JP", 123), "JP1_123");
+        // 非别名区原样（主机解析仍按原始 key 查表，不受影响）
+        assert_eq!(sgp_details_match_id("HN10", 123), "HN10_123");
+        assert_eq!(sgp_details_match_id("NA1", 123), "NA1_123");
     }
 
     // 用 from_str 解析原始 JSON 字符串（避免深层 json! 宏触发递归展开上限）。

@@ -318,7 +318,7 @@ Rust
 序号	类别	模块 / 文件	核心表现	修复策略
 1	交互	Record.vue	详情展开时在搜索框按左右方向键，直接触发切换对局	过滤 HTMLInputElement 键盘事件【已完成：未照搬最小口径。守卫抽为utils/domHotkey纯函数shouldYieldToEditableTarget：input/textarea/select/contenteditable(含内层子元素、false飞地除外)+输入法组词isComposing/Process（与CommandPalette同口径）。审阅同类全局keydown（Framework/CommandPalette/useZoom/useWindowShortcuts）均为Ctrl组合键无同患。附5单测。prettier/eslint/tsc全过，9测试全绿】
 2	Prompt	champSelect.ts	悬停未锁定时将 !pickState 判定为已锁，AI 误诊拒绝输出 BP 建议	严格要求 p.pickState === 'locked'【已完成：验证已修复无需修改——champSelect.ts:142自初始提交即严格判定，全仓!pickState零命中；同文件其余pickState均为展示标注/Gaming仅排除ban态无同患。补2精确失败模式回归（空串/none悬停+undefined缺失仍允许选人建议）。prettier/eslint/tsc全过，41测试全绿】
-3	网络	sgp.rs	请求 Timeline 未经 get_sgp_region_path_param 转换，部分区服返回 404	统一转换 SGP 路径别名参数
+3	网络	sgp.rs	请求 Timeline 未经 get_sgp_region_path_param 转换，部分区服返回 404	统一转换 SGP 路径别名参数【已完成：未照搬文档旧路径（现为{platform}_{game}/DETAILS）。新增sgp_details_match_id内核：DETAILS路径走子区参数（PBE→PBE1_xxx），主机解析仍按原始key查表；同文件其余路径（SUMMARY/rankedStats/puuid）均不含platform段无同患。附1单测。cargo fmt/clippy(GNU)全过，cargo test以CI为权威】
 4	网络	sgp.rs	SGP 401 鉴权过期时不清理 Token 缓存，引发持续 30s 的雪崩报错	遭遇 401 立即失效 Token 缓存
 5	数据	eventsTable.ts	建筑与塔皮摧毁事件以受害方 teamId 为主语，导致推塔阵营颠倒	修正为建筑所属阵营的对立阵营
 6	算法	insight/mod.rs	习惯统计未过滤 team_id，将同队辅助/队友混入对位参考均值	增加 p.team_id != my.team_id 约束
