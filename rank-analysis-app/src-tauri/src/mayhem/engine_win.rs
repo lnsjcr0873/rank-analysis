@@ -10,31 +10,40 @@
 //!   失败时错误信息会明确提示
 //! - `CreateCopyFromBuffer` 假定**预乘 alpha**：GDI 抓屏的 alpha 恒为 255
 //!   （等效不透明），预乘语义下无影响，无需转换
-//! - WinRT 工厂调用要求 MTA 套间：模块用 [`init_apartment_once`] 保证一次初始化，
-//!   tokio worker 线程可直接调用
+//! - WinRT 工厂调用要求 MTA 套间：每次 OCR 执行用 [`ComGuard`] 做线程级 RAII
+//!   初始化（debug5-2）。COM 套间是**线程级**状态，`std::sync::Once` 只保证
+//!   首个线程初始化一次——`spawn_blocking` 随机调度到其他 worker 线程时
+//!   就会抛 CO_E_NOTINITIALIZED（0x800401F0）。
 
 use windows::Graphics::Imaging::{BitmapPixelFormat, SoftwareBitmap};
 use windows::Media::Ocr::OcrEngine;
 use windows::Storage::Streams::DataWriter;
-use windows::Win32::System::Com::{CoInitializeEx, COINIT_MULTITHREADED};
+use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_MULTITHREADED};
 
-use std::sync::Once;
-
-static INIT_APARTMENT: Once = Once::new();
-
-/// 幂等把当前进程初始化为 MTA（WinRT 静态工厂的前置条件）。
+/// 线程级 COM MTA 守卫（debug5-2）。
 ///
-/// 已初始化（任意套间）时忽略错误——重复 init 的 RPC_E_CHANGED_MODE 不算致命，
-/// 后续调用按现有套间继续。
-fn init_apartment_once() {
-    INIT_APARTMENT.call_once(|| {
-        // HRESULT 显式吞掉：S_FALSE（已初始化）/ RPC_E_CHANGED_MODE 均不致命，
-        // 后续调用按现有套间继续（must_use 需绑定以消除告警）
+/// 构造时 `CoInitializeEx(MTA)`，Drop 时配对 `CoUninitialize`。每次
+/// `recognize_rgba_sync` 在当前 `spawn_blocking` 线程上持有一个，与线程池
+/// 调度无关。HRESULT 显式吞掉：S_FALSE（已初始化）/ RPC_E_CHANGED_MODE
+/// 均不致命，按现有套间继续（must_use 需绑定以消除告警）。
+struct ComGuard;
+
+impl ComGuard {
+    fn enter() -> Self {
         unsafe {
             let hr = CoInitializeEx(None, COINIT_MULTITHREADED);
             let _ = hr;
         }
-    });
+        ComGuard
+    }
+}
+
+impl Drop for ComGuard {
+    fn drop(&mut self) {
+        unsafe {
+            CoUninitialize();
+        }
+    }
 }
 
 /// 同步 OCR 执行（在专有阻塞线程上运行，确保 !Send 的 WinRT COM 指针不跨越 .await 边界）。
@@ -51,7 +60,8 @@ fn recognize_rgba_sync(rgba: &[u8], w: i32, h: i32) -> Result<Vec<String>, Strin
         ));
     }
 
-    init_apartment_once();
+    // 线程级 COM 初始化：当前 spawn_blocking 线程持有守卫，执行完配对清理。
+    let _com = ComGuard::enter();
 
     let writer = DataWriter::new().map_err(|e| format!("DataWriter::new: {e}"))?;
     writer

@@ -159,7 +159,7 @@ async function solidifyTag(tag: RankTag): Promise<void> {
 序号	类别	模块 / 文件	核心表现	修复策略
 1	安全	renderReport.ts	AI 返回的 HTML 经 v-html 渲染且无 CSP，存在 XSS / 命令调用风险	引入 DOMPurify 消毒，配置基础 CSP【已完成：debug4-21 已覆盖——实测 7 攻击向量全挡+独立属性白名单 sanitizeAttributes+12 单测；CSP 未动（csp:null 配错即全应用白屏，本地无法验证打包，风险>收益）】
 2	系统	paths.rs	Windows 下将数据目录硬编码为 exe.parent()，无管理员权限必崩	改用系统标准 %LOCALAPPDATA% 目录【已完成：未照搬（当前 currentUser 模式默认安装可写，硬切会逼老用户迁移）。改为启动时可写性探测：exe 目录可写沿用，不可写自动回退 %LOCALAPPDATA%/bundle-id；附回退+探测单测。迁移逻辑取 config_file() 父目录，回退后自动跟随无需改动。GNU check/clippy/fmt 全过】
-3	崩溃	engine_win.rs	Windows COM 仅初始化单个线程，多线程 OCR 抛 0x800401F0	建立线程级 RAII COM 守护初始化
+3	崩溃	engine_win.rs	Windows COM 仅初始化单个线程，多线程 OCR 抛 0x800401F0	建立线程级 RAII COM 守护初始化【已完成：删全局 Once，改每次执行持 ComGuard（CoInitializeEx+Drop配对清理）。默认+ocr-win 双特性 check/clippy/fmt 全过】
 4	数据	score.rs	GAME_SCORE_CACHE 缓存 Key 缺少大区标识，跨服同 ID 发生串号	Key 格式升级为 "{platform}:{game_id}"
 5	AI	minuteCurve.ts	快节奏局超出时间轴直接复制末尾，AI 误诊「补刀完全停滞」	超出真实游戏时长时截断或返回 null
 6	逻辑	game_queue.rs	ID 升序导致现行队列（如 870）被旧队列（830）反向去重覆盖	优先保留更高或映射表中现行的有效队列 ID
