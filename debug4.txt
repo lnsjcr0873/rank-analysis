@@ -343,7 +343,7 @@ code
 Rust
 options.sort_by_key(|o| o.value);
 三、 算法与图表计算边界缺陷 (Medium / Low Severity)
-7. score/events.rs：计算团队平均增量时未排除玩家自身，导致小团队停滞判定失灵
+7. score/events.rs：计算团队平均增量时未排除玩家自身，导致小团队停滞判定失灵【已完成：team_avg_increment 加 exclude_pid 参数，两调用点传 Some(pid)；附 2 人小队回归单测。GNU check/clippy/fmt 全过】
 文件路径：rank-analysis-app/src-tauri/src/score/events.rs
 问题代码：
 code

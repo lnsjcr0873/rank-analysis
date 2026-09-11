@@ -271,13 +271,21 @@ fn frame_increments(
 }
 
 /// 帧级"队均增量"：同队成员各自帧增量的均值（按帧对齐）。
+///
+/// `exclude_pid`：被评估的玩家本人必须排除（debug4-17）——否则本人 0 增量会
+/// 把均值拉低，小队模式（斗魂 2 人队）下"个人停滞而队友正常"会被误判成
+/// "全队都慢"，漏报关键失误。`None` = 不排除（兼容旧调用）。
 fn team_avg_increment(
     detail: &SgpGameDetail,
     team_pids: &HashSet<i32>,
     field: impl Fn(&crate::lcu::api::sgp::SgpFrameParticipantStats) -> i32,
+    exclude_pid: Option<i32>,
 ) -> HashMap<i64, f64> {
     let mut acc: HashMap<i64, (f64, usize)> = HashMap::new();
     for pid in team_pids {
+        if Some(*pid) == exclude_pid {
+            continue;
+        }
         for (t, _, inc) in frame_increments(detail, *pid, &field) {
             let e = acc.entry(t).or_insert((0.0, 0));
             e.0 += inc as f64;
@@ -301,7 +309,7 @@ fn frame_stall_events(
     delta: f64,
 ) -> Vec<ScoreEvent> {
     let mine = frame_increments(detail, pid, &field);
-    let team = team_avg_increment(detail, team_pids, &field);
+    let team = team_avg_increment(detail, team_pids, &field, Some(pid));
     if mine.is_empty() || team.is_empty() {
         return Vec::new();
     }
@@ -366,7 +374,7 @@ fn damage_dip_events(
     if mine.is_empty() {
         return Vec::new();
     }
-    let team = team_avg_increment(detail, team_pids, dmg_of);
+    let team = team_avg_increment(detail, team_pids, dmg_of, Some(pid));
     let mut out = Vec::new();
     let mut run: Option<(i64, i64)> = None;
     for (t, t_end, inc) in mine {
@@ -502,6 +510,31 @@ mod tests {
     fn empty_frames_yield_no_events() {
         let d = detail(vec![]);
         assert!(compute_score_events(&d, ME, &my_team()).is_empty());
+    }
+
+    #[test]
+    fn team_avg_excludes_evaluated_player() {
+        // debug4-17：2 人小队（斗魂），队友每帧 +20，本人 +0。
+        // 不排除本人均值被拉到 10；排除后均值应为 20。
+        let frames = vec![
+            frame(
+                0,
+                HashMap::from([(ME, stats(0, 0, None)), (MATE_A, stats(0, 0, None))]),
+                vec![],
+            ),
+            frame(
+                60_000,
+                HashMap::from([(ME, stats(0, 0, None)), (MATE_A, stats(20, 0, None))]),
+                vec![],
+            ),
+        ];
+        let d = detail(frames);
+        let team = HashSet::from([ME, MATE_A]);
+        let avg = team_avg_increment(&d, &team, |s| s.minions_killed, Some(ME));
+        assert_eq!(avg.get(&0).copied().unwrap_or(-1.0), 20.0);
+        // 不排除时均值被本人 0 拉低（旧行为对照）
+        let avg_all = team_avg_increment(&d, &team, |s| s.minions_killed, None);
+        assert_eq!(avg_all.get(&0).copied().unwrap_or(-1.0), 10.0);
     }
 
     #[test]
