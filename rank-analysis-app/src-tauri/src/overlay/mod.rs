@@ -185,10 +185,22 @@ pub fn layout(app: &tauri::AppHandle, width: f64, height: f64, anchor: &str) {
     position_by_anchor(app, width, anchor);
 }
 
-/// 按锚点将窗口贴主显示器顶部（带边距）。
+/// 按锚点将窗口贴**浮窗所在显示器**顶部（带边距）。
+///
+/// 双屏场景游戏常跑在副屏：固定取主显示器会把浮窗画到玩家看不到的屏上。
+/// 优先 `current_monitor`（浮窗当前所在屏，Tauri 已按逻辑坐标换算，
+/// 无混合 DPI 二次缩放的歧义），拿不到时回退主显示器。
 fn position_by_anchor(app: &tauri::AppHandle, width: f64, anchor: &str) {
-    let Some(monitor) = app.primary_monitor().ok().flatten() else {
-        log::warn!("[overlay] 无法获取主显示器，窗口保持默认位置");
+    let Some(w) = get_window() else {
+        return;
+    };
+    let monitor = w
+        .current_monitor()
+        .ok()
+        .flatten()
+        .or_else(|| app.primary_monitor().ok().flatten());
+    let Some(monitor) = monitor else {
+        log::warn!("[overlay] 无法获取显示器，窗口保持默认位置");
         return;
     };
     let scale_factor = monitor.scale_factor();
@@ -203,9 +215,7 @@ fn position_by_anchor(app: &tauri::AppHandle, width: f64, anchor: &str) {
         "top-right" => 64.0, // 避开顶栏窗控按钮区域（最小化/最大化/关闭）
         _ => OVERLAY_MARGIN,
     };
-    if let Some(w) = get_window() {
-        let _ = w.set_position(Position::Logical(tauri::LogicalPosition::new(x, y)));
-    }
+    let _ = w.set_position(Position::Logical(tauri::LogicalPosition::new(x, y)));
 }
 
 /// 切换鼠标穿透。
