@@ -19,10 +19,7 @@ const STRUCTURE_RE = /[{}\[\]()<>;'"\\]/g
 /** 连续空白 */
 const SPACES_RE = /\s{2,}/g
 
-export function sanitizeUserText(
-  raw: string | null | undefined,
-  maxLen = 48
-): string {
+export function sanitizeUserText(raw: string | null | undefined, maxLen = 48): string {
   if (!raw) return ''
   const cleaned = raw
     .replace(CONTROL_RE, ' ')
