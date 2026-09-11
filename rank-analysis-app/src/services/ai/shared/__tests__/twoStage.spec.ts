@@ -290,6 +290,45 @@ describe('runTwoStage', () => {
     }
   })
 
+  it('超时后迟到的流回调被丢弃，不喂给已退出的状态机/重试流', async () => {
+    vi.useFakeTimers()
+    try {
+      mockRequest.mockResolvedValueOnce({ success: true, content: '{"foo":1}' })
+      let lateChunk: ((c: string) => void) | null = null
+      mockStream.mockImplementation(async (_p, callbacks) => {
+        // 模拟挂死：不回调，等 twoStage 超时返回后我们仍持有回调句柄
+        lateChunk = cb => callbacks.onChunk?.(cb)
+      })
+
+      const streamCb = vi.fn()
+      const promise = runTwoStage<unknown, unknown>({
+        stage1: {
+          systemPrompt: 'S1',
+          userPrompt: 'U1',
+          parse: () => ({ ok: true, value: {} })
+        },
+        stage2: {
+          buildSystemPrompt: () => 'S2',
+          buildUserPrompt: () => 'U2',
+          parse: () => ({ ok: true, value: {} }),
+          timeoutMs: 10_000,
+          streamCallback: streamCb
+        }
+      })
+
+      await vi.advanceTimersByTimeAsync(10_000)
+      const result = await promise
+      expect(result.kind).toBe('stage2Error')
+
+      // 超时退出后，陈旧流继续回调：必须被丢弃，不得转发给 UI / 后续请求
+      lateChunk?.('残片')
+      lateChunk?.('更多残片')
+      expect(streamCb).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('forwards onUsage from both stages to their sinks', async () => {
     mockRequest.mockResolvedValueOnce({ success: true, content: '{"foo":1}' })
     mockStream.mockImplementation(async (_p, callbacks) => {

@@ -129,25 +129,35 @@ export async function runTwoStage<Stage1Out, Stage2Out>(opts: {
   let stage2Raw = ''
   let stage2Err: string | null = null
   let stage2TimedOut = false
+  // 生命周期闸：超时/完成/出错后置 true，丢弃该轮迟到回调——否则超时抛错退出的
+  // 孤儿流后面的 onChunk/onDone 会继续喂给已退出的状态机，与用户立刻重试的
+  // 新请求数据交织（流式挂死超时 → 重试 → JSON 损坏/stage2ParseError 复现）。
+  let streamSettled = false
   const stage2TimeoutMs = opts.stage2.timeoutMs ?? STAGE2_DEFAULT_TIMEOUT_MS
   await new Promise<void>(resolve => {
     const timer = setTimeout(() => {
       stage2TimedOut = true
+      streamSettled = true
       resolve()
     }, stage2TimeoutMs)
     requestAIContentStream(
       opts.stage2.buildUserPrompt(stage1Final),
       {
         onChunk: chunk => {
+          if (streamSettled) return
           stage2Raw += chunk
           opts.stage2.streamCallback?.(chunk)
         },
         onDone: () => {
+          if (streamSettled) return
           clearTimeout(timer)
+          streamSettled = true
           resolve()
         },
         onError: err => {
+          if (streamSettled) return
           clearTimeout(timer)
+          streamSettled = true
           stage2Err = err
           resolve()
         },
