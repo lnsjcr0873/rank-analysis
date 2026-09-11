@@ -220,17 +220,17 @@ static CURRENT_SESSION_TASK: std::sync::LazyLock<
 pub async fn get_session_data(app_handle: AppHandle) -> Result<(), String> {
     log::info!("get_session_data called");
 
-    // 领取序列号：一旦有更新的调用进来，本任务的所有推送将被作废（防旧局数据晚到覆盖）。
-    let seq = begin_session_task(&SESSION_TASK_SEQ);
-
-    // 中止上一个未完成的 session 任务，立即释放其占用的并发信号量及网络请求
+    // 领取序列号 + 中止上一个未完成的 session 任务必须在**同一把锁**内完成：
+    // 若分散（先领 seq 再单独 take AbortHandle），并发调用 A/B 可能交错——B 先占锁
+    // 启动新任务后 A 再进入，误把 B 的新任务 abort 掉，两个任务都无法正常推送。
     let mut lock = CURRENT_SESSION_TASK.lock().await;
+    let seq = begin_session_task(&SESSION_TASK_SEQ);
     if let Some(prev) = lock.take() {
         log::info!("Aborting previous session task to release semaphore permits");
         prev.abort();
     }
 
-    // 在后台线程处理，避免阻塞
+    // 在后台线程处理，避免阻塞（tokio::spawn 非异步等待，锁只持有极短同步窗口）
     let handle = tokio::spawn(async move {
         match process_session_data(app_handle.clone(), seq).await {
             Ok(_) => {
