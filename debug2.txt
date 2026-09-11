@@ -14,9 +14,9 @@ debug2.txt 修复进度（按 debug2 报告逐项，一项一 commit）
 - [x] #11 autoBpHint.ts 空目标判定 —— 【已验证无需修改】静态配置空目标已正确判定（hasNoExecutableTarget，仅规则与兜底均空才报警）；「运行态被 Ban/被抢导致无目标」属对局实时阶段逻辑（gaming BP 决策层处理回退），设置页仅做静态配置校验，不可也无从感知实时可用性
 - [ ] #12 lcu/http.rs get_auth 阻塞 async worker
 - [ ] #13 meet_db 单连接 Mutex 大写入卡读（WAL/分页）
-- [ ] #14 cloud_sync MAX_PULL vs MAX_PUSH 自锁
-- [ ] #15 detect_override current_hover=0 用户取消被弹回
-- [ ] #16 champion_select my_bans/their_bans 去重
+- [x] #14 cloud_sync MAX_PULL vs MAX_PUSH 自锁 —— 4b5fc76 拉取上限放宽至推送 4 倍（20MB，多设备叠加不永久自锁）
+- [x] #15 detect_override current_hover=0 用户取消被弹回 —— 1a234ff 已 hover 后清成 0 视为接管（防按键争夺）
+- [x] #16 champion_select my_bans/their_bans 去重 —— 9c8210c 保序去重（轮换/自定义模式重复 ban 图标膨胀），+1 单测
 - [x] #17 UnifiedTagRow \r\n 换行比对 —— 7afe29c 去重前归一 CRLF/CR，+1 单测
 - [ ] #18 PlayerProfileCard requestSeq 跨实例
 - [x] #19 observability 转义引号 \" 脱敏 —— 0902983 PII_PARAM/AUTH 正则兼容 \\" 转义引号嵌套字符串
