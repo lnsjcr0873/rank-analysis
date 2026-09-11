@@ -412,6 +412,15 @@ const games = computed(() =>
 /** 已到最后一页（按过滤后的命中总数判断） */
 const noMoreMatches = computed(() => page.value >= pageCount.value)
 
+/**
+ * 页码越界钳制（debug4-24 衍生）：每页条数变化（auto 模式 resize）或
+ * 过滤总数收缩时，page 可能超过 pageCount 而取空。筛选变更主路径已由
+ * 上方 watch 置 1，这里兜住其余路径（resize/追加/删除）。
+ */
+watch(pageCount, count => {
+  if (page.value > count) page.value = count
+})
+
 /** 跨区(SGP)已拉取的场次窗口起点：每次「收集更多」向后端追加拉取（SGP 无 50 场上限） */
 const sgpStartIndex = ref(0)
 
@@ -556,7 +565,13 @@ const resetFilter = () => {
   page.value = 1
 }
 
-/** 筛选生效/清除时同步给父级（左栏英雄池选中态跟随英雄筛选） */
+/**
+ * 筛选生效/清除时同步给父级（左栏英雄池选中态跟随英雄筛选）。
+ *
+ * debug4-24：筛选条件变化必须 `page = 1`——否则停在第 3 页切"仅看胜利"，
+ * 总数缩到 1 页时 slice(20, 30) 取空，展示虚假"无数据"空页。
+ * `immediate` 首跑时 page 本就是 1，无副作用。
+ */
 watch(
   () => [
     filterQueueId.value,
@@ -564,7 +579,10 @@ watch(
     filterResult.value,
     filterTimeWindowHours.value
   ],
-  () => emit('filter-change', activeFilter.value),
+  () => {
+    page.value = 1
+    emit('filter-change', activeFilter.value)
+  },
   { immediate: true }
 )
 

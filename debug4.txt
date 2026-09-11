@@ -476,7 +476,7 @@ if let Some((prefix, _)) = s.split_once('.') {
 }
 s.strip_suffix('Z').unwrap_or(s)
 二、 业务逻辑与状态同步缺陷 (Medium Severity)
-4. MatchHistory.vue：改变筛选条件时未重置页码，导致展示虚假「无数据」空页
+4. MatchHistory.vue：改变筛选条件时未重置页码，导致展示虚假「无数据」空页【已完成：筛选 watch 加 page=1；衍生加 pageCount 越界钳制（resize/追加/删除路径）。prettier/eslint/tsc 全过】
 文件路径：rank-analysis-app/src/components/record/MatchHistory.vue
 问题代码：
 code
