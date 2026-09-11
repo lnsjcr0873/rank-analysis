@@ -247,7 +247,7 @@ let alias_key = match cache.get(&champion_id) {
     Some(c) => c.alias.to_ascii_lowercase(), // 统一转换为小写
     None => return Ok(None),
 };
-2. automation.rs：非征召模式（如海克斯大乱斗）下自动备选席换人（Bench Swap）逻辑成为死代码
+2. automation.rs：非征召模式（如海克斯大乱斗）下自动备选席换人（Bench Swap）逻辑成为死代码【已完成：新增 evaluate_bench_swap_target（规则优先+兜底，不依赖 pending action）；start_select_champion 无快照时走独立 bench 求值（30s 冷却复用）；附 4 个单测。GNU check/clippy/fmt 全过】
 文件路径：
 rank-analysis-app/src-tauri/src/bp_decision/evaluate.rs
 rank-analysis-app/src-tauri/src/automation.rs

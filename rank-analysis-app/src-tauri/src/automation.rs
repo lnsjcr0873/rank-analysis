@@ -567,13 +567,66 @@ async fn load_ban_rules() -> Vec<crate::command::rule_config::BanRule> {
 async fn start_select_champion() -> Result<(), String> {
     let select_session = get_champion_select_session().await?;
     let Some(decision) = crate::bp_decision::store::read() else {
-        log::debug!("No BP decision snapshot yet, skipping this tick");
-        return Ok(());
+        // debug4-12：大乱斗 / Mayhem（actions 为空）永远产不出 decision 快照，
+        // bench 自动换人不能跟着陪葬——走独立求值。
+        return try_bench_swap_standalone(&select_session).await;
     };
     if decision.action_type != crate::bp_decision::types::BpActionType::Pick {
         return Ok(());
     }
     apply_bp_decision(&select_session, &decision).await
+}
+
+/// 无 decision 快照时的独立 bench 换人（debug4-12）。
+///
+/// 大乱斗等随机英雄模式：actions 为空 → 快照恒 None → bench 逻辑死代码。
+/// 这里直接用规则+兜底池求换人目标，命中则换（30s 冷却防震荡）。
+async fn try_bench_swap_standalone(
+    session: &crate::lcu::api::champion_select::SelectSession,
+) -> Result<(), String> {
+    if session.bench_champions.is_empty() {
+        return Ok(());
+    }
+    if !switch_enabled("settings.auto.pickChampionSwitch").await {
+        return Ok(());
+    }
+    // 注：接管标记按 action id 作用域（store::is_overridden）；大乱斗无 action，
+    // 无处可标记，此处不检查——用户手动换人后下一 tick 会重新求值（30s 冷却兜底）。
+    let my_summoner = match crate::lcu::api::summoner::Summoner::get_my_summoner().await {
+        Ok(s) => s,
+        Err(_) => return Ok(()),
+    };
+    let pick_rules = load_pick_rules().await;
+    let pick_pool = load_pick_pool().await;
+    let target = crate::bp_decision::evaluate::evaluate_bench_swap_target(
+        session,
+        &my_summoner.puuid,
+        &pick_rules,
+        &pick_pool,
+        None,
+    );
+    let Some(target_id) = target else {
+        return Ok(());
+    };
+    let can_swap = {
+        let mut guard = last_bench_swap().lock().unwrap_or_else(|e| e.into_inner());
+        match *guard {
+            Some(at) if at.elapsed() >= BENCH_SWAP_COOLDOWN => {
+                *guard = Some(std::time::Instant::now());
+                true
+            }
+            Some(_) => false,
+            None => {
+                *guard = Some(std::time::Instant::now());
+                true
+            }
+        }
+    };
+    if can_swap {
+        log::info!("BP bench swap (standalone, no pending action): -> target {target_id}");
+        crate::lcu::api::champion_select::swap_bench_champion(target_id).await?;
+    }
+    Ok(())
 }
 
 /// 自动接受换人请求的压哨保护窗口（秒）。

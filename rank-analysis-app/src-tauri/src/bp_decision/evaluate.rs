@@ -288,6 +288,73 @@ fn rejection_for(champion_id: i32, u: Unavailable) -> BpRejected {
     }
 }
 
+/// 大乱斗 / Mayhem 等随机英雄模式的 bench 换人求值（debug4-12）。
+///
+/// 这些模式 LCU 根本不下发 BP actions（`session.actions` 为空），
+/// [`evaluate_bp_decision`] 首行即返回 None——而 bench 换人恰恰最需要在
+/// 这些模式工作。独立求值不依赖 pending action：已锁定英雄 + 决策改推的
+/// 目标在 bench 池中即换。调用方（执行侧）负责冷却与模式门禁。
+pub fn evaluate_bench_swap_target(
+    session: &SelectSession,
+    my_puuid: &str,
+    pick_rules: &[PickRule],
+    pick_pool: &[i32],
+    snapshot: Option<&OpggSnapshot>,
+) -> Option<i32> {
+    use crate::rule_engine::match_condition;
+    if session.bench_champions.is_empty() {
+        return None;
+    }
+    // 我方已锁定英雄（征召 pick 完成 / 大乱斗直接分配）
+    let locked = session
+        .actions
+        .iter()
+        .flatten()
+        .find_map(|a| {
+            (a.actor_cell_id == session.local_player_cell_id
+                && a.action_type == "pick"
+                && a.completed
+                && a.champion_id > 0)
+                .then_some(a.champion_id)
+        })
+        .or_else(|| {
+            session.my_team.iter().find_map(|p| {
+                (p.cell_id == session.local_player_cell_id && p.champion_id > 0)
+                    .then_some(p.champion_id)
+            })
+        })?;
+    let unavailable = unavailable_map(session);
+    let my_position = crate::rule_engine::detect_my_position(session, my_puuid);
+    let enemy_ids = enemy_champion_ids(session);
+    let enemy_pos = enemy_positions(session);
+    // 规则优先，兜底次之——与 evaluate_bp_decision 同序
+    for rule in pick_rules.iter().filter(|r| r.enabled) {
+        if !rule
+            .conditions
+            .iter()
+            .all(|c| match_condition(c, session, my_position))
+        {
+            continue;
+        }
+        let champ = rule.action.champion_id;
+        if champ != locked
+            && !unavailable.contains_key(&champ)
+            && session.bench_champions.contains(&champ)
+        {
+            return Some(champ);
+        }
+    }
+    let (chosen, _, _) = pick_best_from(
+        pick_pool,
+        &enemy_ids,
+        &enemy_pos,
+        &unavailable,
+        snapshot,
+        my_position,
+    );
+    chosen.filter(|c| *c != locked && session.bench_champions.contains(c))
+}
+
 /// 求值一次完整的 BP 决策。
 ///
 /// 返回 None 表示当前没有属于我的待办 BP 动作（非选人期、或我的回合已完成）。
@@ -1061,6 +1128,67 @@ mod tests {
         c.last_hovered = Some(64);
         let d = evaluate_bp_decision(&c).unwrap();
         assert!(d.user_overridden, "我们 hover 了盲僧，现在是亚索 → 接管");
+    }
+
+    // ---- evaluate_bench_swap_target（debug4-12：无 pending action 也能换）----
+
+    /// 大乱斗式会话：actions 为空、英雄直接分配到 my_team、bench 有候选
+    fn aram_session(locked: i32, bench: Vec<i32>) -> SelectSession {
+        let mut me = player(locked, "", "me");
+        me.cell_id = 0;
+        SelectSession {
+            my_team: vec![me],
+            their_team: vec![],
+            actions: vec![],
+            timer: Timer::default(),
+            local_player_cell_id: 0,
+            trades: Vec::new(),
+            bench_champions: bench,
+        }
+    }
+
+    #[test]
+    fn bench_swap_without_pending_action_returns_rule_target() {
+        // actions 为空（大乱斗）→ evaluate_bp_decision 恒 None，但 bench 求值
+        // 仍能从规则拿到目标
+        let s = aram_session(1, vec![64, 99]);
+        assert!(evaluate_bp_decision(&ctx(&s, &[], &[], None)).is_none());
+        let rules = vec![pick_rule("r1", "打野保底", 64, true, vec![])];
+        assert_eq!(
+            evaluate_bench_swap_target(&s, "me", &rules, &[], None),
+            Some(64)
+        );
+    }
+
+    #[test]
+    fn bench_swap_without_pending_action_falls_back_to_pool() {
+        let s = aram_session(1, vec![99]);
+        assert_eq!(
+            evaluate_bench_swap_target(&s, "me", &[], &[99], None),
+            Some(99)
+        );
+    }
+
+    #[test]
+    fn bench_swap_returns_none_when_target_not_on_bench() {
+        // 规则目标不在 bench 池 → 不换（LCU 只允许换入 bench 内的英雄）
+        let s = aram_session(1, vec![99]);
+        let rules = vec![pick_rule("r1", "打野保底", 64, true, vec![])];
+        assert_eq!(
+            evaluate_bench_swap_target(&s, "me", &rules, &[64], None),
+            None
+        );
+    }
+
+    #[test]
+    fn bench_swap_returns_none_when_already_on_target() {
+        // 已锁定就是目标 → 不换
+        let s = aram_session(64, vec![64, 99]);
+        let rules = vec![pick_rule("r1", "打野保底", 64, true, vec![])];
+        assert_eq!(
+            evaluate_bench_swap_target(&s, "me", &rules, &[], None),
+            None
+        );
     }
 
     #[test]
