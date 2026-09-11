@@ -326,11 +326,17 @@ pub fn derive_champ_select_view(
 
     let mut my_bans = Vec::new();
     let mut their_bans = Vec::new();
+    // 特殊/自定义模式可能对同一 ban 有多条 action（双方盲 Ban 同英雄、同一方多重判定），
+    // 前端以 Set 去重、图标栏按数量渲染，这里先做**保序去重**避免图标膨胀成多张重复卡。
+    let mut my_seen = std::collections::HashSet::new();
+    let mut their_seen = std::collections::HashSet::new();
     for action in session.actions.iter().flatten() {
         if action.action_type == "ban" && action.completed && action.champion_id > 0 {
             if action.is_ally_action {
-                my_bans.push(action.champion_id);
-            } else {
+                if my_seen.insert(action.champion_id) {
+                    my_bans.push(action.champion_id);
+                }
+            } else if their_seen.insert(action.champion_id) {
                 their_bans.push(action.champion_id);
             }
         }
@@ -731,6 +737,28 @@ mod tests {
         assert_eq!(view.stage, "banning");
         assert_eq!(states[&0], "banning");
         assert_eq!(view.my_bans, vec![266]);
+        assert_eq!(view.their_bans, vec![103]);
+    }
+
+    #[test]
+    fn duplicate_completed_bans_are_deduplicated_preserving_order() {
+        // 自定义/轮换模式可能有多条 action 指向同一 ban：保序去重
+        let s = with_phase(
+            mk_session(
+                vec![(0, 0), (1, 0)],
+                vec![(5, 0)],
+                vec![
+                    ban_action(1, 266, true, false, true),
+                    ban_action(2, 266, true, false, true), // 重复我方 ban
+                    ban_action(5, 103, true, false, false),
+                    ban_action(6, 103, true, false, false), // 重复敌方 ban
+                    ban_action(3, 157, true, false, true),
+                ],
+            ),
+            "BAN_PICK",
+        );
+        let (view, _states) = derive_champ_select_view(&s);
+        assert_eq!(view.my_bans, vec![266, 157]);
         assert_eq!(view.their_bans, vec![103]);
     }
 
