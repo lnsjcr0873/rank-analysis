@@ -47,6 +47,19 @@ pub(crate) fn parse_position(s: &str) -> Option<Position> {
     }
 }
 
+/// 我方队伍中除本地玩家外的「真队友」（debug4-6）。
+///
+/// `my_team` 包含本地玩家自己的格子：自动 hover 亚索后自身 championId 即亚索，
+/// 若 Ally 条件不过滤自身，「队友不包含亚索」下一 tick 即失效 → 退兜底池 →
+/// 自身不再是亚索 → 条件又成立 → 每秒在规则与兜底间自指振荡。
+fn allies(session: &SelectSession) -> Vec<&OnePlayer> {
+    session
+        .my_team
+        .iter()
+        .filter(|p| p.cell_id != session.local_player_cell_id)
+        .collect()
+}
+
 /// 求值单个条件。
 pub(crate) fn match_condition(
     cond: &RuleCondition,
@@ -55,7 +68,7 @@ pub(crate) fn match_condition(
 ) -> bool {
     match cond {
         RuleCondition::Position { value } => my_position == Some(*value),
-        RuleCondition::AllyChampionsContains { ids } => team_has_any(&session.my_team, ids),
+        RuleCondition::AllyChampionsContains { ids } => team_has_any_ref(&allies(session), ids),
         // 取反条件不能「空真」：banning 阶段队友还没亮英雄（championId 全 0）时，
         // "队友不包含莫甘娜" 会恒真触发误 Ban。必须至少有一位队友已选定英雄
         // （非 0）才允许对「不包含」做判定——否则条件不匹配。
@@ -63,9 +76,10 @@ pub(crate) fn match_condition(
         // 另：ids 为空（前端未选具体英雄就保存）是无意义的配置错误，一律判 false，
         // 防止"排除空集"恒真霸占后续所有正规规则与兜底池。
         RuleCondition::AllyChampionsNotContains { ids } => {
+            let allies = allies(session);
             !ids.is_empty()
-                && team_has_any_selection(&session.my_team)
-                && !team_has_any(&session.my_team, ids)
+                && team_has_any_selection_ref(&allies)
+                && !team_has_any_ref(&allies, ids)
         }
         RuleCondition::EnemyChampionsContains { ids } => team_has_any(&session.their_team, ids),
         RuleCondition::EnemyChampionsNotContains { ids } => {
@@ -92,6 +106,19 @@ fn team_has_any(team: &[OnePlayer], ids: &[i32]) -> bool {
     })
 }
 
+/// `team_has_any` 的引用切片版（供过滤自身后的 allies 复用，避免克隆）。
+fn team_has_any_ref(team: &[&OnePlayer], ids: &[i32]) -> bool {
+    team.iter().any(|p| {
+        let cid = p.champion_id;
+        cid != 0 && ids.contains(&cid)
+    })
+}
+
+/// `team_has_any_selection` 的引用切片版。
+fn team_has_any_selection_ref(team: &[&OnePlayer]) -> bool {
+    team.iter().any(|p| p.champion_id != 0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -102,7 +129,9 @@ mod tests {
             their_team: vec![],
             actions: vec![],
             timer: Default::default(),
-            local_player_cell_id: 0,
+            // debug4-6：本地格子固定为 99（与 ally_champ 的 cell_id 0 区分），
+            // 否则 allies() 过滤会把全部固件当成自己。
+            local_player_cell_id: 99,
             trades: Vec::new(),
             bench_champions: Vec::new(),
         }
@@ -369,6 +398,77 @@ mod tests {
         assert_eq!(parse_position("top"), Some(Position::Top));
         assert_eq!(parse_position(""), None);
         assert_eq!(parse_position("captain"), None);
+    }
+
+    #[test]
+    fn ally_conditions_exclude_local_player() {
+        // debug4-6 回归：本地玩家 hover 亚索（cell 99）后，
+        // AllyContains 不得把自己算成「队友含亚索」，
+        // AllyNotContains 不得因此失效（否则规则↔兜底自指振荡）。
+        let mut s = make_session(vec![
+            ally_champ(0),
+            OnePlayer {
+                champion_id: 157,
+                puuid: "me".to_string(),
+                obfuscated_puuid: String::new(),
+                assigned_position: "".to_string(),
+                cell_id: 99,
+                champion_pick_intent: 0,
+            },
+        ]);
+        s.local_player_cell_id = 99;
+        assert!(!match_condition(
+            &RuleCondition::AllyChampionsContains { ids: vec![157] },
+            &s,
+            None
+        ));
+        // 队友（cell 0）无选择 → 取反前置守卫拦下，不匹配
+        assert!(!match_condition(
+            &RuleCondition::AllyChampionsNotContains { ids: vec![157] },
+            &s,
+            None
+        ));
+        // 队友亮了别的英雄 → 取反成立（不受自身 157 影响）
+        let mut s2 = make_session(vec![
+            ally_champ(64),
+            OnePlayer {
+                champion_id: 157,
+                puuid: "me".to_string(),
+                obfuscated_puuid: String::new(),
+                assigned_position: "".to_string(),
+                cell_id: 99,
+                champion_pick_intent: 0,
+            },
+        ]);
+        s2.local_player_cell_id = 99;
+        assert!(match_condition(
+            &RuleCondition::AllyChampionsNotContains { ids: vec![157] },
+            &s2,
+            None
+        ));
+        // 队友真选了亚索 → Contains 命中、NotContains 失效（正确行为）
+        let mut s3 = make_session(vec![
+            ally_champ(157),
+            OnePlayer {
+                champion_id: 0,
+                puuid: "me".to_string(),
+                obfuscated_puuid: String::new(),
+                assigned_position: "".to_string(),
+                cell_id: 99,
+                champion_pick_intent: 0,
+            },
+        ]);
+        s3.local_player_cell_id = 99;
+        assert!(match_condition(
+            &RuleCondition::AllyChampionsContains { ids: vec![157] },
+            &s3,
+            None
+        ));
+        assert!(!match_condition(
+            &RuleCondition::AllyChampionsNotContains { ids: vec![157] },
+            &s3,
+            None
+        ));
     }
 
     #[test]

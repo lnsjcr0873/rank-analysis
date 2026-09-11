@@ -105,7 +105,7 @@ Rust
 "middle" | "mid" => Some(Position::Middle),
 "bottom" | "adc" | "bot" => Some(Position::Bottom),
 "utility" | "support" => Some(Position::Utility),
-6. rule_engine.rs：AllyChampionsContains/NotContains 包含玩家自身，引发自指振荡
+6. rule_engine.rs：AllyChampionsContains/NotContains 包含玩家自身，引发自指振荡【已完成：Ally 条件改走 allies()（过滤 local_player_cell_id）+ 引用版 helper 避免克隆；测试固件本地格子改为 99；附自指振荡回归单测。GNU check/clippy/fmt 全过】
 文件路径：rank-analysis-app/src-tauri/src/rule_engine.rs
 问题代码：
 code
