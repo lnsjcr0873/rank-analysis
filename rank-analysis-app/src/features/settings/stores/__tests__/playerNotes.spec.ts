@@ -183,6 +183,59 @@ describe('usePlayerNotesStore', () => {
     })
   })
 
+  describe('purgeExpiredTombstones（debug4-28 超限自愈）', () => {
+    it('只清过期墓碑：新墓碑与活备注保留，无事时不落盘', async () => {
+      // init 的 loadFromConfig 已过滤过期墓碑——purge 的目标是内存里残留的
+      // 过期墓碑（如云端合并进来的旧墓碑）：直接构造内存状态
+      const now = Date.now()
+      const DAY = 24 * 60 * 60 * 1000
+      const store = usePlayerNotesStore()
+      store.notes = {
+        oldTomb: {
+          note: '',
+          label: 'normal',
+          gameName: 'O',
+          tagLine: '1',
+          updatedAt: now - 31 * DAY,
+          deleted: true
+        },
+        freshTomb: {
+          note: '',
+          label: 'normal',
+          gameName: 'F',
+          tagLine: '2',
+          updatedAt: now - 1 * DAY,
+          deleted: true
+        },
+        live: {
+          note: '活的',
+          label: 'careful',
+          gameName: 'L',
+          tagLine: '3',
+          updatedAt: now - 100 * DAY
+        }
+      }
+      mockPut.mockClear()
+
+      const n = await store.purgeExpiredTombstones()
+
+      expect(n).toBe(1)
+      expect(store.notes['oldTomb']).toBeUndefined()
+      expect(store.notes['freshTomb']?.deleted).toBe(true)
+      expect(store.getNote('live')?.note).toBe('活的')
+      expect(mockPut).toHaveBeenCalledTimes(1)
+    })
+
+    it('无过期墓碑时返回 0 且不落盘', async () => {
+      const store = usePlayerNotesStore()
+      await store.setNote('p', { note: 'x', label: 'normal', gameName: 'G', tagLine: 'T' })
+      mockPut.mockClear()
+
+      expect(await store.purgeExpiredTombstones()).toBe(0)
+      expect(mockPut).not.toHaveBeenCalled()
+    })
+  })
+
   describe('墓碑 GC（loadFromConfig）', () => {
     it('载入时清理超过 30 天的旧墓碑，保留新墓碑与活备注', async () => {
       const now = Date.now()

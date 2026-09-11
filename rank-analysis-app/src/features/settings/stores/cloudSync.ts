@@ -331,7 +331,20 @@ export const useCloudSyncStore = defineStore('cloudSync', () => {
       // 补触发的常态路径）不再对云端做无谓的全量 upsert。
       const { stats: pushNeed } = mergeNotesMaps(cloudUnion, notesStore.notes)
       if (pushNeed.added > 0 || pushNeed.replaced > 0) {
-        await invoke('cloud_push_notes', { puuid: me.puuid, payload: notesStore.notes })
+        // debug4-28：推送前先物理清除过期墓碑——超 5MB 被拒推的用户删再多
+        // 备注也只是追加墓碑让表更大（永久死锁）。过期墓碑在合并里本来就
+        // 被拦下，物理删除不改变合并收敛性。purge 后仍超限才真正报错。
+        await notesStore.purgeExpiredTombstones()
+        try {
+          await invoke('cloud_push_notes', { puuid: me.puuid, payload: notesStore.notes })
+        } catch (e) {
+          if (String(e).includes('>5MB')) {
+            throw new Error(
+              `${String(e)}（已自动清理过期删除标记仍超限：请删除不常用的旧备注，或等待云端合并瘦身）`
+            )
+          }
+          throw e
+        }
       }
       await syncConfig(me.puuid)
       lastSyncAt.value = Date.now()

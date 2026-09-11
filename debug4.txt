@@ -556,7 +556,7 @@ LAST_REFRESH_TIME 在进程启动时被直接初始化为 Instant::now()。
 这意味着：在程序启动后的最初 1 秒内，refresh_auth 会认为「刚刚才刷新过」。
 如果应用在启动瞬间遇到 LCU 令牌变更或重连，首次请求触发 401 并尝试 refresh_auth()，由于命中了 1 秒冷却，它直接返回了失效的旧凭据，导致重试依旧 401 并彻底抛错，白白错失自愈机会。
 修复方案：将初始时间初始化为一个较早的时刻，例如 Instant::now() - Duration::from_secs(10)，允许启动初期的自愈重试立即生效。
-8. cloud_push_notes：Tombstone（墓碑记录）导致超过 5MB 限制的用户永远无法清理空间
+8. cloud_push_notes：Tombstone（墓碑记录）导致超过 5MB 限制的用户永远无法清理空间【已完成：新增 purgeExpiredTombstones（物理清除过期墓碑，合并收敛性不受影响）；云同步推送前先 purge 再推，仍超限则报错带清理指引；附 2 个单测。53 测试全绿，tsc 全过】
 文件路径：
 rank-analysis-app/src-tauri/src/command/cloud_sync.rs
 rank-analysis-app/src/features/settings/stores/playerNotes.ts

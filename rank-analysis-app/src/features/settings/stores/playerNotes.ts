@@ -222,6 +222,28 @@ export const usePlayerNotesStore = defineStore('playerNotes', () => {
   }
 
   /**
+   * 物理清除已过期的墓碑（debug4-28：超限自愈逃生阀）。
+   *
+   * 背景：删除写墓碑（30 天 TTL）只增不减；一旦备注表超 5MB 被云端拒推，
+   * 用户删再多备注也只是追加墓碑让表更大——同步永久死锁。过期墓碑在
+   * mergeNotesMaps 里本来就被拦下（不参与合并、不复活），物理删除它不
+   * 改变任何合并结果，收敛性不受影响。
+   *
+   * @returns 清除的条数；0 = 无事发生（不落盘）
+   */
+  async function purgeExpiredTombstones(): Promise<number> {
+    const expireBefore = Date.now() - TOMBSTONE_TTL_MS
+    const entries = Object.entries(notes.value)
+    const expired = entries.filter(([, note]) => note.deleted && note.updatedAt < expireBefore)
+    if (expired.length === 0) return 0
+    const dead = new Set(expired.map(([puuid]) => puuid))
+    notes.value = Object.fromEntries(entries.filter(([puuid]) => !dead.has(puuid)))
+    userMutationSeq.value++
+    await persist()
+    return expired.length
+  }
+
+  /**
    * 批量并入外部备注表（手动导入 / 云端拉取共用），同 puuid 按 updatedAt 新者赢。
    * 无实际变化（仅 kept/invalid/expired）时不落盘、不广播。
    * 墓碑就是普通条目，走同一套"新者赢"——较新的墓碑压过旧活备注（删除传播），
@@ -274,6 +296,7 @@ export const usePlayerNotesStore = defineStore('playerNotes', () => {
     getNote,
     setNote,
     removeNote,
-    importNotes
+    importNotes,
+    purgeExpiredTombstones
   }
 })
