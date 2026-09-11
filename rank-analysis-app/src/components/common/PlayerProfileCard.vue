@@ -176,12 +176,16 @@ watchEffect(async () => {
   const name = props.name
 
   if (!puuid) {
-    loading.value = false
-    error.value = false
-    profile.value = null
-    meet.value = null
-    loadedForPuuid = ''
-    return
+    // debug6：高分段匿名（puuid 为空）但有 name+region 时走 SGP 回退，
+    // 不再直接清空（此前阻断服务层精心设计的降级链路）。
+    if (!(name && region)) {
+      loading.value = false
+      error.value = false
+      profile.value = null
+      meet.value = null
+      loadedForPuuid = ''
+      return
+    }
   }
 
   loading.value = true
@@ -191,7 +195,8 @@ watchEffect(async () => {
     const p = await fetchPlayerProfile({ puuid, championId, region, name })
     if (seq !== requestSeq) return
     profile.value = p
-    loadedForPuuid = puuid
+    // 匿名无 puuid 时以 name 为人键（与下方失败保留口径一致）
+    loadedForPuuid = puuid || name
   } catch {
     if (seq !== requestSeq) return
     failed = true
@@ -200,21 +205,26 @@ watchEffect(async () => {
 
   // 画像失败：同一玩家（championId/region 等触发的重拉）保留上次成功画像，
   // 避免瞬时失败/慢查询把卡片闪成空态；首次失败或换人才展示空态。
+  // （匿名无 puuid 时 loadedFor 为 name 键，同样按"同人"口径保留。）
   if (failed) {
-    if (loadedForPuuid === puuid) return
+    if (loadedForPuuid !== '' && loadedForPuuid === (puuid || name)) return
     error.value = true
     profile.value = null
     loadedForPuuid = ''
     return
   }
 
-  // 遇见过摘要独立降级：失败/无记录不阻断画像
-  try {
-    const m = await queryMeetSummary(puuid)
-    if (seq !== requestSeq) return
-    meet.value = m
-  } catch {
-    if (seq === requestSeq) meet.value = null
+  // 遇见过摘要独立降级：失败/无记录不阻断画像；匿名（无 puuid）直接跳过
+  if (puuid) {
+    try {
+      const m = await queryMeetSummary(puuid)
+      if (seq !== requestSeq) return
+      meet.value = m
+    } catch {
+      if (seq === requestSeq) meet.value = null
+    }
+  } else {
+    meet.value = null
   }
 })
 

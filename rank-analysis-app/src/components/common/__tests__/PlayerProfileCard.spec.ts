@@ -205,6 +205,26 @@ describe('PlayerProfileCard', () => {
     expect(wrapper.text().replace(/\s+/g, ' ')).not.toContain('2026-08-01')
   })
 
+  it('debug6：匿名（无puuid）但有name+region时走SGP回退（不再直接清空）', async () => {
+    const wrapper = mount(PlayerProfileCard, {
+      props: { puuid: '', name: 'Faker#KR1', region: 'KR' }
+    })
+    await flushPromises()
+    expect(vi.mocked(fetchPlayerProfile)).toHaveBeenCalledWith(
+      expect.objectContaining({ puuid: '', name: 'Faker#KR1', region: 'KR' })
+    )
+    expect(wrapper.text()).toContain('60%')
+    // 匿名无 puuid：meet 查询跳过
+    expect(vi.mocked(queryMeetSummary)).not.toHaveBeenCalled()
+  })
+
+  it('debug6：匿名缺name/region时仍清空（无解）', async () => {
+    const wrapper = mount(PlayerProfileCard, { props: { puuid: '', name: '', region: '' } })
+    await flushPromises()
+    expect(vi.mocked(fetchPlayerProfile)).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('暂无近期战绩数据')
+  })
+
   it('region + name 透传给 fetchPlayerProfile（SGP 兜底）', async () => {
     mount(PlayerProfileCard, {
       props: { puuid: 'p1', name: '跨区玩家#123', championId: 64, region: 'HN10' }

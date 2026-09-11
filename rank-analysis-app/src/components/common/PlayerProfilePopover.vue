@@ -29,9 +29,10 @@
  * 玩家画像 hover 弹层：把任意触发器（玩家名等）包上 NPopover，
  * 内容是 PlayerProfileCard。用于战绩详情/对局内各挂载点。
  *
- * - active=false（无 puuid / 隐藏战绩）时原样渲染 trigger，不包弹层
+ * - active=false（无 puuid、无 SGP 回退条件 / 隐藏战绩）时原样渲染 trigger，不包弹层
  * - 走 fetchPlayerProfile（LRU 缓存），hover 才触发查询
  * - region 非空（跨区战绩页等 SGP 来源场景）时画像卡启用 SGP 战绩兜底
+ * - debug6：高分段匿名（puuid 为空）但有 name+region 时同样激活，走 SGP 回退
  */
 import PlayerProfileCard from '@renderer/components/common/PlayerProfileCard.vue'
 import { NPopover } from 'naive-ui'
@@ -50,7 +51,10 @@ const props = withDefaults(
   { puuid: '', name: '', championId: 0, region: '' }
 )
 
-const active = computed(() => props.puuid.length > 0)
+/** puuid 为空时，有 name+region 仍可走 SGP 回退（高分段匿名），同样激活 */
+const active = computed(
+  () => props.puuid.length > 0 || (props.name.length > 0 && props.region.length > 0)
+)
 /** 弹层是否打开过（打开后保持挂载，避免二次 hover 闪烁重查，LRU 缓存兜底） */
 const opened = ref(false)
 

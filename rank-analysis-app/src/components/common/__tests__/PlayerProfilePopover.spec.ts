@@ -36,4 +36,22 @@ describe('PlayerProfilePopover', () => {
     // 未 hover 打开前，画像卡不挂载、零请求
     expect(wrapper.findComponent({ name: 'PlayerProfileCard' }).exists()).toBe(false)
   })
+
+  it('debug6：匿名（无puuid）但有name+region时同样激活（SGP回退）', () => {
+    const wrapper = mount(PlayerProfilePopover, {
+      props: { puuid: '', name: 'Faker#KR1', region: 'KR' },
+      slots: { default: () => '某玩家' },
+      global: { stubs: { PlayerProfileCard: true } }
+    })
+    expect(wrapper.findComponent({ name: 'Popover' }).exists()).toBe(true)
+  })
+
+  it('debug6：匿名缺region时仍不激活', () => {
+    const wrapper = mount(PlayerProfilePopover, {
+      props: { puuid: '', name: 'Faker#KR1', region: '' },
+      slots: { default: () => '某玩家' }
+    })
+    expect(wrapper.text()).toBe('某玩家')
+    expect(wrapper.findComponent({ name: 'Popover' }).exists()).toBe(false)
+  })
 })
