@@ -9,10 +9,12 @@
  */
 
 /** ASCII 控制符：换行/回车/制表等——指令注入的第一载体 */
+// eslint-disable-next-line no-control-regex
 const CONTROL_RE = /[\u0000-\u001f\u007f]/g
 /** markdown 围栏与反引号 */
 const FENCE_RE = /`/g
 /** 结构化定界符：用于夹带系统提示词/JSON 结构 */
+// eslint-disable-next-line no-useless-escape
 const STRUCTURE_RE = /[{}\[\]()<>;'"\\]/g
 /** 连续空白 */
 const SPACES_RE = /\s{2,}/g
