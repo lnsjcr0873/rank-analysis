@@ -350,6 +350,12 @@ export async function collectSgpHistoryAll(opts: SgpCollectOptions): Promise<Sgp
       }
     }
     begIndex += incoming.length
+    // fetchPage 是数秒级网络 IO：回调前再查一次 shouldContinue——组件可能在
+    // 等待期间已卸载/切换玩家，此时 onPage 写已卸载作用域既无意义又阻止 GC
+    //（debug3-C2）。中断时按取消交付，调用方丢弃结果。
+    if (shouldContinue && !shouldContinue()) {
+      return { games, reachedEnd: false, cancelled: true, nextStartIndex: begIndex }
+    }
     onPage?.(games)
   }
   return { games, reachedEnd: false, cancelled: false, nextStartIndex: begIndex }

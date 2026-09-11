@@ -265,4 +265,24 @@ describe('collectSgpHistoryAll', () => {
     expect(result.games).toHaveLength(52)
     expect(result.reachedEnd).toBe(true)
   })
+
+  it('fetchPage 等待期间中断：onPage 不再回调已卸载方，标记 cancelled', async () => {
+    let calls = 0
+    const { fetchPage } = makePagedFetch([50, 50])
+    const onPage = vi.fn()
+    const result = await collectSgpHistoryAll({
+      region: 'HN10',
+      name: 'Tester#0001',
+      fetchPage,
+      onPage,
+      shouldContinue: () => {
+        calls++
+        // 第 1 次（循环顶）放行，第 2 次（onPage 前）拦截
+        return calls < 2
+      }
+    })
+    expect(result.games).toHaveLength(50)
+    expect(result.cancelled).toBe(true)
+    expect(onPage).not.toHaveBeenCalled()
+  })
 })

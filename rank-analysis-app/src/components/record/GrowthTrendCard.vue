@@ -223,12 +223,19 @@ const CURVE_H = 40
 const PAD = 4
 
 function polyPoints(values: number[]): string {
-  const max = Math.max(1, ...values)
-  const step = values.length > 1 ? (CURVE_W - PAD * 2) / (values.length - 1) : CURVE_W - PAD * 2
-  return values
+  if (!values.length) return ''
+  // 脏数据清洗：NaN/Infinity 按 0，负值钳 0——否则 Y 坐标越界/拼出 NaN 坐标
+  // （与 review.ts radarPoints 同类问题，debug3-C2）。
+  const clean = values.map(v => (Number.isFinite(v) ? Math.max(0, v) : 0))
+  const max = Math.max(1, ...clean)
+  const span = CURVE_W - PAD * 2
+  // 单点居中（此前贴左边缘）；多点等距铺满
+  const step = clean.length > 1 ? span / (clean.length - 1) : 0
+  const x0 = clean.length > 1 ? PAD : PAD + span / 2
+  return clean
     .map(
       (v, i) =>
-        `${(PAD + i * step).toFixed(1)},${(CURVE_H - PAD - (v / max) * (CURVE_H - PAD * 2)).toFixed(1)}`
+        `${(x0 + i * step).toFixed(1)},${(CURVE_H - PAD - (v / max) * (CURVE_H - PAD * 2)).toFixed(1)}`
     )
     .join(' ')
 }

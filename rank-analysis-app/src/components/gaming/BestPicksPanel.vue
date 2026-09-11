@@ -651,9 +651,10 @@ const activeFilterChips = computed(() => {
     chips.push({
       key: 'owned',
       label: '含未拥有',
+      // 只改值：持久化唯一由 watch(onlyOwned)→persistFilter 承担。
+      // 此前这里既改值又显式 persistFilter，双写并发 putConfig 破坏写入原子性。
       reset: () => {
         onlyOwned.value = true
-        void persistFilter(OWNED_KEY, true)
       }
     })
   }
@@ -663,7 +664,6 @@ const activeFilterChips = computed(() => {
       label: '仅英雄池',
       reset: () => {
         poolOnly.value = false
-        void persistFilter(POOL_ONLY_KEY, false)
       }
     })
   }
@@ -673,7 +673,6 @@ const activeFilterChips = computed(() => {
       label: '优先覆盖',
       reset: () => {
         coverageFirst.value = false
-        void persistFilter(COVERAGE_FIRST_KEY, false)
       }
     })
   }
@@ -684,7 +683,6 @@ const activeFilterChips = computed(() => {
       label: `胜率≥${v}%`,
       reset: () => {
         poolMinWinRate.value = 50
-        void persistFilter(POOL_WIN_RATE_KEY, 50)
       }
     })
   }
@@ -695,7 +693,6 @@ const activeFilterChips = computed(() => {
       label: `场次≥${g}`,
       reset: () => {
         poolMinGames.value = 5
-        void persistFilter(POOL_GAMES_KEY, 5)
       }
     })
   }
