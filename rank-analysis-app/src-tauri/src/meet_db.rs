@@ -67,13 +67,24 @@ fn init_schema(conn: &Connection) -> rusqlite::Result<()> {
          );
          CREATE INDEX IF NOT EXISTS idx_meet_recency
              ON meet_matches(other_puuid, game_created_at DESC);
-         CREATE TABLE IF NOT EXISTS collected_games (
-             region     TEXT    NOT NULL,
-             name       TEXT    NOT NULL,
-             games_json TEXT    NOT NULL,
-             updated_at TEXT    NOT NULL,
-             PRIMARY KEY (region, name)
-         );",
+          CREATE TABLE IF NOT EXISTS collected_games (
+              region     TEXT    NOT NULL,
+              name       TEXT    NOT NULL,
+              games_json TEXT    NOT NULL,
+              updated_at TEXT    NOT NULL,
+              PRIMARY KEY (region, name)
+          );
+          -- collected_games_v2：逐局分行（debug3-C7）。旧 collected_games 是
+          -- 单行 20MB 巨型 JSON，每追加 1 场都要全量反序列化→合并→重序列化→
+          -- 整行复写，200+ 场时几何级放大。v2 按 (region,name,game_id) 分行，
+          -- 增量 upsert 只写新增行 + 单事务提交。
+          CREATE TABLE IF NOT EXISTS collected_games_v2 (
+              region    TEXT    NOT NULL,
+              name      TEXT    NOT NULL,
+              game_id   INTEGER NOT NULL,
+              game_json TEXT    NOT NULL,
+              PRIMARY KEY (region, name, game_id)
+          );",
     )
 }
 
@@ -248,8 +259,11 @@ fn now_millis() -> i64 {
         .unwrap_or(0)
 }
 
-/// 跨区「收集全部」结果持久化：整包对局 JSON 存一行，`(region, name)` 主键覆盖写入。
+/// 跨区「收集全部」结果持久化：逐局分行 upsert，`(region, name, game_id)` 主键。
 /// 对局数据不可变，重启后恢复即可直接看全量 / 续收，零重复拉取。失败静默降级。
+///
+/// 空数组语义 = 清空该键（DELETE），保留旧整包覆盖语义；非空时增量 upsert，
+/// 只写新增行（已存在 game_id 跳过，不反复重写）。
 pub fn save_collected_games(region: &str, name: &str, games: &[Game]) {
     let updated_at = now_millis().to_string();
     with_db(|conn| save_collected_games_in(conn, region, name, games, &updated_at));
@@ -261,17 +275,90 @@ fn save_collected_games_in(
     region: &str,
     name: &str,
     games: &[Game],
-    updated_at: &str,
+    _updated_at: &str,
 ) -> rusqlite::Result<()> {
-    let json = serde_json::to_string(games).map_err(serde_to_sqlite_err)?;
-    conn.execute(
-        "INSERT INTO collected_games (region, name, games_json, updated_at)
-         VALUES (?1, ?2, ?3, ?4)
-         ON CONFLICT(region, name) DO UPDATE SET
-             games_json = excluded.games_json,
-             updated_at = excluded.updated_at",
-        params![region, name, json, updated_at],
-    )?;
+    migrate_collected_v1(conn)?;
+    if games.is_empty() {
+        conn.execute(
+            "DELETE FROM collected_games_v2 WHERE region = ?1 AND name = ?2",
+            params![region, name],
+        )?;
+        return Ok(());
+    }
+    let tx = conn.unchecked_transaction()?;
+    {
+        let mut stmt = tx.prepare_cached(
+            "INSERT INTO collected_games_v2 (region, name, game_id, game_json)
+             VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT(region, name, game_id) DO NOTHING",
+        )?;
+        for g in games {
+            let json = serde_json::to_string(g).map_err(serde_to_sqlite_err)?;
+            stmt.execute(params![region, name, g.game_id, json])?;
+        }
+    }
+    tx.commit()
+}
+
+/// 旧 collected_games 单行巨 JSON → v2 分行迁移（一次性，幂等）。
+///
+/// 有旧行则拆 game 数组逐行插入 v2，然后删旧表。无旧表（新库）直接返回。
+fn migrate_collected_v1(conn: &Connection) -> rusqlite::Result<()> {
+    let has_v1: bool = conn
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='collected_games'",
+            [],
+            |row| row.get(0),
+        )
+        .map(|n: i64| n > 0)
+        .unwrap_or(false);
+    if !has_v1 {
+        return Ok(());
+    }
+    let rows: Vec<(String, String, String)> = {
+        let mut stmt = conn.prepare("SELECT region, name, games_json FROM collected_games")?;
+        let iter = stmt.query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        })?;
+        let mut out = Vec::new();
+        for row in iter {
+            match row {
+                Ok(v) => out.push(v),
+                Err(e) => log::warn!("meet.db 迁移旧收集行失败，跳过: {e}"),
+            }
+        }
+        out
+    };
+    if rows.is_empty() {
+        conn.execute("DROP TABLE collected_games", [])?;
+        return Ok(());
+    }
+    let tx = conn.unchecked_transaction()?;
+    {
+        let mut stmt = tx.prepare_cached(
+            "INSERT INTO collected_games_v2 (region, name, game_id, game_json)
+             VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT(region, name, game_id) DO NOTHING",
+        )?;
+        for (region, name, json) in &rows {
+            match serde_json::from_str::<Vec<Game>>(json) {
+                Ok(games) => {
+                    for g in &games {
+                        let one = serde_json::to_string(g).map_err(serde_to_sqlite_err)?;
+                        stmt.execute(params![region, name, g.game_id, one])?;
+                    }
+                }
+                Err(e) => log::warn!("meet.db 旧收集行解析失败({region}#{name})，跳过: {e}"),
+            }
+        }
+    }
+    tx.commit()?;
+    conn.execute("DROP TABLE collected_games", [])?;
+    log::info!("meet.db 旧 collected_games 已迁移为分行 v2");
     Ok(())
 }
 
@@ -291,35 +378,60 @@ pub fn load_collected_games(region: &str, name: &str) -> Vec<Game> {
     }
 }
 
-/// 在指定连接上读取（测试可注入内存连接）。
+/// 在指定连接上读取（测试可注入内存连接）。按 game_id 升序返回；
+/// 调用方现有 merge 逻辑负责最终排序。
 fn load_collected_games_in(
     conn: &Connection,
     region: &str,
     name: &str,
 ) -> rusqlite::Result<Vec<Game>> {
-    let json: String = conn.query_row(
-        "SELECT games_json FROM collected_games WHERE region = ?1 AND name = ?2",
-        params![region, name],
-        |row| row.get(0),
+    migrate_collected_v1(conn)?;
+    let mut stmt = conn.prepare(
+        "SELECT game_json FROM collected_games_v2
+         WHERE region = ?1 AND name = ?2 ORDER BY game_id",
     )?;
-    serde_json::from_str(&json).map_err(serde_to_sqlite_err)
+    let rows = stmt.query_map(params![region, name], |row| row.get::<_, String>(0))?;
+    let mut games = Vec::new();
+    for row in rows {
+        let json = row?;
+        games.push(serde_json::from_str::<Game>(&json).map_err(serde_to_sqlite_err)?);
+    }
+    Ok(games)
 }
 
 /// 清除某玩家的跨区收集结果。失败静默降级。
 pub fn clear_collected_games(region: &str, name: &str) {
     with_db(|conn| {
         conn.execute(
-            "DELETE FROM collected_games WHERE region = ?1 AND name = ?2",
+            "DELETE FROM collected_games_v2 WHERE region = ?1 AND name = ?2",
             params![region, name],
-        )
-        .map(|_| ())
+        )?;
+        // 旧表单行残留（未迁移完即 clear 的竞态）一并清，幂等
+        let has_v1: bool = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='collected_games'",
+                [],
+                |row| row.get(0),
+            )
+            .map(|n: i64| n > 0)
+            .unwrap_or(false);
+        if has_v1 {
+            conn.execute(
+                "DELETE FROM collected_games WHERE region = ?1 AND name = ?2",
+                params![region, name],
+            )?;
+        }
+        Ok(())
     });
 }
 
-/// 遍历全部跨区收集结果（M2 样本沉淀入口；解析失败的单条跳过，不整批失败）。
+/// 遍历全部跨区收集结果（M2 样本沉淀入口；解析失败的单局跳过，不整批失败）。
 pub fn all_collected_games() -> Vec<(String, String, Vec<Game>)> {
     with_db(|conn| {
-        let mut stmt = conn.prepare("SELECT region, name, games_json FROM collected_games")?;
+        migrate_collected_v1(conn)?;
+        let mut stmt = conn.prepare(
+            "SELECT region, name, game_json FROM collected_games_v2 ORDER BY region, name, game_id",
+        )?;
         let rows = stmt.query_map([], |row| {
             Ok((
                 row.get::<_, String>(0)?,
@@ -327,7 +439,7 @@ pub fn all_collected_games() -> Vec<(String, String, Vec<Game>)> {
                 row.get::<_, String>(2)?,
             ))
         })?;
-        let mut out = Vec::new();
+        let mut out: Vec<(String, String, Vec<Game>)> = Vec::new();
         for row in rows {
             let (region, name, json) = match row {
                 Ok(v) => v,
@@ -336,9 +448,12 @@ pub fn all_collected_games() -> Vec<(String, String, Vec<Game>)> {
                     continue;
                 }
             };
-            match serde_json::from_str::<Vec<Game>>(&json) {
-                Ok(games) => out.push((region, name, games)),
-                Err(e) => log::warn!("收集结果 JSON 解析失败({region}#{name}): {e}"),
+            match serde_json::from_str::<Game>(&json) {
+                Ok(game) => match out.last_mut() {
+                    Some((r, n, games)) if *r == region && *n == name => games.push(game),
+                    _ => out.push((region, name, vec![game])),
+                },
+                Err(e) => log::warn!("收集结果单局 JSON 解析失败({region}#{name}): {e}"),
             }
         }
         Ok(out)
@@ -464,48 +579,108 @@ mod tests {
         assert_eq!(p1.total, 0);
     }
 
+    fn mk_game(game_id: i64) -> Game {
+        Game {
+            game_id,
+            ..Default::default()
+        }
+    }
+
     #[test]
     fn collected_games_roundtrip_and_overwrite() {
         let conn = mem_conn();
-        let g = Game::default();
+        let g = mk_game(101);
         save_collected_games_in(&conn, "na", "Kill#NA1", std::slice::from_ref(&g), "t1").unwrap();
         let loaded = load_collected_games_in(&conn, "na", "Kill#NA1").unwrap();
         assert_eq!(loaded.len(), 1);
         assert_eq!(loaded[0].game_id, g.game_id);
-        // 同一 (region, name) 覆盖写入
+        // 同一 (region, name) 传空数组 = 清空该键（保留旧整包覆盖语义）
         save_collected_games_in(&conn, "na", "Kill#NA1", &[], "t2").unwrap();
         let loaded2 = load_collected_games_in(&conn, "na", "Kill#NA1").unwrap();
         assert!(loaded2.is_empty());
     }
 
     #[test]
+    fn collected_games_incremental_upsert_only_writes_new_rows() {
+        let conn = mem_conn();
+        // 首轮 2 场
+        save_collected_games_in(&conn, "na", "A#NA1", &[mk_game(1), mk_game(2)], "t1").unwrap();
+        // 次轮传累计 3 场（含重复）：只新增 game_id=3 一行
+        save_collected_games_in(
+            &conn,
+            "na",
+            "A#NA1",
+            &[mk_game(1), mk_game(2), mk_game(3)],
+            "t2",
+        )
+        .unwrap();
+        let loaded = load_collected_games_in(&conn, "na", "A#NA1").unwrap();
+        assert_eq!(
+            loaded.iter().map(|g| g.game_id).collect::<Vec<_>>(),
+            vec![1, 2, 3]
+        );
+        // 行数恰为 3（无重复行）
+        let n: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM collected_games_v2 WHERE region='na' AND name='A#NA1'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(n, 3);
+    }
+
+    #[test]
+    fn collected_games_migrates_legacy_single_row() {
+        let conn = mem_conn();
+        // 手工造旧表单行（20MB 巨 JSON 的缩微版）
+        let legacy = serde_json::to_string(&vec![mk_game(7), mk_game(8)]).unwrap();
+        conn.execute(
+            "INSERT INTO collected_games (region, name, games_json, updated_at)
+             VALUES ('na', 'Old#NA1', ?1, 't0')",
+            rusqlite::params![legacy],
+        )
+        .unwrap();
+        // 首次读写触发迁移：分行可读，旧表删除
+        let loaded = load_collected_games_in(&conn, "na", "Old#NA1").unwrap();
+        assert_eq!(
+            loaded.iter().map(|g| g.game_id).collect::<Vec<_>>(),
+            vec![7, 8]
+        );
+        let has_v1: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='collected_games'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(has_v1, 0);
+    }
+
+    #[test]
     fn collected_games_is_scoped_by_region_and_name() {
         let conn = mem_conn();
-        save_collected_games_in(&conn, "na", "A#NA1", &[Game::default()], "t").unwrap();
-        // 同玩家不同区：无记录
-        assert!(matches!(
-            load_collected_games_in(&conn, "kr", "A#NA1"),
-            Err(rusqlite::Error::QueryReturnedNoRows)
-        ));
-        // 同区不同玩家：无记录
-        assert!(matches!(
-            load_collected_games_in(&conn, "na", "B#NA1"),
-            Err(rusqlite::Error::QueryReturnedNoRows)
-        ));
+        save_collected_games_in(&conn, "na", "A#NA1", &[mk_game(1)], "t").unwrap();
+        // 同玩家不同区 / 同区不同玩家：无记录（空数组，不再是 NoRows 错）
+        assert!(load_collected_games_in(&conn, "kr", "A#NA1")
+            .unwrap()
+            .is_empty());
+        assert!(load_collected_games_in(&conn, "na", "B#NA1")
+            .unwrap()
+            .is_empty());
     }
 
     #[test]
     fn collected_games_clear_removes_row() {
         let conn = mem_conn();
-        save_collected_games_in(&conn, "na", "A#NA1", &[Game::default()], "t").unwrap();
+        save_collected_games_in(&conn, "na", "A#NA1", &[mk_game(1)], "t").unwrap();
         conn.execute(
-            "DELETE FROM collected_games WHERE region = 'na' AND name = 'A#NA1'",
+            "DELETE FROM collected_games_v2 WHERE region = 'na' AND name = 'A#NA1'",
             [],
         )
         .unwrap();
-        assert!(matches!(
-            load_collected_games_in(&conn, "na", "A#NA1"),
-            Err(rusqlite::Error::QueryReturnedNoRows)
-        ));
+        assert!(load_collected_games_in(&conn, "na", "A#NA1")
+            .unwrap()
+            .is_empty());
     }
 }

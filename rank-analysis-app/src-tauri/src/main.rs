@@ -84,6 +84,11 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     // guard 必须存活到 .run() 返回，否则事件 / 日志无法 flush。
     let _sentry_guard = rank_analysis_lib::observability::init();
 
+    // asset:// 并发限流（debug3-C7）：战绩列表一页 10 场 × 10 人 × 多资源位，
+    // 快速滚动翻页时上千请求各 spawn 双任务挂起堆内存。信号量限 32 路并发，
+    // 超限请求在 acquire 排队（responder 句柄不丢，只是晚回）；底层 LCU 另有限流。
+    let asset_semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(32));
+
     let mut app_builder = tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
@@ -91,79 +96,98 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_dialog::init())
-        .register_asynchronous_uri_scheme_protocol("asset", move |_ctx, request, responder| {
-            // 平台/客户端差异防御：WebKit（macOS）解析 `asset://localhost/...` 而
-            // WebView2（Windows）解析 `http://asset.localhost/...`；个别版本会把
-            // 路径带上 `%2F`/反斜杠/重复斜杠。统一清洗：反斜杠归一为 `/`，
-            // percent-decode 后按 `/` 分段并剔除空段，再做 kind/id 解析。
-            let raw_path = request.uri().path().replace('\\', "/");
-            let decoded = urlencoding::decode(&raw_path)
-                .map(|s| s.into_owned())
-                .unwrap_or(raw_path);
-            let parts: Vec<&str> = decoded
-                .trim_start_matches('/')
-                .split('/')
-                .filter(|s| !s.is_empty())
-                .collect();
+        .register_asynchronous_uri_scheme_protocol("asset", {
+            let asset_semaphore = std::sync::Arc::clone(&asset_semaphore);
+            move |_ctx, request, responder| {
+                let asset_semaphore = std::sync::Arc::clone(&asset_semaphore);
+                // 平台/客户端差异防御：WebKit（macOS）解析 `asset://localhost/...` 而
+                // WebView2（Windows）解析 `http://asset.localhost/...`；个别版本会把
+                // 路径带上 `%2F`/反斜杠/重复斜杠。统一清洗：反斜杠归一为 `/`，
+                // percent-decode 后按 `/` 分段并剔除空段，再做 kind/id 解析。
+                let raw_path = request.uri().path().replace('\\', "/");
+                let decoded = urlencoding::decode(&raw_path)
+                    .map(|s| s.into_owned())
+                    .unwrap_or(raw_path);
+                let parts: Vec<&str> = decoded
+                    .trim_start_matches('/')
+                    .split('/')
+                    .filter(|s| !s.is_empty())
+                    .collect();
 
-            if parts.len() < 2 {
-                responder.respond(
-                    tauri::http::Response::builder()
-                        .status(404)
-                        .body(Vec::new())
-                        .unwrap(),
-                );
-                return;
-            }
-
-            let kind = parts[0].to_string();
-            let id = match parts[1].parse::<i64>() {
-                Ok(i) => i,
-                Err(_) => {
+                if parts.len() < 2 {
                     responder.respond(
                         tauri::http::Response::builder()
-                            .status(400)
+                            .status(404)
                             .body(Vec::new())
                             .unwrap(),
                     );
                     return;
                 }
-            };
 
-            // 异步处理：绝不阻塞 webview 资源加载线程。缓存未就绪（启动竞态）时，
-            // get_asset_binary 内部会后台自愈一次 init（见 asset::ensure_caches_ready），
-            // 就绪后再通过 responder 回包——首屏冷启动也能自动补上图标，无需手动刷新。
-            //
-            // Cache-Control: immutable——英雄头像/装备/符文/技能图标是静态资源，
-            // 命中 Rust 端 BINARY_CACHE 是 O(1)；让 WebView 原生缓存长期复用，
-            // 避免每次重绘都走一遍 IPC（此前 no-store 在组件重挂时会反复重建请求）。
-            // 若 BINARY_CACHE 未来引入按版本失效，再改回短 TTL 即可。
-            tauri::async_runtime::spawn(async move {
-                // panic 兜底：get_asset_binary 内部若发生 panic（如底层锁中毒），
-                // 会让 responder 永不回包，WebKit 的 URI 连接池被挂起请求耗尽后
-                // 整页所有本地图标卡死。用独立任务承接 + JoinHandle 收敛：
-                // 子任务 panic 时 JoinHandle 返回 Err，父侧照样回包 500。
-                let handle = tauri::async_runtime::spawn(async move {
-                    asset_api::get_asset_binary(kind, id).await
+                let kind = parts[0].to_string();
+                let id = match parts[1].parse::<i64>() {
+                    Ok(i) => i,
+                    Err(_) => {
+                        responder.respond(
+                            tauri::http::Response::builder()
+                                .status(400)
+                                .body(Vec::new())
+                                .unwrap(),
+                        );
+                        return;
+                    }
+                };
+
+                // 异步处理：绝不阻塞 webview 资源加载线程。缓存未就绪（启动竞态）时，
+                // get_asset_binary 内部会后台自愈一次 init（见 asset::ensure_caches_ready），
+                // 就绪后再通过 responder 回包——首屏冷启动也能自动补上图标，无需手动刷新。
+                //
+                // Cache-Control: immutable——英雄头像/装备/符文/技能图标是静态资源，
+                // 命中 Rust 端 BINARY_CACHE 是 O(1)；让 WebView 原生缓存长期复用，
+                // 避免每次重绘都走一遍 IPC（此前 no-store 在组件重挂时会反复重建请求）。
+                // 若 BINARY_CACHE 未来引入按版本失效，再改回短 TTL 即可。
+                tauri::async_runtime::spawn(async move {
+                    // 并发限流：信号量限 32 路，超限在 acquire 排队（responder 句柄
+                    // 不丢，只是晚回）；permit 守卫持到回包结束。信号量永不关闭，
+                    // acquire 失败只可能是关闭，直接 500 回包不断连接。
+                    let _permit = match asset_semaphore.acquire_owned().await {
+                        Ok(p) => p,
+                        Err(_) => {
+                            responder.respond(
+                                tauri::http::Response::builder()
+                                    .status(500)
+                                    .body(Vec::new())
+                                    .unwrap(),
+                            );
+                            return;
+                        }
+                    };
+                    // panic 兜底：get_asset_binary 内部若发生 panic（如底层锁中毒），
+                    // 会让 responder 永不回包，WebKit 的 URI 连接池被挂起请求耗尽后
+                    // 整页所有本地图标卡死。用独立任务承接 + JoinHandle 收敛：
+                    // 子任务 panic 时 JoinHandle 返回 Err，父侧照样回包 500。
+                    let handle = tauri::async_runtime::spawn(async move {
+                        asset_api::get_asset_binary(kind, id).await
+                    });
+                    let result = match handle.await {
+                        Ok(res) => res,
+                        Err(_) => Err("asset handler panicked".to_string()),
+                    };
+                    let response = match result {
+                        Ok((bytes, mime)) => tauri::http::Response::builder()
+                            .header("Content-Type", mime)
+                            .header("Cache-Control", "public, max-age=86400, immutable")
+                            .body(bytes)
+                            .unwrap(),
+                        Err(e) => tauri::http::Response::builder()
+                            .status(404)
+                            .header("Cache-Control", "no-store")
+                            .body(e.into_bytes())
+                            .unwrap(),
+                    };
+                    responder.respond(response);
                 });
-                let result = match handle.await {
-                    Ok(res) => res,
-                    Err(_) => Err("asset handler panicked".to_string()),
-                };
-                let response = match result {
-                    Ok((bytes, mime)) => tauri::http::Response::builder()
-                        .header("Content-Type", mime)
-                        .header("Cache-Control", "public, max-age=86400, immutable")
-                        .body(bytes)
-                        .unwrap(),
-                    Err(e) => tauri::http::Response::builder()
-                        .status(404)
-                        .header("Cache-Control", "no-store")
-                        .body(e.into_bytes())
-                        .unwrap(),
-                };
-                responder.respond(response);
-            });
+            }
         })
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
