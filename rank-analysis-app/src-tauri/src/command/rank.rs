@@ -228,17 +228,21 @@ pub async fn get_win_rate_by_puuid_mode(puuid: String, mode: i32) -> Result<WinR
 /// 计算胜率百分比
 ///
 /// # Arguments
-/// * `wins` - 胜利场次
-/// * `losses` - 失败场次
+/// * `wins` - 胜利场次（脏数据负数会被归零）
+/// * `losses` - 失败场次（脏数据负数会被归零）
 ///
 /// # Returns
-/// 胜率百分比，如果没有场次则返回0
+/// 胜率百分比，恒钳制在 0..=100：如果没有场次则返回 0。
+/// 上游（本地/SGP）偶发返回重赛负数局数时，不再产出负百分比，
+/// 避免前端 NProgress 收到 percent < 0 渲染错乱。
 pub fn calculate_win_rate(wins: i32, losses: i32) -> f32 {
+    let wins = wins.max(0);
+    let losses = losses.max(0);
     let total = wins + losses;
     if total == 0 {
         0.0
     } else {
-        (wins as f32 / total as f32 * 100.0).round()
+        (wins as f32 / total as f32 * 100.0).round().clamp(0.0, 100.0)
     }
 }
 
@@ -279,9 +283,10 @@ mod tests {
 
     #[test]
     fn should_handle_negative_numbers() {
-        // 负数场次应该被正常计算（虽然业务上不合理）
-        // -1 / (-1 + 3) = -1 / 2 = -0.5 -> -50%
-        assert_eq!(calculate_win_rate(-1, 3), -50.0);
+        // 脏数据（重赛负局数）归零兜底：不再产出负百分比
+        assert_eq!(calculate_win_rate(-1, 3), 0.0);
+        assert_eq!(calculate_win_rate(3, -1), 100.0);
+        assert_eq!(calculate_win_rate(-5, -5), 0.0);
     }
 
     #[test]

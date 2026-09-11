@@ -10,27 +10,33 @@
         <!-- 6px：8px 显粗、5px 又衬不住 base 字号的百分比数字，取中 -->
         <n-progress
           type="line"
-          :percentage="percent"
+          :percentage="safePercent"
           :color="color"
           :height="6"
           :show-indicator="false"
           rail-color="color-mix(in srgb, var(--text-tertiary) 18%, transparent)"
         />
       </div>
-      <span class="progress-stat-value-text" :style="{ color }">{{ percent }}%</span>
+      <span class="progress-stat-value-text" :style="{ color }">{{ safePercent }}%</span>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { NProgress } from 'naive-ui'
 
-defineProps<{
+const props = defineProps<{
   label?: string
   rawValue?: number | string
   percent: number
   color: string
 }>()
+
+/** 纵深钳制：上游脏数据（负数/超 100）不再喂给 NProgress，避免 SVG 渲染错乱 */
+const safePercent = computed(() =>
+  Number.isFinite(props.percent) ? Math.min(100, Math.max(0, props.percent)) : 0
+)
 </script>
 
 <style scoped>

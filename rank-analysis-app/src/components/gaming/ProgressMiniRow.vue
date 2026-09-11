@@ -4,25 +4,31 @@
     <div class="progress-wrapper">
       <n-progress
         type="line"
-        :percentage="percent"
+        :percentage="safePercent"
         :height="6"
         :show-indicator="false"
         :color="color"
         processing
       />
-      <span class="progress-text" :style="{ color }">{{ percent }}%</span>
+      <span class="progress-text" :style="{ color }">{{ safePercent }}%</span>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { NProgress } from 'naive-ui'
 
-defineProps<{
+const props = defineProps<{
   label: string
   percent: number
   color: string
 }>()
+
+/** 纵深钳制：上游脏数据（负数/超 100）不再喂给 NProgress，避免 SVG 渲染错乱 */
+const safePercent = computed(() =>
+  Number.isFinite(props.percent) ? Math.min(100, Math.max(0, props.percent)) : 0
+)
 </script>
 
 <style scoped>
