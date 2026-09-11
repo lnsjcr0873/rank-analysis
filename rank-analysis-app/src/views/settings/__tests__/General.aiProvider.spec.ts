@@ -157,11 +157,34 @@ describe('General.vue AI 服务商设置区', () => {
       request: expect.objectContaining({
         provider: undefined,
         baseUrl: undefined,
-        // onMounted 已把 mock 里的 dashscope 键灌进表单 → 走表单可见值
-        apiKey: 'sk-dash'
+        // debug6：onMounted 灌进表单的是掩码态 → 传 undefined（后端用已存 Key）
+        apiKey: undefined
       })
     })
     expect(messageMock.success).toHaveBeenCalledWith('连接成功：qwen-flash · 8 tokens')
+  })
+
+  it('debug6：已配 Key 回显掩码，blur 掩码态不覆盖真实 Key', async () => {
+    const w = await mountGeneral()
+
+    const pwd = w.find('input[type="password"]')
+    // mock 键 'sk-dash'（7 chars）→ 掩码 '****'
+    expect((pwd.element as HTMLInputElement).value).toBe('****')
+    await pwd.trigger('blur')
+    await new Promise(r => setTimeout(r, 0))
+    expect(mockPut).not.toHaveBeenCalledWith(CONFIG_KEYS.dashscopeApiKey, expect.anything())
+  })
+
+  it('debug6：聚焦掩码态清空占位，新输入才保存', async () => {
+    const w = await mountGeneral()
+
+    const pwd = w.find('input[type="password"]')
+    await pwd.trigger('focus')
+    expect((pwd.element as HTMLInputElement).value).toBe('')
+    await pwd.setValue('sk-newkey123')
+    await pwd.trigger('blur')
+    await new Promise(r => setTimeout(r, 0))
+    expect(mockPut).toHaveBeenCalledWith(CONFIG_KEYS.dashscopeApiKey, 'sk-newkey123')
   })
 
   it('测试连接失败：后端错误原样上屏', async () => {

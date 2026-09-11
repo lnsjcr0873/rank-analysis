@@ -107,6 +107,7 @@
             type="password"
             show-password-on="click"
             placeholder="填入你自己的 DashScope API Key"
+            @focus="revealDashscopeKey"
             @blur="handleDashscopeKeyUpdate"
           />
           <n-text :depth="3" style="font-size: var(--font-size-sm)">
@@ -122,6 +123,7 @@
             type="password"
             show-password-on="click"
             placeholder="留空使用 OPENAI_API_KEY 环境变量"
+            @focus="revealOpenaiKey"
             @blur="handleOpenaiKeyUpdate"
           />
           <n-text :depth="3" style="font-size: var(--font-size-sm)">
@@ -506,8 +508,10 @@ onMounted(async () => {
   }
   try {
     const key = await getConfigByIpc<string>(CONFIG_KEYS.dashscopeApiKey)
-    if (typeof key === 'string') {
-      dashscopeKey.value = key
+    if (typeof key === 'string' && key) {
+      // debug6：已配 Key 回显掩码（sk-****abcd），明文只在用户聚焦编辑时按需读取。
+      // 缩短 renderer 侧 Secret 常驻时长；保存/测试连接仍走 IPC（可信边界内搬运）。
+      dashscopeKey.value = maskApiKey(key)
     }
   } catch (e) {
     console.error(e)
@@ -519,8 +523,8 @@ onMounted(async () => {
     aiModel.value = cfg.model
     // apiKey 字段按当前服务商归一到 dashscopeApiKey，openai 场景需读原始 aiApiKey
     const openaiKey = await getConfigByIpc<string>(CONFIG_KEYS.aiApiKey)
-    if (typeof openaiKey === 'string') {
-      aiApiKey.value = openaiKey
+    if (typeof openaiKey === 'string' && openaiKey) {
+      aiApiKey.value = maskApiKey(openaiKey)
     }
   } catch (e) {
     console.error(e)
@@ -626,7 +630,27 @@ const handleIntelRefresh = async () => {
   }
 }
 
+/** debug6：Key 掩码回显（sk-****abcd）。掩码态未经编辑时 blur 跳过保存，防掩码串落盘。 */
+function maskApiKey(key: string): string {
+  const t = key.trim()
+  if (t.length <= 8) return t ? '****' : ''
+  return `${t.slice(0, 3)}-****${t.slice(-4)}`
+}
+/** 输入框当前是否为掩码态（掩码含 *-****，真实 Key 不含该形态） */
+function isMaskedKey(v: string): boolean {
+  return v.includes('****')
+}
+/** 聚焦掩码态输入框时清空占位，让用户直接输入新 Key（否则追加到掩码串上） */
+function revealDashscopeKey(): void {
+  if (isMaskedKey(dashscopeKey.value)) dashscopeKey.value = ''
+}
+function revealOpenaiKey(): void {
+  if (isMaskedKey(aiApiKey.value)) aiApiKey.value = ''
+}
+
 const handleDashscopeKeyUpdate = async () => {
+  // 掩码态未编辑：跳过保存（否则掩码串覆盖真实 Key）
+  if (isMaskedKey(dashscopeKey.value)) return
   try {
     await putConfigByIpc(CONFIG_KEYS.dashscopeApiKey, dashscopeKey.value.trim())
     message.success('设置已保存')
@@ -640,10 +664,13 @@ const handleProviderUpdate = async (value: AiProviderKind) => {
   aiProvider.value = value
   try {
     await putConfigByIpc(CONFIG_KEYS.aiProvider, value)
-    // 服务商切换时一并持久化当前可见配置，避免 v-if 隐藏未 blur 的输入被丢弃
+    // 服务商切换时一并持久化当前可见配置，避免 v-if 隐藏未 blur 的输入被丢弃。
+    // debug6：掩码态跳过 Key 持久化（否则掩码串覆盖真实 Key）。
     await putConfigByIpc(CONFIG_KEYS.aiBaseUrl, aiBaseUrl.value.trim())
     await putConfigByIpc(CONFIG_KEYS.aiModel, aiModel.value.trim())
-    await putConfigByIpc(CONFIG_KEYS.aiApiKey, aiApiKey.value.trim())
+    if (!isMaskedKey(aiApiKey.value)) {
+      await putConfigByIpc(CONFIG_KEYS.aiApiKey, aiApiKey.value.trim())
+    }
     message.success('设置已保存')
   } catch (e) {
     message.error('保存失败')
@@ -669,6 +696,8 @@ const handleModelUpdate = async () => {
 }
 
 const handleOpenaiKeyUpdate = async () => {
+  // 掩码态未编辑：跳过保存（否则掩码串覆盖真实 Key）
+  if (isMaskedKey(aiApiKey.value)) return
   try {
     await putConfigByIpc(CONFIG_KEYS.aiApiKey, aiApiKey.value.trim())
     message.success('设置已保存')
@@ -683,6 +712,11 @@ const handleTestConnection = async () => {
   if (testing.value) return
   testing.value = true
   try {
+    // debug6：掩码态传 undefined（= 用已存 Key），防掩码串发往后端导致鉴权失败
+    const dashKey = isMaskedKey(dashscopeKey.value)
+      ? undefined
+      : dashscopeKey.value.trim() || undefined
+    const openKey = isMaskedKey(aiApiKey.value) ? undefined : aiApiKey.value.trim() || undefined
     const result = (await invoke('test_ai_provider_connection', {
       request: {
         prompt: '',
@@ -692,9 +726,9 @@ const handleTestConnection = async () => {
         baseUrl: aiBaseUrl.value.trim() || undefined,
         apiKey:
           aiProvider.value === 'dashscope'
-            ? dashscopeKey.value.trim() || undefined
+            ? dashKey
             : aiProvider.value === 'openai'
-              ? aiApiKey.value.trim() || undefined
+              ? openKey
               : undefined,
         responseFormat: undefined
       }
