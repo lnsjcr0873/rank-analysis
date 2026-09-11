@@ -139,6 +139,25 @@ fn enemy_champion_ids(session: &SelectSession) -> Vec<i32> {
         .collect()
 }
 
+/// 敌方已亮出英雄 → 其实际分路（`assigned_position` 大写 LCU 命名；空串 = 未知）。
+///
+/// 同一英雄被敌方多人以不同位置选出时取首个非空分路（选人期极少换位摇摆，
+/// 首个即主分路的概率最高；未知时调用方回退旧行为，不过滤）。
+fn enemy_positions(session: &SelectSession) -> HashMap<i32, String> {
+    let mut map: HashMap<i32, String> = HashMap::new();
+    for p in &session.their_team {
+        if p.champion_id == 0 {
+            continue;
+        }
+        let pos = p.assigned_position.trim().to_ascii_uppercase();
+        let dominated = map.get(&p.champion_id).is_some_and(|e| !e.is_empty());
+        if !dominated {
+            map.insert(p.champion_id, pos);
+        }
+    }
+    map
+}
+
 /// 目标英雄面对当前敌方阵容时**最差的一条已知对位**。
 ///
 /// OP.GG 只给每分路最难打的 top3 对手，因此本函数天然只可能返回劣势对位；
@@ -147,19 +166,40 @@ fn enemy_champion_ids(session: &SelectSession) -> Vec<i32> {
 /// 分路过滤沿用 `command/opgg.rs::select_meta` 的「精确命中 → 回退」策略：
 /// 有分路信息时优先取同分路记录，取不到再放宽到任意分路；
 /// `my_position` 为 None（ARAM 等）时完全不按分路过滤。
+///
+/// 双向分路核验（debug3-B3）：`LaneCounter.position` 是"该英雄打这个位置时
+/// 被克制"——只验我方分路不够。敌方豹女走辅助时，她的 JUNGLE 克制记录不
+/// 得用于排挤我方打野盲僧。`enemy_positions` 为空（无任何分路信息）时保守
+/// 保留旧行为；某英雄分路未知时该条保留（宁可误报不漏报）；其余已知错位
+/// 的记录剔除，全部剔除后直接返回 None（没有真实对位）。
 pub fn worst_matchup(
     champion_id: i32,
     enemy_ids: &[i32],
+    enemy_positions: &HashMap<i32, String>,
     snapshot: Option<&OpggSnapshot>,
     my_position: Option<Position>,
 ) -> Option<BpEvidence> {
     let counters = snapshot?.counters.get(&champion_id)?;
-    let present: Vec<_> = counters
+    let mut present: Vec<_> = counters
         .iter()
         .filter(|c| enemy_ids.contains(&c.opponent_id))
         .collect();
     if present.is_empty() {
         return None;
+    }
+    if !enemy_positions.is_empty() {
+        let filtered: Vec<_> = present
+            .iter()
+            .filter(|c| match enemy_positions.get(&c.opponent_id) {
+                Some(enemy_pos) if !enemy_pos.is_empty() => *enemy_pos == c.position,
+                _ => true,
+            })
+            .copied()
+            .collect();
+        if filtered.is_empty() {
+            return None;
+        }
+        present = filtered;
     }
 
     let picked = my_position
@@ -200,6 +240,7 @@ pub fn worst_matchup(
 pub fn pick_best_from(
     pool: &[i32],
     enemy_ids: &[i32],
+    enemy_positions: &HashMap<i32, String>,
     unavailable: &HashMap<i32, Unavailable>,
     snapshot: Option<&OpggSnapshot>,
     my_position: Option<Position>,
@@ -212,7 +253,7 @@ pub fn pick_best_from(
             rejected.push(rejection_for(id, *u));
             continue;
         }
-        match worst_matchup(id, enemy_ids, snapshot, my_position) {
+        match worst_matchup(id, enemy_ids, enemy_positions, snapshot, my_position) {
             Some(ev) => {
                 rejected.push(BpRejected::CounteredBy {
                     champion_id: id,
@@ -260,6 +301,7 @@ pub fn evaluate_bp_decision(ctx: &BpContext) -> Option<BpDecision> {
     let unavailable = unavailable_map(ctx.session);
     let my_position = detect_my_position(ctx.session, ctx.my_puuid);
     let enemy_ids = enemy_champion_ids(ctx.session);
+    let enemy_pos = enemy_positions(ctx.session);
 
     let mut rejected = Vec::new();
     let mut target: Option<BpTarget> = None;
@@ -292,7 +334,13 @@ pub fn evaluate_bp_decision(ctx: &BpContext) -> Option<BpDecision> {
                         rule_id: rule.id.clone(),
                         rule_name: rule.name.clone(),
                     },
-                    evidence: worst_matchup(champ, &enemy_ids, ctx.snapshot, my_position),
+                    evidence: worst_matchup(
+                        champ,
+                        &enemy_ids,
+                        &enemy_pos,
+                        ctx.snapshot,
+                        my_position,
+                    ),
                 });
                 break;
             }
@@ -322,7 +370,13 @@ pub fn evaluate_bp_decision(ctx: &BpContext) -> Option<BpDecision> {
                         rule_id: rule.id.clone(),
                         rule_name: rule.name.clone(),
                     },
-                    evidence: worst_matchup(champ, &enemy_ids, ctx.snapshot, my_position),
+                    evidence: worst_matchup(
+                        champ,
+                        &enemy_ids,
+                        &enemy_pos,
+                        ctx.snapshot,
+                        my_position,
+                    ),
                 });
                 break;
             }
@@ -335,8 +389,14 @@ pub fn evaluate_bp_decision(ctx: &BpContext) -> Option<BpDecision> {
             BpActionType::Pick => ctx.pick_pool,
             BpActionType::Ban => ctx.ban_pool,
         };
-        let (chosen, pool_rejected, evidence) =
-            pick_best_from(pool, &enemy_ids, &unavailable, ctx.snapshot, my_position);
+        let (chosen, pool_rejected, evidence) = pick_best_from(
+            pool,
+            &enemy_ids,
+            &enemy_pos,
+            &unavailable,
+            ctx.snapshot,
+            my_position,
+        );
         rejected.extend(pool_rejected);
         target = chosen.map(|champion_id| BpTarget {
             champion_id,
@@ -452,9 +512,24 @@ mod tests {
 
     // ---- worst_matchup ----
 
+    /// 敌方分路表构造：[(英雄 id, 分路)] → HashMap
+    fn enemy_pos(pairs: &[(i32, &str)]) -> HashMap<i32, String> {
+        pairs
+            .iter()
+            .map(|(id, pos)| (*id, (*pos).to_string()))
+            .collect()
+    }
+
     #[test]
     fn worst_matchup_finds_present_enemy_counter() {
-        let ev = worst_matchup(64, &[60, 99], Some(&snap()), Some(Position::Jungle)).unwrap();
+        let ev = worst_matchup(
+            64,
+            &[60, 99],
+            &enemy_pos(&[(60, "JUNGLE")]),
+            Some(&snap()),
+            Some(Position::Jungle),
+        )
+        .unwrap();
         assert_eq!(ev.against_champion_id, 60);
         assert!((ev.win_rate - 0.447).abs() < 1e-9);
     }
@@ -462,29 +537,88 @@ mod tests {
     #[test]
     fn worst_matchup_none_when_counter_enemy_absent() {
         // 豹女不在场上 → 无已知劣势
-        assert!(worst_matchup(64, &[99, 89], Some(&snap()), Some(Position::Jungle)).is_none());
+        assert!(worst_matchup(
+            64,
+            &[99, 89],
+            &enemy_pos(&[(99, "MIDDLE"), (89, "BOTTOM")]),
+            Some(&snap()),
+            Some(Position::Jungle)
+        )
+        .is_none());
     }
 
     #[test]
     fn worst_matchup_none_without_snapshot() {
-        assert!(worst_matchup(64, &[60], None, Some(Position::Jungle)).is_none());
+        assert!(worst_matchup(
+            64,
+            &[60],
+            &enemy_pos(&[(60, "JUNGLE")]),
+            None,
+            Some(Position::Jungle)
+        )
+        .is_none());
     }
 
     #[test]
     fn worst_matchup_skips_position_filter_when_position_unknown() {
         // ARAM：无分路，不按 position 过滤
-        let ev = worst_matchup(64, &[60], Some(&snap()), None).unwrap();
+        let ev = worst_matchup(
+            64,
+            &[60],
+            &enemy_pos(&[(60, "JUNGLE")]),
+            Some(&snap()),
+            None,
+        )
+        .unwrap();
         assert_eq!(ev.against_champion_id, 60);
+    }
+
+    #[test]
+    fn worst_matchup_ignores_off_role_enemy_counter() {
+        // B3 核心：豹女在敌方走 UTILITY（辅助）→ 盲僧打野的 JUNGLE 克制记录
+        // 不得用于排挤盲僧；无真实对位 → None
+        assert!(worst_matchup(
+            64,
+            &[60],
+            &enemy_pos(&[(60, "UTILITY")]),
+            Some(&snap()),
+            Some(Position::Jungle)
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn worst_matchup_keeps_counter_when_enemy_position_unknown() {
+        // 敌方分路未知（空表/空串）→ 保守保留旧行为，宁可误报不漏报
+        let ev = worst_matchup(
+            64,
+            &[60],
+            &HashMap::new(),
+            Some(&snap()),
+            Some(Position::Jungle),
+        )
+        .unwrap();
+        assert_eq!(ev.against_champion_id, 60);
+        let ev2 = worst_matchup(
+            64,
+            &[60],
+            &enemy_pos(&[(60, "")]),
+            Some(&snap()),
+            Some(Position::Jungle),
+        )
+        .unwrap();
+        assert_eq!(ev2.against_champion_id, 60);
     }
 
     // ---- pick_best_from（避雷 + 列表序）----
 
     #[test]
     fn pick_best_from_skips_countered_and_takes_first_clean() {
-        // 池 [盲僧64, 拉克丝99]，敌方有豹女60 → 盲僧被克制，取拉克丝
+        // 池 [盲僧64, 拉克丝99]，敌方打野豹女60 → 盲僧被克制，取拉克丝
         let (chosen, rejected, ev) = pick_best_from(
             &[64, 99],
             &[60],
+            &enemy_pos(&[(60, "JUNGLE")]),
             &HashMap::new(),
             Some(&snap()),
             Some(Position::Jungle),
@@ -502,11 +636,28 @@ mod tests {
     }
 
     #[test]
+    fn pick_best_from_ignores_off_role_enemy() {
+        // B3：敌方豹女走辅助 → 盲僧不被排挤，直接取盲僧且无 evidence
+        let (chosen, rejected, ev) = pick_best_from(
+            &[64, 99],
+            &[60],
+            &enemy_pos(&[(60, "UTILITY")]),
+            &HashMap::new(),
+            Some(&snap()),
+            Some(Position::Jungle),
+        );
+        assert_eq!(chosen, Some(64));
+        assert!(ev.is_none());
+        assert!(rejected.is_empty());
+    }
+
+    #[test]
     fn pick_best_from_hard_picks_first_when_all_countered() {
         // 池只有盲僧，且被克制 → 硬选它，evidence 说明风险，且它不出现在 rejected 里
         let (chosen, rejected, ev) = pick_best_from(
             &[64],
             &[60],
+            &enemy_pos(&[(60, "JUNGLE")]),
             &HashMap::new(),
             Some(&snap()),
             Some(Position::Jungle),
@@ -528,7 +679,8 @@ mod tests {
         let mut un = HashMap::new();
         un.insert(64, Unavailable::Banned);
         un.insert(99, Unavailable::Taken { by_ally: true });
-        let (chosen, rejected, ev) = pick_best_from(&[64, 99], &[], &un, Some(&snap()), None);
+        let (chosen, rejected, ev) =
+            pick_best_from(&[64, 99], &[], &HashMap::new(), &un, Some(&snap()), None);
         assert_eq!(chosen, None);
         assert!(ev.is_none());
         assert_eq!(
@@ -546,7 +698,14 @@ mod tests {
     #[test]
     fn pick_best_from_degrades_to_first_available_without_snapshot() {
         // 无 OP.GG 数据（含 ARAM）→ 与今天的「第一个可用」完全一致
-        let (chosen, _, ev) = pick_best_from(&[64, 99], &[60], &HashMap::new(), None, None);
+        let (chosen, _, ev) = pick_best_from(
+            &[64, 99],
+            &[60],
+            &HashMap::new(),
+            &HashMap::new(),
+            None,
+            None,
+        );
         assert_eq!(chosen, Some(64));
         assert!(ev.is_none());
     }
