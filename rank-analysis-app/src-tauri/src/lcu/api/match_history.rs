@@ -292,11 +292,10 @@ impl MatchHistory {
             // 的口径打架（debug3-B5）。现直接复用 score_participants 纯函数：
             // 胜方 total 最高 → MVP，败方 total 最高 → SVP；并列取 participantId 小者。
             // 17 分输入缺 vision 等字段时该维记 0（score.rs 纪律），不回退旧口径。
-            let detail = &game.game_detail.participants;
 
             // 参团率分母：所属队伍总击杀（CHERRY 按 subteam 分组）。
             let mut group_kills: HashMap<i32, i32> = HashMap::new();
-            for p in detail {
+            for p in &game.game_detail.participants {
                 let key = if is_cherry && p.stats.player_subteam_id > 0 {
                     p.stats.player_subteam_id
                 } else {
@@ -304,20 +303,41 @@ impl MatchHistory {
                 };
                 *group_kills.entry(key).or_insert(0) += p.stats.kills;
             }
-            // 参团率：本人 (kills+assists) / 同队总击杀（CHERRY 按 subteam）。
-            // 直接写入 stats.groupRate（此前该字段从未填充，前端战绩行固定显示 0%）。
-            let my_key = if is_cherry && my_subteam > 0 {
-                my_subteam
-            } else {
-                team_id
+            // 参团率：全员 (kills+assists) / 所属队伍总击杀（CHERRY 按 subteam）。
+            // debug5：此前只写 participants[0]（自己），详情页读 game_detail 全员时
+            // 其余 9 人恒为 0，导致他人评分/归因偏低。摘要 participants 与详情
+            // game_detail.participants 同源回填（两数组按 participant_id 对齐）。
+            let rate_of = |kills: i32, assists: i32, team: i32, subteam: i32| -> i32 {
+                let key = if is_cherry && subteam > 0 {
+                    subteam
+                } else {
+                    team
+                };
+                let kills_total = group_kills.get(&key).copied().unwrap_or(0);
+                if kills_total > 0 {
+                    (((kills + assists) as f64 / kills_total as f64) * 100.0).min(100.0) as i32
+                } else {
+                    0
+                }
             };
-            let team_kills = group_kills.get(&my_key).copied().unwrap_or(0);
-            if team_kills > 0 {
-                let my_stats = &mut game.participants[0].stats;
-                my_stats.group_rate =
-                    (((my_stats.kills + my_stats.assists) as f64 / team_kills as f64) * 100.0)
-                        .min(100.0) as i32;
+            // 直接写入 stats.groupRate（此前该字段从未填充，前端战绩行固定显示 0%）。
+            for p in &mut game.participants {
+                p.stats.group_rate = rate_of(
+                    p.stats.kills,
+                    p.stats.assists,
+                    p.team_id,
+                    p.stats.player_subteam_id,
+                );
             }
+            for p in &mut game.game_detail.participants {
+                p.stats.group_rate = rate_of(
+                    p.stats.kills,
+                    p.stats.assists,
+                    p.team_id,
+                    p.stats.player_subteam_id,
+                );
+            }
+            let detail = &game.game_detail.participants;
             // MVP/SVP 判定：17 分制 total（与评分 Tab 同源）。
             // 复用 score.rs 的 LCU 映射（含身份按索引对应；缺字段按 0 降级），
             // 按胜负侧分组取 total 最高者；并列取 participantId 小者（确定性）。

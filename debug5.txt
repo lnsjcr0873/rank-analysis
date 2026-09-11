@@ -741,7 +741,7 @@ rank-analysis-app/src/components/common/ErrorReportingConsentDialog.vue
 2	崩溃	navigation.ts	窗口 label 直接拼接中文和 #，触发 Tauri 窗口创建异常拒绝	对窗口 label 统一做合法字符清洗与哈希
 3	死锁	useMatchReplay.ts	回放下载失败无超时机制，前端陷入每秒轮询的永久死锁	增加重试阈值与错误状态判断
 4	UI	lineupScore.ts	胜率偏差出现 NaN 导致整个阵容强度条样式失效消失	对各维度的中间计算值加 Number.isFinite 保护
-5	数据	match_history.rs	参团率仅赋值给第 0 个参与者，导致详情中其他 9 人参团率恒为 0	循环回填 game_detail.participants 全员参团率
+5	数据	match_history.rs	参团率仅赋值给第 0 个参与者，导致详情中其他 9 人参团率恒为 0	循环回填 game_detail.participants 全员参团率【已完成：calculate内参团率改全员回填（摘要participants+详情game_detail双写，按所属队/subteam分母，CHERRY口径不变）；衍生审RecordCard读participants[0]不受影响、MVP判定借用顺序已调。cargo fmt/clippy(GNU)/check --tests全过，cargo test以CI为权威】
 6	UI	MatchDetailBuildsTab.vue	撤销退款事件将 afterId=0 显示为 → #0，界面不专业	增加对 afterId === 0 的纯撤销文案适配
 7	体验	useStartupDialogs.ts	对局中启动时弹出无法 Esc 关闭的启动弹窗，遮挡局内分析	游戏进行中静默延迟弹窗
 Model 17:57
