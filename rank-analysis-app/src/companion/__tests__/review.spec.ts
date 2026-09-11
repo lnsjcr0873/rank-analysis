@@ -62,4 +62,13 @@ describe('radarPoints', () => {
     expect(radarPoints([2, -1], 0, 0, 10)).toBe('0.0,-10.0 0.0,0.0')
     expect(radarPoints([], 0, 0, 10)).toBe('')
   })
+
+  it('Remake/脏数据 NaN/Infinity 被清洗为 0，不拼出 NaN 坐标', () => {
+    // 四顶点顺序：上→右→下→左；NaN/Infinity/-Infinity 均按 0 落中心点，
+    // 0.5 落左中点 (cx-r*0.5, cy)
+    expect(radarPoints([NaN, Infinity, -Infinity, 0.5], 100, 100, 80)).toBe(
+      '100.0,100.0 100.0,100.0 100.0,100.0 60.0,100.0'
+    )
+    expect(radarPoints([NaN], 0, 0, 10)).toBe('0.0,0.0')
+  })
 })

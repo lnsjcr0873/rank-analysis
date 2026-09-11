@@ -75,7 +75,10 @@ export function radarPoints(values: number[], cx: number, cy: number, r: number)
   const n = values.length
   if (!n) return ''
   return values
-    .map((v, i) => {
+    .map((raw, i) => {
+      // Remake/脏数据可能喂入 NaN/Infinity：Math.max(NaN,0) 仍是 NaN，
+      // 会拼出 "NaN,NaN" 让 <polygon points> 渲染失败，整图不可见。
+      const v = Number.isFinite(raw) ? raw : 0
       const clamped = Math.min(Math.max(v, 0), 1)
       const angle = -Math.PI / 2 + (i * 2 * Math.PI) / n
       const x = cx + Math.cos(angle) * r * clamped
