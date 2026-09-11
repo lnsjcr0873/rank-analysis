@@ -92,9 +92,19 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_dialog::init())
         .register_asynchronous_uri_scheme_protocol("asset", move |_ctx, request, responder| {
-            let path = request.uri().path();
-            // path is like /champion/123
-            let parts: Vec<&str> = path.trim_start_matches('/').split('/').collect();
+            // 平台/客户端差异防御：WebKit（macOS）解析 `asset://localhost/...` 而
+            // WebView2（Windows）解析 `http://asset.localhost/...`；个别版本会把
+            // 路径带上 `%2F`/反斜杠/重复斜杠。统一清洗：反斜杠归一为 `/`，
+            // percent-decode 后按 `/` 分段并剔除空段，再做 kind/id 解析。
+            let raw_path = request.uri().path().replace('\\', "/");
+            let decoded = urlencoding::decode(&raw_path)
+                .map(|s| s.into_owned())
+                .unwrap_or(raw_path);
+            let parts: Vec<&str> = decoded
+                .trim_start_matches('/')
+                .split('/')
+                .filter(|s| !s.is_empty())
+                .collect();
 
             if parts.len() < 2 {
                 responder.respond(
