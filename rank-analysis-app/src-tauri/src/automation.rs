@@ -576,6 +576,52 @@ async fn start_select_champion() -> Result<(), String> {
     apply_bp_decision(&select_session, &decision).await
 }
 
+/// 自动接受换人请求的压哨保护窗口（秒）。
+///
+/// 2s 轮询周期叠加 LCU 快照抖动：剩余不足此时长时，这可能是本局最后一次
+/// 看到该 trade 的机会——接受后用户已无时间反应/换回。恶意队友专挑倒数
+/// 1~2 秒压哨发换人请求（debug3-B4），直接拒绝并记日志。
+const TRADE_REFUSE_SECS_LEFT: f64 = 5.0;
+
+/// 自动接受换人请求的纯判定（可单测；IO 由调用方承担）。
+///
+/// # 参数
+/// - `trade`: 候选 trade（已确认 state == AVAILABLE 且发起方非自己）
+/// - `my_locked`: 我方已锁定英雄（None = 未锁定）
+/// - `pick_pool`: 用户英雄池（`settings.auto.pickChampionSlice`）；空 = 未配置，跳过池校验
+/// - `secs_left`: 本阶段剩余秒数（`adjusted_time_left_in_phase` 毫秒换算）
+///
+/// # 规则
+/// - 压哨（剩余 < 5s）一律拒绝：不可逆操作不能发生在用户无反应时间窗口
+/// - 已锁定 + 换入英雄不在池内 → 拒绝（防"中单劫被换成辅助风女并秒锁"）
+/// - 其余接受（保持原行为）
+fn should_auto_accept_trade(
+    trade_champion_id: i32,
+    my_locked: Option<i32>,
+    pick_pool: &[i32],
+    secs_left: f64,
+) -> bool {
+    if secs_left < TRADE_REFUSE_SECS_LEFT {
+        log::info!(
+            "BP trade auto-accept 拒绝：压哨（剩余 {secs_left:.1}s < {TRADE_REFUSE_SECS_LEFT}s），champion={trade_champion_id}"
+        );
+        return false;
+    }
+    if let Some(locked) = my_locked {
+        if locked != trade_champion_id
+            && !pick_pool.is_empty()
+            && !pick_pool.contains(&trade_champion_id)
+        {
+            log::info!(
+                "BP trade auto-accept 拒绝：已锁定 {locked}，换入 {trade_champion_id} 不在英雄池（{} 个）",
+                pick_pool.len()
+            );
+            return false;
+        }
+    }
+    true
+}
+
 /// 自动确认英雄交易请求（P1-2）。
 ///
 /// 我方队员之间的换人请求以 `session.trades` 暴露（`state == "AVAILABLE"` 待确认）。
@@ -584,6 +630,9 @@ async fn start_select_champion() -> Result<(), String> {
 ///
 /// 2s 轮询：trade 确认没有时间窗压力（不像锁定只有几秒窗口），慢一点换来
 /// 更少的会话读取，且能避免与执行侧（1s 轮询）在同一 tick 打架。
+///
+/// 安全门（debug3-B4）：每个候选先过 [`should_auto_accept_trade`]——压哨
+/// （剩余 < 5s）与"已锁定 + 换入不在英雄池"一律拒绝并记日志，只接受安全项。
 async fn start_trade_automation() {
     log::info!("Starting trade automation");
     let mut ticker = interval(Duration::from_secs(2));
@@ -620,8 +669,17 @@ async fn start_trade_automation() {
         };
         // 快照可能携带已处理过的 AVAILABLE（接受后 LCU 状态流转不是即时的），
         // 重复 accept 一次 LCU 会以 4xx 拒绝——打 warn 后继续，不视为致命。
+        //
+        // 安全门输入按轮次取一次：剩余秒数（毫秒→秒）、我方锁定英雄、英雄池。
+        // 池读取失败按"未配置"处理（空池跳过池校验，不阻断正常换人）。
+        let secs_left = session.timer.adjusted_time_left_in_phase / 1000.0;
+        let my_locked = my_locked_champion(&session);
+        let pick_pool = load_pick_pool().await;
         for trade in &session.trades {
             if trade.state == "AVAILABLE" && trade.cell_id != session.local_player_cell_id {
+                if !should_auto_accept_trade(trade.champion_id, my_locked, &pick_pool, secs_left) {
+                    continue;
+                }
                 log::info!(
                     "BP trade auto-accept: trade={} from_cell={} champion={}",
                     trade.id,
@@ -1615,6 +1673,35 @@ pub async fn start_automation(app: tauri::AppHandle) {
 mod tests {
     use super::*;
     use std::collections::HashMap;
+
+    // ──────────────────── should_auto_accept_trade（debug3-B4）────────────────────
+
+    #[test]
+    fn trade_accepts_normal_request() {
+        // 未锁定 + 时间充裕 → 接受（原行为）
+        assert!(should_auto_accept_trade(157, None, &[157, 64], 25.0));
+    }
+
+    #[test]
+    fn trade_refuses_pressing_deadline() {
+        // 压哨（剩余 < 5s）一律拒绝，哪怕换入在池内
+        assert!(!should_auto_accept_trade(157, None, &[157, 64], 1.5));
+        assert!(!should_auto_accept_trade(157, Some(157), &[157], 4.9));
+        // 边界：恰好 5.0s 接受
+        assert!(should_auto_accept_trade(157, None, &[], 5.0));
+    }
+
+    #[test]
+    fn trade_refuses_locked_pool_outsider() {
+        // 已锁定劫(238)，换入风女(37)不在池 → 拒绝
+        assert!(!should_auto_accept_trade(37, Some(238), &[238, 157], 25.0));
+        // 换入在池内 → 接受
+        assert!(should_auto_accept_trade(157, Some(238), &[238, 157], 25.0));
+        // 未配置池（空）→ 跳过池校验，接受
+        assert!(should_auto_accept_trade(37, Some(238), &[], 25.0));
+        // 换入即锁定英雄本身 → 接受（同英雄互换无风险）
+        assert!(should_auto_accept_trade(37, Some(37), &[238], 25.0));
+    }
 
     // 构造一条最小化的 PickRule JSON
     fn pick_rule_json(id: &str, champion_id: i32, lock: bool) -> serde_json::Value {
