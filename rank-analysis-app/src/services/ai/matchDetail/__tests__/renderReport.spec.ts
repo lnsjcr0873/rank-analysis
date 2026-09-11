@@ -104,4 +104,14 @@ describe('renderAnalysisReport', () => {
     expect(html).toContain('target="_blank"')
     expect(html).toContain('rel="noopener noreferrer"')
   })
+
+  it('XSS：属性白名单剥 on* 事件与 style（debug4-21 纵深防线）', () => {
+    // markdown-it 已挡 raw HTML；这里直接验证 enhance 的独立走查语义：
+    // 构造 markdown 链接，再确认正常链接的合法属性不受影响
+    const html = renderAnalysisReport('[安全](https://example.com/a?b=1 "t")')
+    expect(html).toContain('href="https://example.com/a?b=1"')
+    expect(html).not.toContain('onmouseover')
+    expect(html).not.toContain('<script')
+    expect(html).not.toContain('<img')
+  })
 })

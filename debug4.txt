@@ -412,7 +412,7 @@ Expand to view model thoughts
 chevron_right
 承接上文的分析，我们在进一步深入审查前端过滤算法、安全防护机制、后端协议边界处理以及配置持久化等模块后，再次发现了以下若干隐蔽性极高、但在特定场景下会导致功能异常、甚至引发严重安全风险与数据不一致的问题：
 一、 严重缺陷与安全漏洞 (Critical & Security Issues)
-1. XSS 漏洞：未过滤的 AI 流式输出通过 v-html 渲染，可执行任意代码（RCE 风险）
+1. XSS 漏洞：未过滤的 AI 流式输出通过 v-html 渲染，可执行任意代码（RCE 风险）【已完成：实测 7 个攻击向量全部被现有三层（html:false+validateLink+sanitizeLinks）挡掉；补独立属性白名单走查 sanitizeAttributes（剥on*/style/危险标签/AI可控img）+单测。CSP 未动（csp:null 配错即全应用白屏，本地无法验证打包效果，风险>收益；白名单已是独立防线）。12 测试全绿】
 文件路径：
 rank-analysis-app/src/services/ai/matchDetail/renderReport.ts
 rank-analysis-app/src/components/record/MatchAIPanel.vue

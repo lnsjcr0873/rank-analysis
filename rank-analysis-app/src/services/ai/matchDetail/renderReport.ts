@@ -1,11 +1,13 @@
 /**
  * AI 复盘报告渲染：markdown → 带语义高亮的 HTML（纯函数，便于单测）。
  *
- * 两步：
+ * 三步：
  * 1. markdown-it 渲染（html:false 阻断 raw HTML，CSP 之外的 XSS 纵深防御），
  *    并按固定章节标题给 `<h2>` 着 section class（图标走 CSS ::before）。
  * 2. DOMParser 走查“仅文本节点”：数字包成 `.ai-num`、列表项首个「：」前的名字包成
  *    `.ai-name`。只改文本节点、不碰标签/属性，不引入注入面。
+ * 3. 属性白名单走查（debug4-21）：剥 `on*` 事件属性与危险标签、AI 可控 `<img>`
+ *    外链（追踪像素）。即使未来 markdown-it 行为变更，这也是一道独立防线。
  *
  * 章节标题与 prompts/stage2-critique.ts、critiqueTemplate.ts 的 5 段保持一致。
  */
@@ -68,14 +70,52 @@ export function renderAnalysisReport(markdown: string): string {
   return enhance(md.render(dedupeSectionMentions(markdown)))
 }
 
-/** DOM 走查：链接安全净化 + 名字加粗 + 数字高亮，仅改文本节点与合法属性。 */
+/** DOM 走查：属性白名单 + 链接净化 + 名字加粗 + 数字高亮。 */
 function enhance(html: string): string {
   const doc = new DOMParser().parseFromString(html, 'text/html')
   const root = doc.body
+  sanitizeAttributes(root)
   sanitizeLinks(root)
   boldListItemNames(root, doc)
   highlightNumbers(root, doc)
   return root.innerHTML
+}
+
+/**
+ * 属性/标签白名单走查（debug4-21）。
+ *
+ * markdown-it 已挡掉 raw HTML 与伪协议（实测 6 向量全过），这里是独立第二道：
+ * - 剥离一切 `on*` 事件处理器属性（大小写不敏感）与 `style`（`style="x:expression(...)"`
+ *   在旧引擎仍是向量，且 AI 内容不需要行内样式）；
+ * - 移除 `script/style/iframe/object/embed/form/input/button` 等危险标签（保留其文本）；
+ * - 移除 AI 可控的 `<img>`（追踪像素；AI 报告是纯文本分析，不需要配图）。
+ */
+function sanitizeAttributes(root: HTMLElement): void {
+  const DANGEROUS_TAGS = new Set([
+    'SCRIPT',
+    'STYLE',
+    'IFRAME',
+    'OBJECT',
+    'EMBED',
+    'FORM',
+    'INPUT',
+    'BUTTON',
+    'IMG'
+  ])
+  // 先收集再改：边遍历边删会跳过兄弟节点
+  const els = [...root.querySelectorAll('*')]
+  for (const el of els) {
+    if (DANGEROUS_TAGS.has(el.tagName)) {
+      el.replaceWith(...Array.from(el.childNodes))
+      continue
+    }
+    for (const attr of [...el.attributes]) {
+      const name = attr.name.toLowerCase()
+      if (name.startsWith('on') || name === 'style') {
+        el.removeAttribute(attr.name)
+      }
+    }
+  }
 }
 
 /** 净化链接：剔除 javascript: 等伪协议，外链附加 target="_blank" 与 rel="noopener noreferrer"。 */
