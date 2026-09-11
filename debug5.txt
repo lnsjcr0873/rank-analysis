@@ -164,7 +164,7 @@ async function solidifyTag(tag: RankTag): Promise<void> {
 5	AI	minuteCurve.ts	快节奏局超出时间轴直接复制末尾，AI 误诊「补刀完全停滞」	超出真实游戏时长时截断或返回 null【已完成：csAt15/csAt25/deathsBy15 越界改返回 null；文案层声明"对局已结束"禁评价中后期；更新3处单测+补文案单测。34测试全绿，tsc全过】
 6	逻辑	game_queue.rs	ID 升序导致现行队列（如 870）被旧队列（830）反向去重覆盖	优先保留更高或映射表中现行的有效队列 ID
 7	UI	BestPicksPanel.vue	英雄池仅初始化一次，切换召唤师后依然展示旧账号英雄池	切换召唤师时重置 poolEntries.value = null
-8	数据	UnifiedTagRow.vue	匿名选人阶段固化备注导致空玩家名永久入库污染记录	过滤空用户名，待进入对局姓名解密后再补全
+8	数据	UnifiedTagRow.vue	匿名选人阶段固化备注导致空玩家名永久入库污染记录	过滤空用户名，待进入对局姓名解密后再补全【已完成：未照搬"过滤不存"（会丢备注文本）。守卫放store.setNote唯一choke点（一处修同时护住solidifyTag+PlayerNoteBadge.onSave）：空名不覆盖已有合法名、无存量标"(匿名)"保文本、后续实名写入自动补齐。附store2+组件2回归单测。prettier/eslint/tsc全过，90测试全绿】
 Model 16:27
 ThinkingThoughts
 Expand to view model thoughts

@@ -173,6 +173,36 @@ describe('UnifiedTagRow', () => {
     expect(messageMock.info).toHaveBeenCalledWith('该标签已在备注中')
   })
 
+  it('匿名选人期固化：空名不覆盖已有合法姓名（debug5-7）', async () => {
+    const store = usePlayerNotesStore()
+    await store.setNote('puuid-1', {
+      note: '旧备注',
+      label: 'friendly',
+      gameName: 'Faker',
+      tagLine: 'KR1'
+    })
+    // Anti-Scouting：选人期敌方 gameName/tagLine 为空串
+    const w = mountRow({ gameName: '', tagLine: '' })
+
+    await w.vm.solidifyTag(tags[1])
+
+    const saved = store.getNote('puuid-1')
+    expect(saved?.note).toContain('专精')
+    expect(saved?.gameName).toBe('Faker')
+    expect(saved?.tagLine).toBe('KR1')
+  })
+
+  it('首次匿名固化：标(匿名)保备注文本，不落空名（debug5-7）', async () => {
+    const store = usePlayerNotesStore()
+    const w = mountRow({ gameName: '', tagLine: '' })
+
+    await w.vm.solidifyTag(tags[0])
+
+    const saved = store.getNote('puuid-1')
+    expect(saved?.note).toBe('炸鱼嫌疑：仅供参考')
+    expect(saved?.gameName).toBe('(匿名)')
+  })
+
   it('拼接后超过 100 字时不写入且原备注不变', async () => {
     const store = usePlayerNotesStore()
     // 95 字备注：追加任意标签行（换行 + ≥5 字）必超 100 字上限

@@ -170,6 +170,13 @@ export const usePlayerNotesStore = defineStore('playerNotes', () => {
    * @param data - 备注内容（不含 updatedAt，由内部盖时间戳）；可选 `encounter`
    *   为"本次标记所在的对局"，会并入该玩家的遇见记录（去重、最近在前）。
    *   不传 `encounter` 时保留已有遇见记录不变。
+   *
+   * 匿名选人期守卫（debug5-7）：高分段 Anti-Scouting 下 gameName/tagLine 为
+   * 空串，直接落盘会让该 puuid 永久绑定 ""#""（备注管理页显示 (未知)#、
+   * 点名搜空串）。策略：空名不覆盖已有合法姓名；无存量名则标 "(匿名)"，
+   * 备注文本照常保存，后续任意一次带实名写入即自动补齐（新者赢）。
+   * 放 store 层而非组件层——`UnifiedTagRow.solidifyTag` 与
+   * `PlayerNoteBadge.onSave` 两个写入点同走这里，一处修两处保。
    */
   async function setNote(
     puuid: string,
@@ -183,9 +190,22 @@ export const usePlayerNotesStore = defineStore('playerNotes', () => {
   ): Promise<void> {
     const { encounter, ...rest } = data
     const encounters = mergeEncounters(notes.value[puuid]?.encounters, encounter)
+    const stored = notes.value[puuid]
+    const hasRealName =
+      (stored?.gameName?.trim() ?? '') !== '' || (stored?.tagLine?.trim() ?? '') !== ''
+    const incomingName = data.gameName.trim()
+    const gameName = incomingName || (hasRealName ? stored!.gameName : '(匿名)')
+    const tagLine =
+      incomingName || data.tagLine.trim() ? data.tagLine : hasRealName ? stored!.tagLine : ''
     notes.value = {
       ...notes.value,
-      [puuid]: { ...rest, updatedAt: nextTs(), ...(encounters ? { encounters } : {}) }
+      [puuid]: {
+        ...rest,
+        gameName,
+        tagLine,
+        updatedAt: nextTs(),
+        ...(encounters ? { encounters } : {})
+      }
     }
     userMutationSeq.value++
     await persist()

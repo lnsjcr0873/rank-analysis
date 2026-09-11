@@ -119,6 +119,38 @@ describe('usePlayerNotesStore', () => {
       expect(store.getNote('p')?.label).toBe('blacklist')
       expect(store.count).toBe(1)
     })
+
+    it('匿名选人期空名不覆盖已有合法姓名（debug5-7）', async () => {
+      const store = usePlayerNotesStore()
+      await store.setNote('p', { note: 'a', label: 'normal', gameName: 'Faker', tagLine: 'KR1' })
+      await store.setNote('p', { note: 'b', label: 'careful', gameName: '', tagLine: '' })
+
+      const saved = store.getNote('p')
+      expect(saved?.note).toBe('b')
+      expect(saved?.gameName).toBe('Faker')
+      expect(saved?.tagLine).toBe('KR1')
+    })
+
+    it('首次写入即匿名：标(匿名)保备注文本，后续实名自动补齐（debug5-7）', async () => {
+      const store = usePlayerNotesStore()
+      await store.setNote('p', { note: '炸鱼嫌疑', label: 'careful', gameName: '', tagLine: '' })
+
+      const anon = store.getNote('p')
+      expect(anon?.note).toBe('炸鱼嫌疑')
+      expect(anon?.gameName).toBe('(匿名)')
+
+      await store.setNote('p', {
+        note: '炸鱼嫌疑',
+        label: 'careful',
+        gameName: 'Zeus',
+        tagLine: 'KR1'
+      })
+
+      const named = store.getNote('p')
+      expect(named?.gameName).toBe('Zeus')
+      expect(named?.tagLine).toBe('KR1')
+      expect(named?.note).toBe('炸鱼嫌疑')
+    })
   })
 
   describe('removeNote（墓碑）', () => {
