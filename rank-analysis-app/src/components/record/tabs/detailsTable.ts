@@ -293,18 +293,23 @@ export interface BuildDiff {
 }
 
 /**
- * 出装对比判定：玩家 7 件 vs 推荐 7 件（按槽位一对一比较）。
+ * 出装对比判定：玩家 7 件 vs 推荐 7 件（集合语义，槽位顺序无关）。
  *
- * 判定规则（设计文档 §6.2-2「黄色=换装，红色=乱出」）：
+ * 6 个普通槽位是平权的——同一套三件套放 1 槽还是 2 槽纯属键位习惯
+ * （debug4-18）。逐槽下标强比对会把"同装异槽"标黄换装甚至标红乱出，
+ * 大面积假阳性。改多重集判定：
  * - 玩家槽为空或饰品 → `skip`（不参与统计）；
- * - 同槽位 id 相同 → `match`；
- * - 同槽位 id 不同且推荐该槽有数据 → `swap`（换装，黄）；
- * - 同槽位 id 不同且推荐该槽无推荐 → `odd`（乱出，红）——推荐位空置代表
- *   玩家出了推荐体系外的东西（如买鞋进 1 号槽 VS 推荐核心件）。
+ * - 装备在推荐集合内（含同槽命中与异槽命中）→ `match`；
+ * - 装备在推荐集合外 → `odd`（乱出，红）——只有买了推荐体系外的东西
+ *   才标红（如推荐 7 件全是 AD 装，玩家出了个辅助装）。
+ * - `swap`（换装，黄）保留类型但不再产生：顺序差异不再算错，
+ *   展示层图例相应弱化（见 MatchDetailStatsTab）。
+ *
+ * 多重集计数：同 id 重复出（如两把同样的散件）按 min(玩家数, 推荐数) 计命中。
  *
  * 整体判定：equipped ≥ 4（已形成可评判的构建）时，
  * - `matched ≥ ceil(equipped * 0.6)` → `match`；
- * - `matched ≥ ceil(equipped * 0.3)` → `swap`（部分换装）；
+ * - `matched ≥ ceil(equipped * 0.3)` → `swap`（部分偏离）；
  * - 否则 → `odd`；
  * - equipped < 4（出装不完整，如 15 分钟内的对局）→ `none`（不评判）。
  *
@@ -319,13 +324,37 @@ export function diffBuild(
   const recIds = (recommendItems ?? []).map(slot => (slot ? slot.itemId : 0))
   const hasRec = recIds.some(id => id > 0)
 
-  const slots: BuildSlotState[] = playerItems.slice(0, 7).map((itemId, i) => {
-    const recId = recIds[i] ?? 0
-    if (!hasRec) return 'skip'
-    if (itemId <= 0 || WARD_ITEM_IDS.has(itemId)) return 'skip'
-    if (itemId === recId && recId > 0) return 'match'
-    if (recId > 0) return 'swap'
-    return 'odd'
+  // 推荐多重集：id → 出现次数（7 槽 top1 去空；同装备占多槽时按次数计）
+  const recCounts = new Map<number, number>()
+  for (const id of recIds) {
+    if (id > 0) recCounts.set(id, (recCounts.get(id) ?? 0) + 1)
+  }
+
+  const items = playerItems.slice(0, 7)
+  // 先标出有效槽（非 skip），再按多重集分配命中：同槽命中优先，
+  // 剩余有效槽按推荐余量认领——同装异槽同样命中，不再误伤。
+  const effective = items.map(id => hasRec && id > 0 && !WARD_ITEM_IDS.has(id))
+  const slots: BuildSlotState[] = items.map(() => 'skip')
+  const remaining = new Map(recCounts)
+  // 第一遍：同槽命中
+  effective.forEach((ok, i) => {
+    if (!ok) return
+    const id = items[i]
+    if ((remaining.get(id) ?? 0) > 0 && (recIds[i] ?? 0) === id) {
+      slots[i] = 'match'
+      remaining.set(id, (remaining.get(id) ?? 0) - 1)
+    }
+  })
+  // 第二遍：异槽认领（推荐集合内即命中）
+  effective.forEach((ok, i) => {
+    if (!ok || slots[i] !== 'skip') return
+    const id = items[i]
+    if ((remaining.get(id) ?? 0) > 0) {
+      slots[i] = 'match'
+      remaining.set(id, (remaining.get(id) ?? 0) - 1)
+    } else {
+      slots[i] = 'odd'
+    }
   })
 
   const equipped = slots.filter(s => s !== 'skip').length

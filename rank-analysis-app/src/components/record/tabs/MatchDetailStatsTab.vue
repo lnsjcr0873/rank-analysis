@@ -28,7 +28,7 @@
       >
         <div class="match-detail-stats-label-cell">
           <span class="match-detail-stats-label">出装 vs 推荐</span>
-          <span class="match-detail-build-legend">黄=换装 · 红=乱出</span>
+          <span class="match-detail-build-legend">黄=部分偏离 · 红=乱出（顺序不同不算错）</span>
         </div>
         <div class="match-detail-build-values">
           <n-tooltip

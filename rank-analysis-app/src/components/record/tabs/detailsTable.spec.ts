@@ -220,13 +220,22 @@ describe('detailsTable', () => {
       expect(d.slots).toEqual(['skip', 'skip', 'match', 'match', 'match', 'match', 'skip'])
     })
 
-    it('部分换装：30%~60% 匹配 → overall swap；不匹配槽标 swap', () => {
+    it('同装异槽：集合语义下同样命中，不再误标换装', () => {
+      // 推荐 [101..106]，玩家同 6 件但整体错位一格 → 全部命中
+      const d = diffBuild([106, 101, 102, 103, 104, 105, 0], recommend)
+      expect(d.equipped).toBe(6)
+      expect(d.matched).toBe(6)
+      expect(d.overall).toBe('match')
+      expect(d.slots.slice(0, 6).every(s => s === 'match')).toBe(true)
+    })
+
+    it('部分偏离：30%~60% 匹配 → overall swap；集合外槽标 odd', () => {
       // 6 件装备，3 件命中（103/104/105）→ 3/6 = 50%（≥30% 且 <60%）
       const d = diffBuild([201, 202, 203, 104, 105, 106, 0], recommend)
       expect(d.equipped).toBe(6)
       expect(d.matched).toBe(3)
       expect(d.overall).toBe('swap')
-      expect(d.slots[0]).toBe('swap')
+      expect(d.slots[0]).toBe('odd')
       expect(d.slots[3]).toBe('match')
     })
 
