@@ -28,8 +28,14 @@ fn resolve_enemy_puuid(p: &OnePlayer) -> Option<String> {
 /// 从 champ-select 会话读取敌方队伍（their_team），
 /// 对每个敌方玩家聚合历史数据，返回威胁评级列表。
 /// 敌方数据不足时降级为 Low + caveats。
+///
+/// 反侦查说明（debug3-B1）：高分段/新版本选人期 Riot 可能下发空身份
+/// （puuid 与混淆串皆空，或混淆串无映射关系还原失败）。此时 ratings 为空
+/// 但 `is_enemy_anonymous` 为 true——前端据此渲染显式引导（看阵容强度/
+/// OP.GG 对位），而不是静默白板让用户误以为软件故障。
+/// 无身份玩家直接跳过，不发必败的 IPC 查询。
 #[tauri::command]
-pub async fn get_threat_ratings() -> Result<Vec<ThreatRating>, String> {
+pub async fn get_threat_ratings() -> Result<ThreatRatingsResponse, String> {
     let my = Summoner::get_my_summoner()
         .await
         .map_err(|e| format!("拿不到本机召唤师: {e}"))?;
@@ -38,19 +44,31 @@ pub async fn get_threat_ratings() -> Result<Vec<ThreatRating>, String> {
         .await
         .map_err(|e| format!("拿不到选人会话: {e}"))?;
 
+    let enemy_count = session.their_team.len();
+    let mut anonymous_count = 0usize;
     let enemies: Vec<PlayerInfo> = session
         .their_team
         .iter()
-        .filter_map(|p| {
-            resolve_enemy_puuid(p).map(|puuid| PlayerInfo {
+        .filter_map(|p| match resolve_enemy_puuid(p) {
+            Some(puuid) => Some(PlayerInfo {
                 puuid,
                 position: p.assigned_position.clone(),
-            })
+            }),
+            None => {
+                anonymous_count += 1;
+                None
+            }
         })
         .collect();
 
+    let is_enemy_anonymous = enemy_count > 0 && enemies.is_empty();
     if enemies.is_empty() {
-        return Ok(Vec::new());
+        return Ok(ThreatRatingsResponse {
+            ratings: Vec::new(),
+            enemy_count,
+            anonymous_count,
+            is_enemy_anonymous,
+        });
     }
 
     let mut enemies_with_games = Vec::new();
@@ -73,7 +91,25 @@ pub async fn get_threat_ratings() -> Result<Vec<ThreatRating>, String> {
     }
 
     let ratings = crate::scouting::assess_team_threats_with_games(&my.puuid, &enemies_with_games);
-    Ok(ratings)
+    Ok(ThreatRatingsResponse {
+        ratings,
+        enemy_count,
+        anonymous_count,
+        is_enemy_anonymous,
+    })
+}
+
+/// 威胁评级响应（含匿名状态，前后端 camelCase 对齐）。
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreatRatingsResponse {
+    pub ratings: Vec<ThreatRating>,
+    /// 选人会话中敌方人数（their_team 长度）
+    pub enemy_count: usize,
+    /// 其中无身份（puuid 与混淆串皆空/还原失败）人数
+    pub anonymous_count: usize,
+    /// 有敌方但全匿名 → 前端渲染显式引导而非静默空白
+    pub is_enemy_anonymous: bool,
 }
 
 #[cfg(test)]

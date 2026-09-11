@@ -35,20 +35,61 @@ function sampleRating(overrides: Partial<ThreatRating> = {}): ThreatRating {
 }
 
 describe('scouting service', () => {
-  it('should call get_threat_ratings command', async () => {
+  it('should call get_threat_ratings command and normalize response', async () => {
     const ratings = [sampleRating(), sampleRating({ puuid: 'p2', position: 'JUNGLE' })]
-    mockInvoke.mockResolvedValueOnce(ratings)
+    mockInvoke.mockResolvedValueOnce({
+      ratings,
+      enemyCount: 2,
+      anonymousCount: 0,
+      isEnemyAnonymous: false
+    })
 
     const result = await getThreatRatings()
 
     expect(mockInvoke).toHaveBeenCalledWith('get_threat_ratings')
-    expect(result).toHaveLength(2)
-    expect(result[0].puuid).toBe('p1')
+    expect(result.ratings).toHaveLength(2)
+    expect(result.ratings[0].puuid).toBe('p1')
+    expect(result.isEnemyAnonymous).toBe(false)
+  })
+
+  it('should surface isEnemyAnonymous when backend reports full anonymity', async () => {
+    mockInvoke.mockResolvedValueOnce({
+      ratings: [],
+      enemyCount: 5,
+      anonymousCount: 5,
+      isEnemyAnonymous: true
+    })
+
+    const result = await getThreatRatings()
+
+    expect(result.ratings).toEqual([])
+    expect(result.enemyCount).toBe(5)
+    expect(result.isEnemyAnonymous).toBe(true)
+  })
+
+  it('should stay backward compatible with legacy array responses', async () => {
+    const ratings = [sampleRating()]
+    mockInvoke.mockResolvedValueOnce(ratings)
+
+    const result = await getThreatRatings()
+
+    expect(result.ratings).toHaveLength(1)
+    expect(result.isEnemyAnonymous).toBe(false)
   })
 
   it('should propagate empty result from backend', async () => {
-    mockInvoke.mockResolvedValueOnce([])
-    await expect(getThreatRatings()).resolves.toEqual([])
+    mockInvoke.mockResolvedValueOnce({
+      ratings: [],
+      enemyCount: 0,
+      anonymousCount: 0,
+      isEnemyAnonymous: false
+    })
+    await expect(getThreatRatings()).resolves.toEqual({
+      ratings: [],
+      enemyCount: 0,
+      anonymousCount: 0,
+      isEnemyAnonymous: false
+    })
   })
 
   it('should propagate command errors', async () => {

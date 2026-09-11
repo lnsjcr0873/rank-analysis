@@ -29,9 +29,19 @@ function sampleRating(overrides: Partial<ThreatRating> = {}): ThreatRating {
 }
 
 describe('EnemyThreatCard', () => {
-  it('should not render when ratings is empty', () => {
+  it('should not render when ratings is empty and not anonymous', () => {
     const wrapper = mount(EnemyThreatCard, { props: { ratings: [] } })
     expect(wrapper.find('.threat-card').exists()).toBe(false)
+  })
+
+  it('should render anonymous guide instead of silent blank when enemy is anonymous', () => {
+    const wrapper = mount(EnemyThreatCard, { props: { ratings: [], anonymous: true } })
+    expect(wrapper.find('.threat-card').exists()).toBe(true)
+    expect(wrapper.find('.threat-anon-title').text()).toContain('匿名防侦查')
+    expect(wrapper.find('.threat-anon-body').text()).toContain('阵容强度')
+    // 匿名引导下不渲染威胁头与玩家行
+    expect(wrapper.find('.threat-header').exists()).toBe(false)
+    expect(wrapper.findAll('.threat-row')).toHaveLength(0)
   })
 
   it('should render card with max threat header', () => {

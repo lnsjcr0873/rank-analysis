@@ -245,6 +245,11 @@
                 "
                 class="sig-badge"
                 >{{ t.key === 'threat' ? threatRatings?.length : nextActions?.length }}</sup
+              ><sup
+                v-else-if="t.key === 'threat' && isEnemyAnonymous"
+                class="sig-badge"
+                title="敌方匿名"
+                >!</sup
               >
             </button>
           </div>
@@ -255,7 +260,11 @@
               :mine="lineupScores.scores.value.mine"
               :enemy="lineupScores.scores.value.enemy"
             />
-            <EnemyThreatCard v-else-if="activeSignalTab === 'threat'" :ratings="threatRatings" />
+            <EnemyThreatCard
+              v-else-if="activeSignalTab === 'threat'"
+              :ratings="threatRatings"
+              :anonymous="isEnemyAnonymous"
+            />
             <NextActionCard v-else-if="activeSignalTab === 'next'" :actions="nextActions" />
             <template v-else>
               <!-- 对位分析（同分路画像均值差 ≥2%，确定性计算） -->
@@ -583,6 +592,8 @@ watch(
 
 /** 赛前威胁评级（M4 战场六）：选人阶段拉取敌方威胁数据 */
 const threatRatings = ref<ThreatRating[]>([])
+/** 敌方匿名（Riot 反侦查）：有敌方但全无身份，渲染显式引导而非静默空白 */
+const isEnemyAnonymous = ref(false)
 watch(
   () => sessionData.phase,
   phase => {
@@ -590,11 +601,13 @@ watch(
       void getThreatRatings()
         .then(r => {
           // 后端/测试桩可能返回 undefined：归一为数组，避免模板读 length 崩溃
-          threatRatings.value = Array.isArray(r) ? r : []
+          threatRatings.value = Array.isArray(r?.ratings) ? r.ratings : []
+          isEnemyAnonymous.value = r?.isEnemyAnonymous ?? false
         })
         .catch(() => {})
     } else {
       threatRatings.value = []
+      isEnemyAnonymous.value = false
     }
   }
 )
