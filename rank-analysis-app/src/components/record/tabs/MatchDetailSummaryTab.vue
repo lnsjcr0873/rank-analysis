@@ -172,7 +172,7 @@
                       <template #trigger>
                         <span class="match-detail-badge-icon" :class="badge.className">
                           <n-icon :size="10">
-                            <component :is="badge.icon" />
+                            <component v-if="badge.icon" :is="badge.icon" />
                           </n-icon>
                         </span>
                       </template>
