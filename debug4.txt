@@ -222,7 +222,7 @@ Expand to view model thoughts
 chevron_right
 承接上文，我们对代码库的其他模块（包括 LCU 数据映射、SGP 跨区通信、Fandom/OP.GG 补丁比对、云同步一致性、AI Prompt 注入以及前端多维图表渲染）进行了更深入的全面排查，发现了以下同样影响系统稳定性与功能正确性的核心问题：
 一、 核心逻辑与运行时崩溃缺陷 (Critical & High Severity)
-1. command/fandom.rs：补丁改动比对大小写不匹配，导致英雄改动笔记 100% 匹配失败
+1. command/fandom.rs：补丁改动比对大小写不匹配，导致英雄改动笔记 100% 匹配失败【已完成：验证已修复，无需修改——查询侧 fandom.rs:146 与写入侧 patch_notes.rs:193 同走 normalize_champion_name（小写+仅字母数字），特例表 wiki_name_to_alias_key 覆盖悟空/努努/雷娜塔；单测 486-492 行已覆盖】
 文件路径：rank-analysis-app/src-tauri/src/command/fandom.rs
 问题代码（get_champion_patch_note 函数）：
 code
