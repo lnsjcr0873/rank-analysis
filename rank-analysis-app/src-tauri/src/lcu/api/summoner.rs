@@ -42,7 +42,14 @@ impl Summoner {
     }
 
     /// 按召唤师名称获取召唤师信息（带缓存）。
+    ///
+    /// debug5：LCU 旧端点只认纯旧版召唤师名，带 `名字#TAG` 会 404。
+    /// 含 `#` 时先走 Riot Client alias 查 puuid，再走 v2 puuid 端点。
     pub async fn get_summoner_by_name(name: &str) -> Result<Self, String> {
+        if let Some((game_name, tag_line)) = split_name_tag(name) {
+            let puuid = super::sgp::resolve_puuid_by_riot_id(&game_name, &tag_line).await?;
+            return Self::get_summoner_by_puuid(&puuid).await;
+        }
         let url_encoding = urlencoding::encode(name);
         if let Some(cached) = SUMMONER_CACHE.get(name).await {
             return Ok(cached.clone());
@@ -84,5 +91,35 @@ impl Summoner {
                 }
             }
         }
+    }
+}
+
+/// 拆 `名字#TAG`：两侧非空才算 Riot ID。`rsplit_once` 取最后一个 `#`。
+fn split_name_tag(name: &str) -> Option<(String, String)> {
+    match name.rsplit_once('#') {
+        Some((g, t)) if !g.trim().is_empty() && !t.trim().is_empty() => {
+            Some((g.trim().to_string(), t.trim().to_string()))
+        }
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn split_name_tag_cases() {
+        assert_eq!(
+            split_name_tag("Faker#KR1"),
+            Some(("Faker".to_string(), "KR1".to_string()))
+        );
+        assert_eq!(
+            split_name_tag("  Faker # KR1 "),
+            Some(("Faker".to_string(), "KR1".to_string()))
+        );
+        assert_eq!(split_name_tag("纯旧名"), None);
+        assert_eq!(split_name_tag("Faker#"), None);
+        assert_eq!(split_name_tag("#KR1"), None);
     }
 }

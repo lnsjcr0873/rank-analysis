@@ -460,7 +460,7 @@ Rust 端的 put_config 每次被调用都会执行完整的 YAML 序列化、创
 修复方案：滚轮缩放时仅实时应用前端样式/Webview Zoom，对配置持久化（IPC 调用）增加 300~500ms 的防抖（Debounce）。
 四、 问题汇总表
 序号	类别	模块 / 文件	核心表现	修复策略
-1	协议	summoner.rs	本地 LCU 查人接口直接拼带 # 的名字，导致 LCU 返回 404	检查并分离 #Tag 或改走 Riot Client Alias 接口
+1	协议	summoner.rs	本地 LCU 查人接口直接拼带 # 的名字，导致 LCU 返回 404	检查并分离 #Tag 或改走 Riot Client Alias 接口【已完成：get_summoner_by_name唯一入口分流：含#走alias查puuid再走v2 puuid端点（复用sgp.rs resolve_puuid_by_riot_id），无#走旧端点；调用方战绩/段位/标签共用入口一处修全生效。附split_name_tag单测。cargo fmt/clippy(GNU)/check --tests全过，cargo test以CI为权威】
 2	云端	cloud_sync.rs	updated_at 以纯字符串 "now()" 传给 PostgREST，触发 SQL 语法错误	发送标准 ISO 时间戳或由 DB 列默认值填充
 3	崩溃	PlayerHistoryGrid.vue	战绩列表中遇到空参与者数组时缺少可选链，触发未捕获 TypeError	增加可选链保护 game.participants[0]?.stats?.win
 4	UI	MatchDetailReviewTab.vue	雷达图刻度底图固定为 8 边形，与 7 维数据多边形角度错位	将 rings 顶点数量绑定为 axes.value.length
