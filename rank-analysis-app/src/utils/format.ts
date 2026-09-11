@@ -41,9 +41,20 @@ export function formatGameDate(raw: string, format: 'short' | 'full' = 'short'):
   if (!raw) {
     return ''
   }
+  let date: Date | null = null
   const ts = Number(raw)
-  const date = Number.isFinite(ts) && ts > 0 ? new Date(ts) : new Date(raw)
-  if (Number.isNaN(date.getTime())) {
+  if (Number.isFinite(ts) && ts > 0) {
+    // 微秒级（16 位数字）归毫秒；毫秒级（13~14 位）原样。年代 sanity：超过
+    // 2100 年视为脏数据（微秒误判/异常源），直接拒收，避免趋势图坐标系拉爆。
+    const ms = ts >= 1_000_000_000_000_000 ? ts / 1000 : ts
+    const d = new Date(ms)
+    if (!Number.isNaN(d.getTime()) && d.getUTCFullYear() <= 2100) date = d
+  }
+  if (!date) {
+    const d = new Date(raw)
+    if (!Number.isNaN(d.getTime()) && d.getUTCFullYear() <= 2100) date = d
+  }
+  if (!date) {
     return raw
   }
   if (format === 'full') {

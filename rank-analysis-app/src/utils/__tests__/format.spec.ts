@@ -40,4 +40,17 @@ describe('formatGameDate', () => {
   it('解析不了的原样返回', () => {
     expect(formatGameDate('not-a-date')).toBe('not-a-date')
   })
+
+  it('微秒级时间戳（16 位）归毫秒后格式化，不再渲染 5 万多年', () => {
+    const ms = Date.UTC(2024, 5, 5, 4, 13)
+    const micros = String(ms * 1000)
+    const out = formatGameDate(micros)
+    expect(out).toBe(formatGameDate(String(ms)))
+    expect(out).not.toMatch(/\d{5}/)
+  })
+
+  it('超 2100 年的异常时间戳（脏数据/极端精度误判）原样返回', () => {
+    expect(formatGameDate('9999999999999999')).toBe('9999999999999999')
+    expect(formatGameDate('99999999999999')).toBe('99999999999999')
+  })
 })
