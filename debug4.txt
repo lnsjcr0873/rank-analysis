@@ -124,7 +124,7 @@ RuleCondition::AllyChampionsNotContains { ids } => {
 code
 Rust
 let allies: Vec<_> = session.my_team.iter().filter(|p| p.cell_id != session.local_player_cell_id).cloned().collect();
-7. main.rs：资产自定义协议（asset://）发生错误时返回 HTTP 200
+7. main.rs：资产自定义协议（asset://）发生错误时返回 HTTP 200【已完成：验证已修复，无需修改——main.rs:182-186 错误分支已有 .status(404)；400/500 分支（128-137/156-163 行）状态码同样齐全】
 文件路径：rank-analysis-app/src-tauri/src/main.rs
 问题代码：
 code
