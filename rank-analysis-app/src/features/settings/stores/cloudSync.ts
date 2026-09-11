@@ -61,6 +61,11 @@ export const useCloudSyncStore = defineStore('cloudSync', () => {
   let configDirty = false
   /** 正在应用外来快照：期间的 config-changed 事件不算 dirty，防拉取→写入→再推送回环 */
   let applyingConfig = false
+  /** apply 结束后继续抑制 dirty 的窗口长度：Rust 侧 config-changed 事件经 IPC
+   *  异步到达，若 invoke 一返回就复位标记，刚应用的快照会被误当用户修改推回云端，
+   *  造成「拉取→写入→事件→再推送」的元数据空转。 */
+  const APPLY_SUPPRESS_MS = 500
+  let applySuppressTimer: ReturnType<typeof setTimeout> | undefined
   let configWatchStarted = false
 
   /** 标记本地配置已变更（config-changed 监听与测试共用入口） */
@@ -99,7 +104,13 @@ export const useCloudSyncStore = defineStore('cloudSync', () => {
     try {
       await invoke('apply_config_snapshot', { snapshot: cloud.config, fromCloud: true })
     } finally {
-      applyingConfig = false
+      // 事件回显窗口：invoke 返回后延迟复位 suppressing，吸收异步到达的
+      // config-changed 回声（否则刚应用的快照会被再次推回云端形成空转）。
+      if (applySuppressTimer) clearTimeout(applySuppressTimer)
+      applySuppressTimer = setTimeout(() => {
+        applyingConfig = false
+        applySuppressTimer = undefined
+      }, APPLY_SUPPRESS_MS)
     }
     configDirty = false
     await putConfigByIpc(CONFIG_KEYS.configLastSyncAt, Date.now())
