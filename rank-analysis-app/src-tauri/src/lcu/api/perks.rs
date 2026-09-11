@@ -75,10 +75,10 @@ pub async fn get_current_perk_page_id() -> Result<i64, String> {
 
 /// 把客户端的「当前使用页」切换到 `page_id`。
 ///
-/// LCU 端点 `PUT lol-perks/v1/currentpage/{id}`，body 为空。
+/// LCU 端点 `PUT lol-perks/v1/currentpage`，页 ID 作请求体数字直传；
+/// 旧实现误拼成 `PUT .../currentpage/{id}` + 空 body，会被 LCU 直接 404。
 pub async fn set_current_perk_page(page_id: i64) -> Result<(), String> {
-    let uri = format!("lol-perks/v1/currentpage/{}", page_id);
-    crate::lcu::util::http::lcu_put::<(), ()>(&uri, &()).await?;
+    crate::lcu::util::http::lcu_put::<(), _>("lol-perks/v1/currentpage", &page_id).await?;
     Ok(())
 }
 

@@ -737,7 +737,7 @@ rank-analysis-app/src/components/common/ErrorReportingConsentDialog.vue
 修复方案：增加阶段状态判断，若当前游戏处于 InProgress，延迟到游戏结算回到大厅后再展示启动弹窗。
 四、 审计清单汇总
 序号	类别	模块 / 文件	核心表现	修复策略
-1	致命	perks.rs	符文设置路径拼错为 /currentpage/{id}，导致所有符文切换 100% 报错	改为 PUT /lol-perks/v1/currentpage + Body 传递 ID
+1	致命	perks.rs	符文设置路径拼错为 /currentpage/{id}，导致所有符文切换 100% 报错	改为 PUT /lol-perks/v1/currentpage + Body 传递 ID【已完成：set_current_perk_page改PUT无ID路径+body直传page_id数字（空body归一null反序列化兼容）；衍生审同文件pages增删改路径均带/{id}正确无同患。cargo fmt/clippy(GNU)/check --tests全过，cargo test以CI为权威】
 2	崩溃	navigation.ts	窗口 label 直接拼接中文和 #，触发 Tauri 窗口创建异常拒绝	对窗口 label 统一做合法字符清洗与哈希
 3	死锁	useMatchReplay.ts	回放下载失败无超时机制，前端陷入每秒轮询的永久死锁	增加重试阈值与错误状态判断
 4	UI	lineupScore.ts	胜率偏差出现 NaN 导致整个阵容强度条样式失效消失	对各维度的中间计算值加 Number.isFinite 保护
