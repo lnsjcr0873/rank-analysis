@@ -6,6 +6,7 @@
  */
 import { isRegistered, register, unregister } from '@tauri-apps/plugin-global-shortcut'
 import { invoke } from '@tauri-apps/api/core'
+import { isWindows } from '@renderer/services/platform'
 
 export const DEFAULT_OVERLAY_HOTKEY = 'Alt+A'
 export const OVERLAY_HOTKEY = DEFAULT_OVERLAY_HOTKEY
@@ -14,6 +15,11 @@ let currentRegisteredHotkey: string | null = null
 
 /** 幂等应用热键配置；重复调用先解绑再按需绑定。 */
 export async function applyOverlayHotkey(enabled: boolean, customHotkey?: string): Promise<void> {
+  // overlay 主战场是 Windows 国服（透明置顶/屏幕穿透均为 Windows 专属行为）。
+  // macOS/Linux 下不注册系统级热键，优雅降级为无操作，避免 unregistered/低层
+  // 窗口 API 静默异常。
+  if (!isWindows()) return
+
   const target = (customHotkey && customHotkey.trim()) || OVERLAY_HOTKEY
 
   if (currentRegisteredHotkey) {
