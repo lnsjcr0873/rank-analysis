@@ -620,6 +620,10 @@ async function focusGame(gameId: number): Promise<void> {
     }
   }
   resetFilter()
+  // debug4-24：resetFilter 触发的筛选 watch（flush: pre）会在本函数同步代码
+  // 跑完后才执行 `page = 1`——若这里立即设 page，会被 watch 冲回 1 而留在第 1 页。
+  // 等一拍让 watch 先落地，再翻到目标页。
+  await nextTick()
   const idx = filteredGames.value.findIndex(g => g.gameId === gameId)
   if (idx < 0) {
     emit('focus-handled')
