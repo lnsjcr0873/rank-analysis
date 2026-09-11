@@ -452,7 +452,7 @@ if (filter.queueId && filter.queueId !== 0) {
 }
 后果：当前版本玩家打完一局人机（实际 queueId: 870），在战绩页面下拉框选择「人机(入门)」时，因为 870 !== 830，该局会被直接过滤掉，列表显示为 0 场。匹配模式同理。
 修复方案：前端 matchFilters.ts 必须同步引入队列组别比对逻辑（canonicalQueueId(game.queueId) === filter.queueId），而不能只做原始 ID 的绝对比对。
-3. ts_second_key 字符串切片 Panic：非 ASCII 或异常时间戳触发 UTF-8 边界崩溃
+3. ts_second_key 字符串切片 Panic：非 ASCII 或异常时间戳触发 UTF-8 边界崩溃【已完成：改字符边界安全写法（T 后首个点切毫秒+strip_suffix 去Z）；合法语义不变，附非ASCII回归单测。GNU check/clippy/fmt 全过】
 文件路径：rank-analysis-app/src-tauri/src/lcu/api/sgp_league_servers.rs
 问题代码：
 code

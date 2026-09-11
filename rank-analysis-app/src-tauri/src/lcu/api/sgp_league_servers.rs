@@ -110,15 +110,25 @@ fn config_is_newer(cur: Option<&LeagueServersConfig>, incoming: &LeagueServersCo
 }
 
 /// `YYYY-MM-DDTHH:MM:SS(.mmm)?Z?` → 秒级排序键（去掉可选毫秒段与结尾 `Z`）。
+///
+/// debug4-23：旧实现按字节下标 `&s[..19]` 切片，非 ASCII 输入（中文日期/BOM/
+/// 损坏帧）落在多字节字符中间时直接 panic。改字符边界安全写法：
+/// - 毫秒段：`T` 之后的第一个 `.` 处切分取首段（`.`/`T` 恒为 ASCII，
+///   `split_once` 不碰字符边界；日期段里的 `.` 不会误切）；
+/// - 结尾 `Z`：`strip_suffix`（ASCII 后缀，安全）；
+/// - 其余原样返回，合法输入的比较语义与旧实现一致。
 fn ts_second_key(s: &str) -> &str {
-    let b = s.as_bytes();
-    if b.len() > 20 && b[19] == b'.' {
-        return &s[..19];
-    }
-    if b.last() == Some(&b'Z') {
-        return &s[..b.len() - 1];
-    }
-    s
+    let no_ms = match s.split_once('T') {
+        Some((date, rest)) => match rest.split_once('.') {
+            Some((secs, _)) => &s[..date.len() + 1 + secs.len()],
+            None => s,
+        },
+        None => match s.split_once('.') {
+            Some((prefix, _)) => prefix,
+            None => s,
+        },
+    };
+    no_ms.strip_suffix('Z').unwrap_or(no_ms)
 }
 
 /// 应用配置到内存 + 写磁盘缓存（写盘失败静默——下次启动重新拉取即可）。
@@ -350,6 +360,31 @@ mod tests {
             parse_config(&SAMPLE.replace("2026-07-18T04:00:00.000Z", "2026-07-18T04:00:01Z"))
                 .unwrap();
         assert!(config_is_newer(Some(&with_ms), &later));
+    }
+
+    #[test]
+    fn ts_second_key_is_char_boundary_safe() {
+        // debug4-23：合法输入语义与旧实现一致
+        assert_eq!(
+            ts_second_key("2026-07-18T04:00:00.000Z"),
+            "2026-07-18T04:00:00"
+        );
+        assert_eq!(ts_second_key("2026-07-18T04:00:00Z"), "2026-07-18T04:00:00");
+        assert_eq!(ts_second_key("2026-07-18T04:00:00"), "2026-07-18T04:00:00");
+        assert_eq!(
+            ts_second_key("2026-07-18T04:00:00.500Z"),
+            "2026-07-18T04:00:00"
+        );
+        // 非 ASCII / 损坏输入不得 panic（旧 &s[..19] 在此直接崩溃）
+        assert_eq!(ts_second_key("2026年07月18日"), "2026年07月18日");
+        assert_eq!(
+            ts_second_key("日期：2026-07-18T04:00:00.000Z"),
+            "日期：2026-07-18T04:00:00"
+        );
+        assert_eq!(ts_second_key(""), "");
+        assert_eq!(ts_second_key("Z"), "");
+        // 比较仍成立：晚一秒胜出
+        assert!(ts_second_key("2026-07-18T04:00:01Z") > ts_second_key("2026-07-18T04:00:00.999Z"));
     }
 
     #[test]
