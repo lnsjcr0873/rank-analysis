@@ -454,11 +454,24 @@ async function persistFilter(key: string, value: boolean | number): Promise<void
   }
 }
 
-watch(onlyOwned, v => void persistFilter(OWNED_KEY, v))
-watch(poolOnly, v => void persistFilter(POOL_ONLY_KEY, v))
-watch(poolMinWinRate, v => void persistFilter(POOL_WIN_RATE_KEY, v))
-watch(poolMinGames, v => void persistFilter(POOL_GAMES_KEY, v))
-watch(coverageFirst, v => void persistFilter(COVERAGE_FIRST_KEY, v))
+/** 筛选配置是否已从存储恢复完成：完成前不落盘，避免默认值覆盖用户已存配置 */
+let filtersReady = false
+
+watch(onlyOwned, v => {
+  if (filtersReady) void persistFilter(OWNED_KEY, v)
+})
+watch(poolOnly, v => {
+  if (filtersReady) void persistFilter(POOL_ONLY_KEY, v)
+})
+watch(poolMinWinRate, v => {
+  if (filtersReady) void persistFilter(POOL_WIN_RATE_KEY, v)
+})
+watch(poolMinGames, v => {
+  if (filtersReady) void persistFilter(POOL_GAMES_KEY, v)
+})
+watch(coverageFirst, v => {
+  if (filtersReady) void persistFilter(COVERAGE_FIRST_KEY, v)
+})
 
 /** 展示用推荐列表：按显示数量截断（'all' 时全量） */
 const shownPicks = computed(() =>
@@ -529,6 +542,7 @@ onMounted(async () => {
   } catch (e) {
     console.warn('[bestPicks] 优先覆盖配置读取失败:', e)
   }
+  filtersReady = true
 })
 
 const enemyPicks = computed(() =>
