@@ -2,10 +2,10 @@
 debug2.txt 修复进度（按 debug2 报告逐项，一项一 commit）
 =====================================================================
 - [x] #1 CommandPalette.vue 重复 watch —— cf7c0ef 已删除重复的 [show, filtered] watcher
-- [ ] #2 BestPicksPanel.vue 挂载读配置前的持久化覆写
-- [ ] #3 session.rs SESSION_TASK_SEQ / CURRENT_SESSION_TASK 竞态
-- [ ] #4 useSessionSync.ts 事件监听器未全量注销
-- [ ] #5 Gaming/OverlayView nextActionTimer 生命周期
+- [x] #2 BestPicksPanel.vue 挂载读配置前的持久化覆写 —— 14b3d58 persist watcher 加 filtersReady 门控，恢复完成前不落盘
+- [x] #3 session.rs SESSION_TASK_SEQ / CURRENT_SESSION_TASK 竞态 —— 9c1311c 序列号领取与旧任务中止并入同一锁
+- [x] #4 useSessionSync.ts 事件监听器未全量注销 —— 【已验证无需修改】unlisteners 数组 + onUnmounted 全量 off()（line 433-434）；useGameState/useMatchReplay 同样已注销
+- [x] #5 Gaming/OverlayView nextActionTimer 生命周期 —— 【已验证无需修改】单例守卫 + phase 退出分支与 onUnmounted 双清理（S9 已审）
 - [ ] #6 main.rs asset:// 协议路径未解码/host/反斜杠
 - [ ] #7 windows.ts macOS 未守卫
 - [ ] #8 cloud_sync 明文/无鉴权（E2EE）——范围大，另行评估
