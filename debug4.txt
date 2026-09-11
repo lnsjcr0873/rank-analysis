@@ -507,7 +507,7 @@ watch(
     emit('filter-change', activeFilter.value)
   }
 )
-5. Automation.vue：下拉选择添加英雄后，输入框未重置回占位符状态
+5. Automation.vue：下拉选择添加英雄后，输入框未重置回占位符状态【已完成：addPickData/addBanData 入口即重置对应 select 为 null（含早退分支）。prettier/eslint/tsc 全过】
 文件路径：rank-analysis-app/src/views/settings/Automation.vue
 问题代码：
 code

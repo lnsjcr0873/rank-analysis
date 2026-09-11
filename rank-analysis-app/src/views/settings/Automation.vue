@@ -594,11 +594,15 @@ const deletePickData = async (value: number) => {
   await updatePickData()
 }
 const addBanData = async (value: number | string) => {
+  // debug4-25：追加后 select 绑定位回 null（恢复 Placeholder），否则下拉停留
+  // 在刚选中的英雄上，再选同一英雄不触发 update:value，早退分支同样重置。
+  selectBanChampionId.value = null
   if (value === 0 || myBanData.value.includes(value as number)) return
   myBanData.value?.push(value as number)
   await updateBanData()
 }
 const addPickData = async (value: number | string) => {
+  selectPickChampionId.value = null
   if (myPickData.value.includes(value as number) || value === 0) return
   myPickData.value?.push(value as number)
   await updatePickData()
