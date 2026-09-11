@@ -26,4 +26,14 @@ describe('PlayerProfilePopover', () => {
     expect(popover.props('delay')).toBe(250)
     expect(popover.props('flip')).toBe(true)
   })
+
+  it('debug5：弹层未打开时画像卡不挂载（防列表页并发轰炸）', () => {
+    const wrapper = mount(PlayerProfilePopover, {
+      props: { puuid: 'p1' },
+      slots: { default: () => '某玩家' },
+      global: { stubs: { PlayerProfileCard: true } }
+    })
+    // 未 hover 打开前，画像卡不挂载、零请求
+    expect(wrapper.findComponent({ name: 'PlayerProfileCard' }).exists()).toBe(false)
+  })
 })
