@@ -19,21 +19,26 @@
 //!
 //! | 平台 | 配置目录 | 理由 |
 //! |------|---------|------|
-//! | Windows | **exe 所在目录** | 保持便携版（绿色软件）约定，且与老版本落点一致，升级无需迁移数据 |
+//! | Windows | **exe 所在目录**（可写时；不可写自动回退 `%LOCALAPPDATA%\<bundle id>`） | 保持便携版（绿色软件）约定，且与老版本落点一致，升级无需迁移数据 |
 //! | macOS | `~/Library/Application Support/<bundle id>` | 不能写进 `.app` bundle：会破坏代码签名，且每次更新整个 bundle 被替换 |
 //! | 其他 Unix | `~/.config/<bundle id>` | 未发布平台，仅为编译完整性 |
 //!
 //! 缓存一律放系统临时目录（带应用前缀避免撞名）—— 它们都能自动重建，丢了只是多拉
 //! 一次，不值得占用配置目录，也不必考虑写权限。
 //!
-//! ## ⚠️ 前提：Windows 安装在用户可写目录
+//! ## Windows 可写性探测（debug5-1）
 //!
-//! Windows 侧把配置放 exe 旁边成立的前提是 `tauri.conf.json` 里
-//! `bundle.windows.nsis.installMode = "currentUser"`（装进 `%LOCALAPPDATA%`，可写）。
-//! **若哪天改成 `perMachine`（装进 `Program Files`），exe 目录将不可写，届时必须改用
-//! `%APPDATA%\<bundle id>` 并为老用户写一次数据迁移。**
+//! 把配置放 exe 旁边成立的前提是目录可写：`tauri.conf.json` 里
+//! `bundle.windows.nsis.installMode = "currentUser"`（装进 `%LOCALAPPDATA%`）时成立，
+//! 但若改成 `perMachine`（装进 `Program Files`，标准用户 OS Error 5 拒绝写入）、
+//! 或目录被杀软/权限锁住，exe 目录即不可写。此前无任何探测，直接崩溃。
+//!
+//! 现在启动时探测一次（进程内缓存）：exe 目录可写 → 沿用（老用户零迁移）；
+//! 不可写 → 回退 `%LOCALAPPDATA%\<bundle id>` 并打 warn 日志。两者都不可用时
+//! 才走原有的临时目录回退。
 
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 /// 应用 bundle 标识，与 `tauri.conf.json` 的 `identifier` 保持一致。
 ///
@@ -90,31 +95,93 @@ pub fn config_file() -> PathBuf {
     data_file(CONFIG_FILE_NAME)
 }
 
+/// Windows `%LOCALAPPDATA%\<bundle id>` 回退目录（debug5-1）。
+///
+/// exe 目录不可写时（perMachine 装进 Program Files / 权限锁住）的逃生舱。
+/// `LOCALAPPDATA` 缺失时返回 `None`，调用方继续走临时目录回退。
+fn windows_appdata_fallback() -> Option<PathBuf> {
+    windows_appdata_dir(std::env::var_os("LOCALAPPDATA").as_deref())
+}
+
+/// 纯函数内核：`LOCALAPPDATA` 值 → 回退目录。拆出来让单测无需碰进程级环境变量
+///（Rust 单测多线程共享进程，`set_var` 会互相污染）。
+fn windows_appdata_dir(local_app_data: Option<&std::ffi::OsStr>) -> Option<PathBuf> {
+    local_app_data
+        .map(PathBuf::from)
+        .filter(|p| !p.as_os_str().is_empty())
+        .map(|p| p.join(BUNDLE_ID))
+}
+
+/// 探测目录是否可写：尝试创建并立即删除一个哨兵文件。
+///
+/// 只在启动时调一次（结果由 [`config_dir`] 缓存），不污染用户目录。
+/// 目录本身不存在时先尝试创建（exe 旁首次运行 / APPDATA 回退首次运行）。
+fn dir_writable(dir: &Path) -> bool {
+    if std::fs::create_dir_all(dir).is_err() {
+        return false;
+    }
+    let probe = dir.join(format!(".writable-probe-{}", std::process::id()));
+    match std::fs::write(&probe, b"1") {
+        Ok(()) => {
+            let _ = std::fs::remove_file(&probe);
+            true
+        }
+        Err(_) => false,
+    }
+}
+
+/// 解析出的配置目录（进程内缓存，启动时探测一次）。
+static CONFIG_DIR_CACHE: OnceLock<PathBuf> = OnceLock::new();
+
 /// 按平台解析配置目录，解析不出来时回退到临时目录。
 ///
+/// Windows 侧（debug5-1）：exe 目录优先（便携约定 + 老用户零迁移），但先做
+/// 可写性探测——不可写（Program Files 等）时自动回退 `%LOCALAPPDATA%\<bundle id>`。
 /// 回退分支现实中几乎不可能走到（`current_exe()` / `$HOME` 皆失效）。选临时目录而不是
 /// CWD，是因为它至少保证「绝对且可写」；配置存在那里会随系统清理丢失，所以额外打一条
 /// 告警，便于线上发现。
 fn config_dir() -> PathBuf {
-    let resolved = if cfg!(target_os = "windows") {
-        std::env::current_exe()
-            .ok()
-            .as_deref()
-            .and_then(config_dir_windows)
-    } else if cfg!(target_os = "macos") {
-        home_dir().map(|h| config_dir_macos(&h))
-    } else {
-        home_dir().map(|h| config_dir_unix(&h))
-    };
+    CONFIG_DIR_CACHE
+        .get_or_init(|| {
+            let resolved = if cfg!(target_os = "windows") {
+                let exe_dir = std::env::current_exe()
+                    .ok()
+                    .as_deref()
+                    .and_then(config_dir_windows);
+                match exe_dir {
+                    Some(dir) if dir_writable(&dir) => Some(dir),
+                    Some(dir) => {
+                        log::warn!(
+                            "exe 所在目录 {:?} 不可写（perMachine 安装/权限锁定？），回退到 %LOCALAPPDATA%",
+                            dir
+                        );
+                        let fallback = windows_appdata_fallback();
+                        if let Some(ref fb) = fallback {
+                            if !dir_writable(fb) {
+                                log::warn!("回退目录 {:?} 同样不可写，继续回退临时目录", fb);
+                                return std::env::temp_dir();
+                            }
+                        }
+                        fallback
+                    }
+                    None => windows_appdata_fallback(),
+                }
+            } else if cfg!(target_os = "macos") {
+                home_dir().map(|h| config_dir_macos(&h))
+            } else {
+                home_dir().map(|h| config_dir_unix(&h))
+            };
 
-    resolved.unwrap_or_else(|| {
-        let fallback = std::env::temp_dir();
-        log::warn!(
-            "无法解析配置目录（exe 路径 / $HOME 均不可用），回退到临时目录 {:?}；配置可能随系统清理丢失",
-            fallback
-        );
-        fallback
-    })
+            resolved.unwrap_or_else(|| {
+                let fallback = std::env::temp_dir();
+                log::warn!(
+                    "无法解析配置目录（exe 路径 / $HOME 均不可用），回退到临时目录 {:?}；配置可能随系统清理丢失",
+                    fallback
+                );
+                fallback
+            })
+        })
+        .clone()
 }
 
 /// 用户主目录（`$HOME`），空值视为不可用。
@@ -219,6 +286,32 @@ mod tests {
     fn windows_config_dir_should_be_none_when_exe_has_no_real_parent() {
         // 父目录为空字符串等价于「相对 CWD」，正是本模块要杜绝的，必须当作失败。
         assert_eq!(config_dir_windows(Path::new("app.exe")), None);
+    }
+
+    #[test]
+    fn windows_appdata_fallback_should_join_bundle_id() {
+        // debug5-1：perMachine/权限锁住时的逃生舱落点
+        assert_eq!(
+            windows_appdata_dir(Some(std::ffi::OsStr::new("/AppData/Local"))),
+            Some(PathBuf::from(
+                "/AppData/Local/com.lol-record-analysis-tauri.app"
+            ))
+        );
+        assert_eq!(windows_appdata_dir(None), None);
+        assert_eq!(windows_appdata_dir(Some(std::ffi::OsStr::new(""))), None);
+    }
+
+    #[test]
+    fn dir_writable_should_detect_real_directories() {
+        // 真实可写目录 → true；探测哨兵文件已清理
+        let dir = std::env::temp_dir().join(format!("ra-writable-test-{}", std::process::id()));
+        assert!(dir_writable(&dir));
+        assert!(dir.is_dir());
+        assert!(
+            std::fs::read_dir(&dir).unwrap().next().is_none(),
+            "哨兵文件必须清理干净"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
