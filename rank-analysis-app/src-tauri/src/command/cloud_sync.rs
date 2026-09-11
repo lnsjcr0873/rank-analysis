@@ -31,7 +31,11 @@ const SUPABASE_PUBLISHABLE_KEY: &str = "sb_publishable_ksZfyme84izJY9oTWC4VOw_l9
 /// 云端单次拉取响应的字节上限（5MiB）：同 puuid 的行任何匿名账号可插入，
 /// 攻击者可注册大量账号塞行把响应撑到 GB 级；超限直接失败（同步报错而非 OOM），
 /// 正常备注表（万条以内）远小于此值，不受影响。
-const MAX_PULL_BYTES: usize = 5 * 1024 * 1024;
+/// 拉取上限：云端是「该 puuid + data_type 下所有设备的行」集合——2 台设备各推送
+/// 3MB 备注时响应即达 6MB。若与推送上限同款 5MB 会对一个正常多设备用户形成
+/// **拉取自锁**（永远超限 → 永远无法再取）。放宽到推送上限的 4 倍，既容纳
+/// 多设备叠加，也保留 DoS 防线（攻击者塞行仍不能把响应撑到 GB 级）。
+const MAX_PULL_BYTES: usize = 20 * 1024 * 1024;
 /// 云端单次推送的字节上限（5MiB）：与拉取侧对齐，超限拒绝并提示用户清理备注。
 const MAX_PUSH_BYTES: usize = 5 * 1024 * 1024;
 /// puuid 长度上限：正常 UUID 36 字符，留余量；防巨型字符串拼进 URL/打爆查询。
