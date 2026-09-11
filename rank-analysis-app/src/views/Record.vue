@@ -146,6 +146,7 @@ import type { Game } from '../types/domain/match'
 import type { ChampionPoolEntry } from '../components/record/championPool'
 import { useBreakpoint } from '@renderer/composables/useBreakpoint'
 import { usePlayerRecordData } from '@renderer/composables/usePlayerRecordData'
+import { shouldYieldToEditableTarget } from '@renderer/utils/domHotkey'
 
 const route = useRoute()
 const { isMobile, isCompact } = useBreakpoint()
@@ -183,6 +184,7 @@ function stepDetail(dir: -1 | 1) {
 /** 聚焦模式下键盘切换：Esc 收回、←/→ 上/下一个对局 */
 function onGlobalKey(e: KeyboardEvent) {
   if (!focusMode.value) return
+  if (shouldYieldToEditableTarget(e)) return
   if (e.key === 'Escape') {
     e.preventDefault()
     onSelectGame(null)

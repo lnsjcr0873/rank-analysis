@@ -316,7 +316,7 @@ Rust
 .filter(|p| p.team_id != my.team_id)
 四、 本轮问题清单总结
 序号	类别	模块 / 文件	核心表现	修复策略
-1	交互	Record.vue	详情展开时在搜索框按左右方向键，直接触发切换对局	过滤 HTMLInputElement 键盘事件
+1	交互	Record.vue	详情展开时在搜索框按左右方向键，直接触发切换对局	过滤 HTMLInputElement 键盘事件【已完成：未照搬最小口径。守卫抽为utils/domHotkey纯函数shouldYieldToEditableTarget：input/textarea/select/contenteditable(含内层子元素、false飞地除外)+输入法组词isComposing/Process（与CommandPalette同口径）。审阅同类全局keydown（Framework/CommandPalette/useZoom/useWindowShortcuts）均为Ctrl组合键无同患。附5单测。prettier/eslint/tsc全过，9测试全绿】
 2	Prompt	champSelect.ts	悬停未锁定时将 !pickState 判定为已锁，AI 误诊拒绝输出 BP 建议	严格要求 p.pickState === 'locked'
 3	网络	sgp.rs	请求 Timeline 未经 get_sgp_region_path_param 转换，部分区服返回 404	统一转换 SGP 路径别名参数
 4	网络	sgp.rs	SGP 401 鉴权过期时不清理 Token 缓存，引发持续 30s 的雪崩报错	遭遇 401 立即失效 Token 缓存
