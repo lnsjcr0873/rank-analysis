@@ -42,13 +42,14 @@ const sorted = computed(() =>
   cursor: help;
 }
 .badge--gold {
-  color: #ffd76a;
-  border-color: #ffd76a88;
-  background: rgba(255, 215, 106, 0.08);
+  /* debug6：金牌走 --brand token（此前硬编码 #ffd76a 浅色下失真） */
+  color: var(--brand-deep, var(--brand));
+  border-color: var(--brand-border);
+  background: var(--brand-soft);
 }
 .badge--silver {
-  color: #b9c4d0;
-  border-color: #b9c4d066;
+  color: var(--text-secondary);
+  border-color: var(--border-strong);
 }
 .compact .badge {
   font-size: 10px;

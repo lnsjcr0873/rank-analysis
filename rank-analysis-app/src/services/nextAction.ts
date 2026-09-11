@@ -22,10 +22,11 @@ export const NEXT_ACTION_LABELS: Record<string, string> = {
   objective: '资源提醒'
 }
 
+/* debug6：紧急色走 token（此前硬编码 hex 浅色下失真；:style 绑定 CSS var 字符串同样生效） */
 export const URGENCY_COLORS: Record<string, string> = {
-  high: '#e65454',
-  medium: '#e6a854',
-  low: '#54a8e6'
+  high: 'var(--loss)',
+  medium: 'var(--warn)',
+  low: 'var(--info)'
 }
 
 export async function getNextActions(
