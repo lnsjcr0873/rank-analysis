@@ -403,7 +403,11 @@ fn damage_dip_events(
     out
 }
 
-/// 对单名玩家的帧事件流做全维归因（时间升序，截断 [`MAX_EVENTS`]）。
+/// 对单名玩家的帧事件流做全维归因（按重要性截断 [`MAX_EVENTS`] 后时间升序）。
+///
+/// debug5：此前先时间排序再 truncate，前 10 分钟琐碎事件占满 12 名额，
+/// 中后期大龙团被秒、高地猝死等高权重证据全被丢弃。现先按 `delta.abs()`
+/// 降序取最重要的 12 条，再按时间升序排版供界面阅读。
 ///
 /// `team_pids`：本队 5 人 participantId 集合（用于队均基准与"本队参与团战"判定；
 /// 帧数据本身不带 team 信息，必须由调用方从 LCU 详情提供）。
@@ -440,8 +444,14 @@ pub fn compute_score_events(
     ));
     events.extend(damage_dip_events(detail, participant_id, team_pids));
 
-    events.sort_by_key(|e| e.timestamp_secs);
+    events.sort_by(|a, b| {
+        b.delta
+            .abs()
+            .partial_cmp(&a.delta.abs())
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     events.truncate(MAX_EVENTS);
+    events.sort_by_key(|e| e.timestamp_secs);
     events
 }
 
@@ -736,6 +746,49 @@ mod tests {
             .windows(2)
             .all(|w| w[0].timestamp_secs <= w[1].timestamp_secs));
         assert!(evs.len() <= MAX_EVENTS);
+    }
+
+    #[test]
+    fn truncation_prefers_high_delta_over_early_time() {
+        // debug5 回归：12 次前期阵亡（delta 0.1）+ 1 次后期漏团（delta 0.5）。
+        // 旧逻辑按时间截前 12 条会丢掉后期漏团；新逻辑按重要性取，漏团必须留存。
+        let mut kills = Vec::new();
+        for i in 1..=12 {
+            kills.push(ev("CHAMPION_KILL", i * 60_000, Some(9), Some(9), Some(ME)));
+        }
+        // 后期团战：本队 3 死（队友），本人未参与 → 漏团事件。
+        kills.push(ev(
+            "CHAMPION_KILL",
+            1_800_000,
+            Some(9),
+            Some(9),
+            Some(MATE_A),
+        ));
+        kills.push(ev(
+            "CHAMPION_KILL",
+            1_810_000,
+            Some(9),
+            Some(9),
+            Some(MATE_B),
+        ));
+        kills.push(ev(
+            "CHAMPION_KILL",
+            1_820_000,
+            Some(9),
+            Some(9),
+            Some(MATE_A),
+        ));
+        let d = detail(vec![frame(0, HashMap::new(), kills)]);
+        let evs = compute_score_events(&d, ME, &my_team());
+        assert!(evs.len() <= MAX_EVENTS);
+        assert!(
+            evs.iter()
+                .any(|e| e.dimension == ScoreDimension::Participation),
+            "后期高权重漏团不得被前期琐碎阵亡挤掉"
+        );
+        assert!(evs
+            .windows(2)
+            .all(|w| w[0].timestamp_secs <= w[1].timestamp_secs));
     }
 
     #[test]
