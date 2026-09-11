@@ -97,12 +97,28 @@ fn endpoint_of<'a>(
 }
 
 /// 择优判定：incoming 的 updatedAt 更新（或当前无配置）才应用。
-/// 同源下发格式固定（ISO-8601 等长字符串），字典序即时间序。
+///
+/// 字典序不能直接当时间序：上游 CDN 可能一处下发带毫秒（`….00.000Z`）另一处不带
+/// （`….00Z`）。字符序里 `'Z'(90) > '.'(46)`，会使**同时刻**的两种格式一个恒「新」，
+/// 刚拉到的正经新配置也可能被判旧而永久拒收。统一剥掉结尾毫秒段与 `Z` 到秒精度再比，
+/// 同时刻视为相等（不降级也不误升级），真正晚一秒的配置仍能胜出。
 fn config_is_newer(cur: Option<&LeagueServersConfig>, incoming: &LeagueServersConfig) -> bool {
     match cur {
         None => true,
-        Some(cur) => incoming.updated_at > cur.updated_at,
+        Some(cur) => ts_second_key(&incoming.updated_at) > ts_second_key(&cur.updated_at),
     }
+}
+
+/// `YYYY-MM-DDTHH:MM:SS(.mmm)?Z?` → 秒级排序键（去掉可选毫秒段与结尾 `Z`）。
+fn ts_second_key(s: &str) -> &str {
+    let b = s.as_bytes();
+    if b.len() > 20 && b[19] == b'.' {
+        return &s[..19];
+    }
+    if b.last() == Some(&b'Z') {
+        return &s[..b.len() - 1];
+    }
+    s
 }
 
 /// 应用配置到内存 + 写磁盘缓存（写盘失败静默——下次启动重新拉取即可）。
@@ -315,6 +331,25 @@ mod tests {
         assert!(!config_is_newer(Some(&old), &old), "同版本不得覆盖");
         assert!(config_is_newer(Some(&old), &newer));
         assert!(!config_is_newer(Some(&newer), &old));
+    }
+
+    #[test]
+    fn config_is_newer_normalizes_millis_vs_no_millis() {
+        // 同时刻两种格式：带毫秒 vs 不带。旧字典序会因 'Z'>'.' 恒判带秒的更新，
+        // 导致带毫秒的新版本被拒。归一化后视为同刻（不覆盖，也不误升级）。
+        let with_ms = parse_config(&SAMPLE.replace("04:00:00.000Z", "04:00:00.500Z")).unwrap();
+        let without_ms =
+            parse_config(&SAMPLE.replace("2026-07-18T04:00:00.000Z", "2026-07-18T04:00:00Z"))
+                .unwrap();
+        assert!(
+            !config_is_newer(Some(&with_ms), &without_ms),
+            "同秒无毫秒不应把带毫秒的覆盖掉"
+        );
+        // 真正晚一秒仍胜出
+        let later =
+            parse_config(&SAMPLE.replace("2026-07-18T04:00:00.000Z", "2026-07-18T04:00:01Z"))
+                .unwrap();
+        assert!(config_is_newer(Some(&with_ms), &later));
     }
 
     #[test]
