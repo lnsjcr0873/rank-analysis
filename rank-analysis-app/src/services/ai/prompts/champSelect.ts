@@ -13,6 +13,7 @@
 
 import { extractPlayerInsight } from '../player-insight'
 import { getChampionName } from '../champion-names'
+import { sanitizeUserText } from './sanitize'
 import { getChampionMeta, getLaneCounters, findCounterHints } from '@renderer/services/opgg'
 import { buildPatchNotesBlock, PATCH_NOTES_SECTION_HEADER } from './shared/patchNotes'
 import type { BpDecision } from '@renderer/types/bpDecision'
@@ -61,7 +62,7 @@ function bpDecisionText(d: BpDecision | null): string {
   const champName = getChampionName(d.target.champion_id)
   const originText =
     d.target.origin.type === 'Rule'
-      ? `命中规则「${d.target.origin.rule_name}」`
+      ? `命中规则「${sanitizeUserText(d.target.origin.rule_name)}」`
       : `兜底推荐（池内 ${d.target.origin.pool_size} 个候选）`
   const evidenceText = d.target.evidence
     ? `；对位 ${getChampionName(d.target.evidence.against_champion_id)} 胜率 ${(d.target.evidence.win_rate * 100).toFixed(0)}%（该选择有已知被克制风险）`
@@ -83,6 +84,9 @@ function lineupText(mine: LineupScore, enemy: LineupScore): string {
 /** 我方玩家一行的核心画像摘要（选人期精简版，字段取舍见文件头注释） */
 function myPlayerLine(p: SessionSummoner): string {
   const insight = extractPlayerInsight(p, { detailed: false })
+  // insight.name 是 Riot ID（用户可改名）：恶意名含换行/指令覆盖时不包会污染
+  // prompt 上下文甚至破坏 JSON 输出结构；tier/位置/英雄名均非用户输入，无需包。
+  const safeName = sanitizeUserText(insight.name)
   const champLabel =
     p.championId > 0
       ? `${getChampionName(p.championId)}${p.pickState !== 'locked' ? '（未锁定）' : ''}`
@@ -95,7 +99,7 @@ function myPlayerLine(p: SessionSummoner): string {
           `${c.champion}(${c.winRate}%/${c.games}场)`
       )
       .join('、') || '无近期数据'
-  return `- ${insight.name}（${insight.tier}）本局：${champLabel}${assignedPositionSegment(p.assignedPosition)}｜近期胜率 ${insight.recentStats.winRate}% KDA ${insight.recentStats.kda}｜主打位置 ${insight.mainPosition}｜常用：${topChampsText}`
+  return `- ${safeName}（${insight.tier}）本局：${champLabel}${assignedPositionSegment(p.assignedPosition)}｜近期胜率 ${insight.recentStats.winRate}% KDA ${insight.recentStats.kda}｜主打位置 ${insight.mainPosition}｜常用：${topChampsText}`
 }
 
 /** 选人期 prompt 额外确定性事实（缺省均为 null，此时不写对应小节） */
