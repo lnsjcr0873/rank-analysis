@@ -158,15 +158,6 @@ function resetUsage(): void {
   saveUsage(usage.value)
 }
 
-watch([show, filtered], async () => {
-  active.value = 0
-  if (show.value) {
-    await nextTick()
-    inputEl.value?.focus()
-    scrollActive()
-  }
-})
-
 const inputEl = ref<HTMLInputElement | null>(null)
 const panelEl = ref<HTMLElement | null>(null)
 const listEl = ref<HTMLElement | null>(null)
