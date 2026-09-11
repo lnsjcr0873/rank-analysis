@@ -161,7 +161,7 @@ async function solidifyTag(tag: RankTag): Promise<void> {
 2	系统	paths.rs	Windows 下将数据目录硬编码为 exe.parent()，无管理员权限必崩	改用系统标准 %LOCALAPPDATA% 目录【已完成：未照搬（当前 currentUser 模式默认安装可写，硬切会逼老用户迁移）。改为启动时可写性探测：exe 目录可写沿用，不可写自动回退 %LOCALAPPDATA%/bundle-id；附回退+探测单测。迁移逻辑取 config_file() 父目录，回退后自动跟随无需改动。GNU check/clippy/fmt 全过】
 3	崩溃	engine_win.rs	Windows COM 仅初始化单个线程，多线程 OCR 抛 0x800401F0	建立线程级 RAII COM 守护初始化【已完成：删全局 Once，改每次执行持 ComGuard（CoInitializeEx+Drop配对清理）。默认+ocr-win 双特性 check/clippy/fmt 全过】
 4	数据	score.rs	GAME_SCORE_CACHE 缓存 Key 缺少大区标识，跨服同 ID 发生串号	Key 格式升级为 "{platform}:{game_id}"
-5	AI	minuteCurve.ts	快节奏局超出时间轴直接复制末尾，AI 误诊「补刀完全停滞」	超出真实游戏时长时截断或返回 null
+5	AI	minuteCurve.ts	快节奏局超出时间轴直接复制末尾，AI 误诊「补刀完全停滞」	超出真实游戏时长时截断或返回 null【已完成：csAt15/csAt25/deathsBy15 越界改返回 null；文案层声明"对局已结束"禁评价中后期；更新3处单测+补文案单测。34测试全绿，tsc全过】
 6	逻辑	game_queue.rs	ID 升序导致现行队列（如 870）被旧队列（830）反向去重覆盖	优先保留更高或映射表中现行的有效队列 ID
 7	UI	BestPicksPanel.vue	英雄池仅初始化一次，切换召唤师后依然展示旧账号英雄池	切换召唤师时重置 poolEntries.value = null
 8	数据	UnifiedTagRow.vue	匿名选人阶段固化备注导致空玩家名永久入库污染记录	过滤空用户名，待进入对局姓名解密后再补全

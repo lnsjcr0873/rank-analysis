@@ -237,8 +237,8 @@ describe('GrowthTrendCard 分时曲线（D-P3）', () => {
       RecentData,
       import('@renderer/components/record/minuteCurve').MinuteCurveInsights | null
     ]
-    expect(insights?.csAt15).toBe(9) // 轴不足（0..2）→ 末值
-    expect(insights?.deathsBy15).toBe(1)
+    expect(insights?.csAt15).toBeNull() // 轴不足（0..2）→ 无节点（debug5-4）
+    expect(insights?.deathsBy15).toBeNull()
   })
 
   it('点「生成报告」：curve 未加载 → 先 load，失败降级不带画像', async () => {

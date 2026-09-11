@@ -44,9 +44,19 @@ export function growthCurveText(insights: MinuteCurveInsights): string {
     insights.fightPeakMinutes.length > 0
       ? insights.fightPeakMinutes.map(m => `${m} 分钟`).join('、')
       : '节奏平缓'
+  // debug5-4：短局/投降局无 15/25 分钟节点时显式声明对局已结束，
+  // 禁止外推末值（否则 AI 误判"15~25 分钟一刀未补"）。
+  const csLine =
+    insights.csAt15 == null && insights.csAt25 == null
+      ? '· 累计补刀：对局在 15 分钟前结束，无 15/25 分钟节点（禁止据此评价中后期发育）'
+      : `· 15 分钟累计补刀：${insights.csAt15 ?? '对局已结束，无此节点'}（25 分钟：${insights.csAt25 ?? '对局已结束，无此节点'}）`
+  const deathsLine =
+    insights.deathsBy15 == null
+      ? `· 死亡时机：对局在 15 分钟前结束，全场累计 ${insights.deathsTotal} 次，集中段 ${spike}`
+      : `· 死亡时机：15 分钟前累计 ${insights.deathsBy15} 次，全场累计 ${insights.deathsTotal} 次，集中段 ${spike}`
   return [
-    `· 15 分钟累计补刀：${insights.csAt15}（25 分钟：${insights.csAt25}）`,
-    `· 死亡时机：15 分钟前累计 ${insights.deathsBy15} 次，全场累计 ${insights.deathsTotal} 次，集中段 ${spike}`,
+    csLine,
+    deathsLine,
     `· 参团节奏：每分钟平均 ${insights.avgFightsPerMin} 个参团击杀，活跃段 ${fightPeak}`
   ].join('\n')
 }

@@ -162,12 +162,16 @@ export function aggregateMinuteCurves(
  * 「15 分钟补刀落后」「死亡集中段」这类结论可引用的数字。
  */
 export interface MinuteCurveInsights {
-  /** 15 分钟累计补刀（场均；轴不足 15 分钟时取末值） */
-  csAt15: number
-  /** 25 分钟累计补刀（同上） */
-  csAt25: number
-  /** 15 分钟前累计死亡（场均） */
-  deathsBy15: number
+  /**
+   * 15 分钟累计补刀（场均；轴不足 15 分钟时为 null——短局/投降局无此节点，
+   * 调用方必须声明"对局已结束"而非外推末值。debug5-4：此前取末值导致
+   * 15 分钟=25 分钟=110 刀，AI 误判"15~25 分钟一刀未补"）。
+   */
+  csAt15: number | null
+  /** 25 分钟累计补刀（同上；短局为 null） */
+  csAt25: number | null
+  /** 15 分钟前累计死亡（场均；轴不足时为 null） */
+  deathsBy15: number | null
   /** 整场累计死亡（场均） */
   deathsTotal: number
   /** 死亡集中段（死亡累计增速最快的分钟段，升序，最多 3 个） */
@@ -178,7 +182,14 @@ export interface MinuteCurveInsights {
   avgFightsPerMin: number
 }
 
-const at = (values: number[], minute: number) => values[Math.min(minute, values.length - 1)] ?? 0
+/**
+ * 取分钟锚点：轴内返回四舍五入/一位小数，超出轴返回 null（debug5-4）。
+ * 调用方据此声明节点缺失，禁止外推末值喂给 AI。
+ */
+const atRound = (values: number[], minute: number): number | null =>
+  minute < values.length ? Math.round(values[minute]) : null
+const atDeaths = (values: number[], minute: number): number | null =>
+  minute < values.length ? Math.round(values[minute] * 10) / 10 : null
 
 /** 累计序列的增速（相邻差值）最高的分钟段；不足两分钟轴时返回空 */
 function spikeMinutes(values: number[], top: number): number[] {
@@ -214,10 +225,10 @@ export function summarizeMinuteCurve(
   if (!curve || curve.minutes.length === 0) return null
   const n = curve.minutes.length - 1
   return {
-    csAt15: Math.round(at(curve.cs, Math.min(15, n))),
-    csAt25: Math.round(at(curve.cs, Math.min(25, n))),
-    deathsBy15: Math.round(at(curve.deaths, Math.min(15, n)) * 10) / 10,
-    deathsTotal: Math.round(at(curve.deaths, n) * 10) / 10,
+    csAt15: atRound(curve.cs, 15),
+    csAt25: atRound(curve.cs, 25),
+    deathsBy15: atDeaths(curve.deaths, 15),
+    deathsTotal: Math.round((curve.deaths[n] ?? 0) * 10) / 10,
     deathSpikeMinutes: spikeMinutes(curve.deaths, 3),
     fightPeakMinutes: peakMinutes(curve.fights, 3),
     avgFightsPerMin:

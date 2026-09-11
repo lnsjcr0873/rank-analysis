@@ -195,13 +195,15 @@ describe('summarizeMinuteCurve（分时画像特征）', () => {
     expect(summarizeMinuteCurve(aggOf([], [], []))).toBeNull()
   })
 
-  it('补刀取 15/25 分钟锚点，轴不足时取末值', () => {
-    // 轴不足（0..6 分钟）→ 15 分钟锚点取末值
+  it('补刀取 15/25 分钟锚点，轴不足时为 null（debug5-4：禁外推末值）', () => {
+    // 轴不足（0..6 分钟）→ 15/25 分钟节点不存在，返回 null
     const short = summarizeMinuteCurve(
       aggOf([0, 5, 10, 16, 20, 24, 28], [0, 1, 1, 1, 1, 1, 1], [0, 0, 0, 1, 1, 1, 1])
     )!
-    expect(short.csAt15).toBe(28)
-    expect(short.csAt25).toBe(28)
+    expect(short.csAt15).toBeNull()
+    expect(short.csAt25).toBeNull()
+    expect(short.deathsBy15).toBeNull()
+    expect(short.deathsTotal).toBe(1)
     // 轴充足（0..30 分钟）→ 取 index 15 / 25
     const cs = Array.from({ length: 31 }, (_, m) => m * 2)
     const long = summarizeMinuteCurve(aggOf(cs, new Array(31).fill(0), new Array(31).fill(0)))!
@@ -212,7 +214,7 @@ describe('summarizeMinuteCurve（分时画像特征）', () => {
   it('死亡集中段 = 累计增速最快的分钟段', () => {
     // 0..4 分钟死亡 0,0,2,3,4：增速峰值在 minute2（+2），并列段按升序收尾
     const s = summarizeMinuteCurve(aggOf([0, 1, 2, 3, 4], [0, 0, 2, 3, 4], [0, 0, 0, 0, 0]))!
-    expect(s.deathsBy15).toBe(4)
+    expect(s.deathsBy15).toBeNull() // 轴不足 15 分钟 → 无节点（debug5-4）
     expect(s.deathsTotal).toBe(4)
     expect(s.deathSpikeMinutes[0]).toBe(2) // 增速最快的段
     expect(s.deathSpikeMinutes.length).toBeLessThanOrEqual(3)

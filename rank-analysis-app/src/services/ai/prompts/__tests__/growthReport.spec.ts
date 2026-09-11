@@ -109,6 +109,21 @@ describe('buildGrowthReportPrompt', () => {
     expect(prompt).toContain('每分钟平均 0.38 个参团击杀')
   })
 
+  it('growthCurveText 短局无节点时声明对局已结束（debug5-4）', () => {
+    const text = growthCurveText({
+      csAt15: null,
+      csAt25: null,
+      deathsBy15: null,
+      deathsTotal: 2,
+      deathSpikeMinutes: [8],
+      fightPeakMinutes: [8],
+      avgFightsPerMin: 0.2
+    })
+    expect(text).toContain('对局在 15 分钟前结束')
+    expect(text).toContain('禁止据此评价中后期发育')
+    expect(text).not.toContain('一刀未补')
+  })
+
   it('growthCurveText 无集中段时用「无明显集中段」降级', () => {
     const text = growthCurveText({
       csAt15: 40,
