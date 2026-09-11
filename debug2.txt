@@ -28,10 +28,10 @@ debug2.txt 修复进度（按 debug2 报告逐项，一项一 commit）
 - [ ] #25 sgp gameCreation 缺失 → 1970 排最后
 - [x] #26 min_max_norm 浮点下溢 —— 4f947c9 已按 0.5pp 阈值均分（score.rs）
 - [ ] #27 mayhem AssistScheduler remake 未复位
-- [ ] #28 twoStage 孤儿 Promise/超时未中止
+- [x] #28 twoStage 孤儿 Promise/超时未中止 —— 90c1c34 超时/完成/出错后置 streamSettled 丢弃迟到回调（防与重试流交织），+1 单测
 - [x] #29 validator.ts Markdown 代码块提取 —— 【已验证无需修改】stripFencedCodeBlock 已实现「首个 { → 末个 }」模糊提取（line 209-213），模型前后夹带思考/自然语言也能取出 JSON
 - [x] #30 timelineData fillSeries 稀疏分钟越界 —— 【已验证无需修改】fillSeries 已按分钟轴遍历 + 缺失沿用前值（line 104-111，单测「缺失分钟沿用前值补齐全轴」）
-- [ ] #31 score/events cluster_teamfights 除零/负时长
+- [x] #31 score/events cluster_teamfights 除零/负时长 —— 【已验证无需修改】deaths 先按 timestamp 排序使 t 单调，无负时长
 - [ ] #32 asset.rs ensure_offline_assets alias/字符串 ID
 - [ ] #33 overlay position_by_anchor 多显示器/DPI
 - [ ] #34 overlay show() SW_SHOWNOACTIVATE
@@ -41,7 +41,7 @@ debug2.txt 修复进度（按 debug2 报告逐项，一项一 commit）
 - [ ] #38 automation execute_at_secs_left 暂停误锁
 - [ ] #39 autoTrade ARAM 误换人
 - [x] #40 SummaryTab badge.icon、LazyImg 重试 —— 7452a32 LazyImg 有界延迟重试（LCU 启动 404 自愈）+ badge.icon v-if 守卫
-- [ ] #41 score/events frame_increments 负数、format.ts 微秒
+- [x] #41 score/events frame_increments 负数、format.ts 微秒 —— 【events.rs 已验证】inc>=0 跳过复位 + avg>0 门禁；【format.ts 已修复】8a98b65 微秒归毫秒 + >2100 年拒收
 - [x] #42 cloudSync markConfigDirty 竞态、UserSidePanel activeChampion 复位 —— beec6e0（activeChampion 随英雄池换源复位）+ b8a386a（apply 后 500ms 抑制 config-changed 回声，防再推送空转）
 - [ ] #43 system relaunch_as_admin 相对路径
 =====================================================================error
