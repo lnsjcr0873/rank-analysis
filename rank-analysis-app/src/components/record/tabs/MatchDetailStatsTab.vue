@@ -155,7 +155,7 @@
           v-for="row in groupedRows[group]"
           :key="row.def.key"
           class="match-detail-stats-row"
-          :class="{ 'match-detail-stats-row--missing': row.max === 0 }"
+          :class="{ 'match-detail-stats-row--missing': row.empty }"
         >
           <!-- 首列：统计名（sticky left） -->
           <div class="match-detail-stats-label-cell">
@@ -163,7 +163,7 @@
           </div>
           <!-- 数据列：10 人 -->
           <n-tooltip
-            v-if="row.max > 0"
+            v-if="!row.empty"
             trigger="hover"
             placement="left"
             :disabled="statsBarDisabled(row)"
@@ -305,9 +305,9 @@ function formatCell(row: StatsTableRow, value: number) {
   return row.def.format(value)
 }
 
-/** 单列数值的 hover 条形图只对数值型行提供；缺失行（max 0）不挂 tooltip */
+/** 单列数值的 hover 条形图只对数值型行提供；缺失行（empty）不挂 tooltip */
 function statsBarDisabled(row: StatsTableRow) {
-  return row.max === 0 || row.values.every(v => Number.isNaN(v))
+  return row.empty
 }
 
 /** 条形宽度：按行 max 刻度，0/NaN 时 0% */

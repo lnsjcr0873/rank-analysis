@@ -154,8 +154,28 @@ describe('detailsTable', () => {
       expect(pick('longestTimeSpentLiving').def.format(59)).toBe('0:59')
     })
 
-    it('自定义行定义可覆盖默认（SGP 增强追加行）', () => {
-      const custom = [
+    it('debug5：全员 0 不是缺失（empty=false），全 NaN 才是缺失', () => {
+      const zeros = [makePlayer(0, 100, { pentaKills: 0 }), makePlayer(1, 200, { pentaKills: 0 })]
+      const zeroTable = buildStatsTable(zeros)
+      const zeroRow = zeroTable.find(r => r.def.key === 'pentaKills')!
+      expect(zeroRow.max).toBe(0)
+      expect(zeroRow.empty).toBe(false)
+
+      const custom: Parameters<typeof buildStatsTable>[1] = [
+        {
+          key: 'x',
+          label: '自定义',
+          group: '其他' as const,
+          value: () => NaN,
+          format: (v: number) => `${v}`
+        }
+      ]
+      const nanTable = buildStatsTable(zeros, custom)
+      expect(nanTable[0].empty).toBe(true)
+      expect(nanTable[0].max).toBe(0)
+    })
+
+    it('自定义行定义可覆盖默认（SGP 增强追加行）', () => {      const custom = [
         {
           key: 'x',
           label: '自定义',

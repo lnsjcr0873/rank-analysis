@@ -205,6 +205,14 @@ describe('evaluateSignals', () => {
     )
     expect(signals).toHaveLength(1)
   })
+  it('debug5：玩家名含 $ 时不触发 replace 模式替换', () => {
+    const signals = evaluateSignals(
+      [subject({ name: 'Rich$Carry', metrics: { ...subject({}).metrics, lossStreak: 4 } })],
+      [lossRule]
+    )
+    expect(signals).toHaveLength(1)
+    expect(signals[0].text).toBe('Rich$Carry正在4连败，注意心态与对线保守')
+  })
 })
 
 describe('formatMetric', () => {

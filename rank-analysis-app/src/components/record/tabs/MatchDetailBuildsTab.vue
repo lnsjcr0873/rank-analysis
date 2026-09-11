@@ -169,10 +169,9 @@
                   </n-tooltip>
                   <n-tooltip v-else-if="it.kind === 'undo'" trigger="hover" placement="top">
                     <template #trigger>
-                      <span class="match-detail-builds-timeline-undo"
-                        >撤销 {{ itemName(it.beforeId) || `#${it.beforeId}` }} →
-                        {{ itemName(it.afterId) || `#${it.afterId}` }}</span
-                      >
+                      <span class="match-detail-builds-timeline-undo">{{
+                        undoText(it.beforeId, it.afterId)
+                      }}</span>
                     </template>
                     <span>{{ fmtTs(it.timestamp) }} 撤销购买（返还金币）</span>
                   </n-tooltip>
@@ -234,6 +233,16 @@ const SKILL_KEY: Record<number, string> = { 1: 'Q', 2: 'W', 3: 'E', 4: 'R' }
 /** 时间戳 → m:ss（与事件 tab 口径一致） */
 const fmtTs = (ts: number) =>
   `${Math.floor(ts / 60000)}:${String(Math.round((ts % 60000) / 1000)).padStart(2, '0')}`
+
+/**
+ * 撤销文案：afterId 为 0 = 撤销购买（退款消失，无指向）；>0 = 换装撤销。
+ * debug5：此前 afterId=0 时兜底拼出 `#0` 内部代号。
+ */
+const undoText = (beforeId: number, afterId: number) => {
+  const before = itemName(beforeId) || `#${beforeId}`
+  if (afterId <= 0) return `撤销购买 ${before}`
+  return `撤销 ${before} → ${itemName(afterId) || `#${afterId}`}`
+}
 
 /** SGP 事件流聚合：技能加点 + 购买时间线 + 铁砧计数（纯函数层 buildsTable） */
 const builds = computed<BuildCollection>(() => collectBuildEvents(ctx.sgpDetail.value?.frames))

@@ -206,6 +206,8 @@ export interface StatsTableRow {
   values: number[]
   /** 全场最大值（NaN 过滤后），用于 hover 条形图刻度；全缺失时为 0 */
   max: number
+  /** 无任何有效数字（全 NaN）= 字段缺失；全员 0 时为 false（正常展示 0） */
+  empty: boolean
 }
 
 export interface StatsTablePlayer {
@@ -240,7 +242,9 @@ export function buildRowsFromSources<T>(
     const values = sources.map(s => def.value(s))
     const numeric = values.filter(v => Number.isFinite(v))
     const max = numeric.length ? Math.max(...numeric) : 0
-    return { def, values, max }
+    // debug5：全员 0（如五杀/真眼）≠ 字段缺失。缺失仅当无任何有效数字。
+    const empty = numeric.length === 0
+    return { def, values, max, empty }
   })
 }
 

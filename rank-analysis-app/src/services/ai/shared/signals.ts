@@ -122,12 +122,14 @@ function fillTemplate(
   subject: SignalSubject,
   met: Record<string, number>
 ): string {
-  let text = template.replace(/\{name\}/g, subject.name)
+  // debug5：replacement 用函数回调——玩家名含 $（如 Rich$Carry）时，
+  // 字符串形式的第二个参数会触发 $&/$'/$` 模式替换导致文案爆炸。
+  let text = template.replace(/\{name\}/g, () => subject.name)
   for (const match of template.matchAll(/\{(\w+)\}/g)) {
     const key = match[1]
     const v = met[key]
     if (typeof v === 'number' && !Number.isNaN(v)) {
-      text = text.replace(new RegExp(`\\{${key}\\}`, 'g'), formatMetric(key, v))
+      text = text.replace(new RegExp(`\\{${key}\\}`, 'g'), () => formatMetric(key, v))
     }
   }
   return text
