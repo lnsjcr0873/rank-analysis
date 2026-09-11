@@ -49,8 +49,8 @@ static SGP_SUMMARY_CACHE: LazyLock<Cache<String, Value>> = LazyLock::new(|| {
 /// entitlements accessToken 的短 TTL 缓存。
 ///
 /// 此前每次 SGP 请求都现取：跨区批量拉 10 人段位 = 10 次额外 LCU 往返。
-/// token 轮换周期远大于 30s，且 401 自愈路径靠刷新**主机映射**而非换 token，
-/// 短缓存不改变任何故障恢复语义。
+/// token 轮换周期远大于 30s；401 时请求层先失效本缓存、重取新 token 再重试
+///（[`sgp_get_resilient`]，debug5-401），短缓存不改变故障恢复语义。
 static ENTITLEMENTS_TOKEN_CACHE: LazyLock<Cache<(), String>> = LazyLock::new(|| {
     Cache::builder()
         .max_capacity(1)
@@ -66,10 +66,34 @@ static LEAGUE_SESSION_TOKEN_CACHE: LazyLock<Cache<(), String>> = LazyLock::new(|
         .build()
 });
 
+/// 401 时失效 token 缓存（debug5-401）。
+///
+/// `common=false` 走 entitlements token，`true` 走 league-session token，
+/// 各管一路，不互相污染。
+pub async fn invalidate_sgp_token(common: bool) {
+    if common {
+        LEAGUE_SESSION_TOKEN_CACHE.invalidate(&()).await;
+    } else {
+        ENTITLEMENTS_TOKEN_CACHE.invalidate(&()).await;
+    }
+}
+
+/// 从 LCU 重取新鲜 token（先失效缓存，再走正常取数路径；LCU 不可用时返回错误，
+/// 调用方回退为返回原始 401 错误，不吞错）。
+async fn refresh_sgp_token(common: bool) -> Result<String, String> {
+    invalidate_sgp_token(common).await;
+    if common {
+        get_league_session_token().await
+    } else {
+        get_entitlements_access_token().await
+    }
+}
+
 /// 从本地 LCU 取 SGP 鉴权用的 `accessToken`（`entitlements/v1/token`）。
 ///
 /// 该 token 用于 `match-history-query`，且跨大区通用（已验证）。带 30s 短缓存
-/// 削减批量场景的重复往返；401 场景由上层重取主机映射兜底。
+/// 削减批量场景的重复往返；401 场景由请求层失效缓存后重取（见
+/// [`sgp_get_resilient`]，debug5-401）。
 /// 取数经 `get_with` 单飞（debug3-C5）：缓存过期瞬间 10 并发只穿透 1 次，
 /// 不再 10 路齐打本地 LCU 触发 429/连接重置。
 pub async fn get_entitlements_access_token() -> Result<String, String> {
@@ -188,11 +212,19 @@ fn is_host_refreshable(err: &str) -> bool {
     }
 }
 
+/// SGP 错误是否为 401（token 被拒）：客户端刷新 token / 跨区重鉴权后，
+/// 缓存里的旧 token 即失效（debug5-401）。
+fn is_sgp_unauthorized(err: &str) -> bool {
+    matches!(sgp_error_status(err), Some(401))
+}
+
 /// 带主机映射自愈的 SGP GET（P1-3 加固）：
 /// `sgp_get` 内置 3 次指数退避重试后仍失败（401/5xx/网络），则强制刷新
-/// league-servers 映射（无视 2h 节流）并用新主机重试一次。token 每次现取，
-/// 无需在请求层处理 token 轮换。数据通道经 [`crate::lcu::api::sgp_gateway`]
-/// 接口（P1-4 DI），业务层不直接依赖 HTTP/静态表。
+/// league-servers 映射（无视 2h 节流）并用新主机重试一次。401 额外先失效
+/// token 缓存、重取新鲜 token 再重试（debug5-401，否则 30s 内全携旧 token
+/// 雪崩）；重取失败则回退原始 401 错误。数据通道经
+/// [`crate::lcu::api::sgp_gateway`] 接口（P1-4 DI），业务层不直接依赖
+/// HTTP/静态表。
 async fn sgp_get_resilient<T: serde::de::DeserializeOwned>(
     platform_id: &str,
     uri: &str,
@@ -212,8 +244,21 @@ async fn sgp_get_resilient<T: serde::de::DeserializeOwned>(
         Err(err) if is_host_refreshable(&err) => {
             log::warn!("SGP 请求失败，刷新主机映射后重试一次: {err}");
             sgp_league_servers::force_refresh().await;
+            // 401 先换 token：旧 token 已被服务端拒绝，换主机也救不回来
+            let fresh_token: Option<String> = if is_sgp_unauthorized(&err) {
+                match refresh_sgp_token(common).await {
+                    Ok(fresh) => Some(fresh),
+                    Err(refresh_err) => {
+                        log::warn!("SGP 401 后 token 重取失败，返回原始错误: {refresh_err}");
+                        return Err(err);
+                    }
+                }
+            } else {
+                None
+            };
+            let bearer: &str = fresh_token.as_deref().unwrap_or(token);
             match gw.resolve_host(platform_id, common).await {
-                Some(new_host) => match gw.request(&new_host, uri, token).await {
+                Some(new_host) => match gw.request(&new_host, uri, bearer).await {
                     Ok(body) => serde_json::from_str::<T>(&body)
                         .map_err(|e| format!("SGP 反序列化失败: {e}")),
                     Err(retry_err) => Err(retry_err),
@@ -1242,5 +1287,33 @@ mod tests {
         assert!(is_sgp_not_found("SGP 非 2xx（404）: 404 Not Found"));
         assert!(!is_sgp_not_found("SGP 非 2xx（401）: unauthorized"));
         assert!(!is_sgp_not_found("SGP 请求失败（网络/TLS）: timeout"));
+    }
+
+    #[test]
+    fn unauthorized_matches_401_for_token_refresh() {
+        // debug5-401：401 命中 token 刷新分支（三种调用方共享同一判定）
+        assert!(is_sgp_unauthorized("SGP 非 2xx（401）: unauthorized"));
+        assert!(!is_sgp_unauthorized("SGP 非 2xx（403）: forbidden"));
+        assert!(!is_sgp_unauthorized("SGP 非 2xx（404）: 404 Not Found"));
+        assert!(!is_sgp_unauthorized("SGP 请求失败（网络/TLS）: timeout"));
+    }
+
+    #[tokio::test]
+    async fn invalidate_token_cache_clears_only_target_lane() {
+        // debug5-401：双路 token 缓存互不污染——失效一路，另一路保留
+        ENTITLEMENTS_TOKEN_CACHE.insert((), "ent".to_string()).await;
+        LEAGUE_SESSION_TOKEN_CACHE
+            .insert((), "session".to_string())
+            .await;
+
+        invalidate_sgp_token(false).await;
+        assert!(ENTITLEMENTS_TOKEN_CACHE.get(&()).await.is_none());
+        assert_eq!(
+            LEAGUE_SESSION_TOKEN_CACHE.get(&()).await.as_deref(),
+            Some("session")
+        );
+
+        invalidate_sgp_token(true).await;
+        assert!(LEAGUE_SESSION_TOKEN_CACHE.get(&()).await.is_none());
     }
 }
