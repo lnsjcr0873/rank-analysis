@@ -54,12 +54,19 @@ pub(crate) fn match_condition(
         // 取反条件不能「空真」：banning 阶段队友还没亮英雄（championId 全 0）时，
         // "队友不包含莫甘娜" 会恒真触发误 Ban。必须至少有一位队友已选定英雄
         // （非 0）才允许对「不包含」做判定——否则条件不匹配。
+        //
+        // 另：ids 为空（前端未选具体英雄就保存）是无意义的配置错误，一律判 false，
+        // 防止"排除空集"恒真霸占后续所有正规规则与兜底池。
         RuleCondition::AllyChampionsNotContains { ids } => {
-            team_has_any_selection(&session.my_team) && !team_has_any(&session.my_team, ids)
+            !ids.is_empty()
+                && team_has_any_selection(&session.my_team)
+                && !team_has_any(&session.my_team, ids)
         }
         RuleCondition::EnemyChampionsContains { ids } => team_has_any(&session.their_team, ids),
         RuleCondition::EnemyChampionsNotContains { ids } => {
-            team_has_any_selection(&session.their_team) && !team_has_any(&session.their_team, ids)
+            !ids.is_empty()
+                && team_has_any_selection(&session.their_team)
+                && !team_has_any(&session.their_team, ids)
         }
     }
 }
@@ -294,13 +301,21 @@ mod tests {
     }
 
     #[test]
-    fn ally_not_contains_with_empty_ids_requires_selection() {
-        // 空列表 "不包含以下任意" —— 队友已选英雄时成立；全队未选时不得空真
+    fn ally_not_contains_with_empty_ids_never_matches() {
+        // 空 ids 是无意义的配置错误（前端未选英雄就保存）："不包含空集"
+        // 必须永远判 false，否则有人选英雄时恒真霸占所有后续规则与兜底池。
         let s = make_session(vec![ally_champ(157)]);
         let c = RuleCondition::AllyChampionsNotContains { ids: vec![] };
-        assert!(match_condition(&c, &s, None));
+        assert!(!match_condition(&c, &s, None));
         let none_selected = make_session(vec![ally_champ(0), ally_champ(0)]);
         assert!(!match_condition(&c, &none_selected, None));
+    }
+
+    #[test]
+    fn enemy_not_contains_with_empty_ids_never_matches() {
+        let some = make_session_with_enemies(vec![], vec![enemy_champ(1)]);
+        let c = RuleCondition::EnemyChampionsNotContains { ids: vec![] };
+        assert!(!match_condition(&c, &some, None));
     }
 
     #[test]

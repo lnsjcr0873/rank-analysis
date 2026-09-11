@@ -132,4 +132,29 @@ describe('RuleEditModal', () => {
     expect(rule.action.champion_id).toBe(89)
     expect('lock' in rule.action).toBe(false)
   })
+
+  /**
+   * 测试：英雄类条件未选英雄（空 ids）时保存按钮应被禁用
+   * （空 ids 后端一律判 false，前端直接禁存，防"排除空集"恒真霸占规则链）
+   */
+  it('save button is disabled when champion condition has empty ids', () => {
+    const w = mount(RuleEditModal, {
+      props: {
+        show: true,
+        mode: 'pick',
+        championOptions: opts,
+        initial: {
+          id: 'r2',
+          name: '测试空条件',
+          enabled: true,
+          conditions: [{ type: 'EnemyChampionsNotContains', ids: [] }],
+          action: { champion_id: 157, lock: false }
+        } as PickRule
+      },
+      global: { stubs: globalStubs }
+    })
+    const saveBtn = w.findAll('button').find(b => b.text().trim() === '保存')
+    expect(saveBtn).toBeDefined()
+    expect(saveBtn?.attributes('disabled')).toBeDefined()
+  })
 })

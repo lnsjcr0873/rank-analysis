@@ -62,8 +62,26 @@ watch(
   { immediate: true }
 )
 
+/** 英雄类条件必须选定至少一个英雄：空 ids 是无意义配置，
+ * 后端求值一律判 false（防"排除空集"恒真霸占规则链），此处直接禁存。 */
+function isConditionComplete(c: RuleCondition): boolean {
+  switch (c.type) {
+    case 'AllyChampionsContains':
+    case 'AllyChampionsNotContains':
+    case 'EnemyChampionsContains':
+    case 'EnemyChampionsNotContains':
+      return Array.isArray(c.ids) && c.ids.length > 0
+    default:
+      return true
+  }
+}
+
 const canSave = computed(
-  () => name.value.trim().length > 0 && conditions.value.length > 0 && targetChampion.value != null
+  () =>
+    name.value.trim().length > 0 &&
+    conditions.value.length > 0 &&
+    conditions.value.every(isConditionComplete) &&
+    targetChampion.value != null
 )
 
 function addCondition() {
