@@ -49,6 +49,12 @@ describe('formatGameDate', () => {
     expect(out).not.toMatch(/\d{5}/)
   })
 
+  it('秒级时间戳（10 位）×1000 后格式化，不再渲染 1970 年', () => {
+    const ms = Date.UTC(2024, 5, 5, 4, 13)
+    const secs = String(Math.floor(ms / 1000))
+    expect(formatGameDate(secs)).toBe(formatGameDate(String(ms)))
+  })
+
   it('超 2100 年的异常时间戳（脏数据/极端精度误判）原样返回', () => {
     expect(formatGameDate('9999999999999999')).toBe('9999999999999999')
     expect(formatGameDate('99999999999999')).toBe('99999999999999')

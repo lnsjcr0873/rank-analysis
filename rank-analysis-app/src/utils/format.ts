@@ -44,9 +44,15 @@ export function formatGameDate(raw: string, format: 'short' | 'full' = 'short'):
   let date: Date | null = null
   const ts = Number(raw)
   if (Number.isFinite(ts) && ts > 0) {
-    // 微秒级（16 位数字）归毫秒；毫秒级（13~14 位）原样。年代 sanity：超过
-    // 2100 年视为脏数据（微秒误判/异常源），直接拒收，避免趋势图坐标系拉爆。
-    const ms = ts >= 1_000_000_000_000_000 ? ts / 1000 : ts
+    // 四档判定（debug3-B7）：10 位秒级（1.7e9，个别源下发）此前被当毫秒
+    // 直接变 1970 年；16 位微秒归毫秒；13~14 位毫秒原样。年代 sanity：
+    // 超过 2100 年视为脏数据（微秒误判/异常源），直接拒收，避免趋势图坐标系拉爆。
+    const ms =
+      ts < 1_000_000_000_000
+        ? ts * 1000 // 秒 → 毫秒
+        : ts >= 1_000_000_000_000_000
+          ? ts / 1000 // 微秒 → 毫秒
+          : ts // 毫秒原样
     const d = new Date(ms)
     if (!Number.isNaN(d.getTime()) && d.getUTCFullYear() <= 2100) date = d
   }

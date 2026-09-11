@@ -29,8 +29,8 @@
           :type-cn="typeCn"
           :mode-type="modeType"
           :queue-id="queueId"
-          :img-url="tiersBySubteam[subteam.subteamId]?.[i]?.imgUrl ?? ''"
-          :tier-cn="tiersBySubteam[subteam.subteamId]?.[i]?.tierCn ?? '无'"
+          :img-url="tierOf(p.summoner.puuid, i)?.imgUrl ?? ''"
+          :tier-cn="tierOf(p.summoner.puuid, i)?.tierCn ?? '无'"
           :team="isMine ? 'mine' : 'enemy'"
           :density="density"
           :opgg-mode="opggMode"
@@ -99,6 +99,27 @@ const props = withDefaults(defineProps<Props>(), {
 const placeholderCount = computed(() =>
   Math.max(0, props.expectedSize - props.subteam.players.length)
 )
+
+/**
+ * 段位按 puuid 检索（debug3-B7）：此前用循环索引 i 下标 tiers 数组，
+ * Arena 等模式玩家中途离开致 players 缩减、tiers 更新滞后时，段位会错位
+ * 挂到别人头上。tiers 与 players 同源同序，zip 建 Map 后按 puuid 取；
+ * puuid 缺失（匿名）时回退索引（选人期敌方无身份，顺序即唯一对应）。
+ */
+const tierByPuuid = computed(() => {
+  const tiers = props.tiersBySubteam[props.subteam.subteamId] ?? []
+  const map = new Map<string, TierDisplay | undefined>()
+  props.subteam.players.forEach((p, i) => {
+    const key = p.summoner.puuid
+    if (key && !map.has(key)) map.set(key, tiers[i])
+  })
+  return { map, tiers }
+})
+
+function tierOf(puuid: string, index: number): TierDisplay | undefined {
+  if (puuid) return tierByPuuid.value.map.get(puuid) ?? tierByPuuid.value.tiers[index]
+  return tierByPuuid.value.tiers[index]
+}
 </script>
 
 <style scoped>

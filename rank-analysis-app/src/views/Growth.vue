@@ -57,7 +57,7 @@
                 ><span class="l" title="与同局同位置玩家的场均差值，非全段位基准"
                   >vs 同局同位置</span
                 ><span class="v num" :class="deltaClass(t.avgVsPeer)">{{
-                  formatDelta(t.avgVsPeer)
+                  formatDelta(t.avgVsPeer, t.dimension)
                 }}</span></span
               >
             </template>
@@ -305,11 +305,23 @@ const dimensionOptions = computed(() =>
   Object.entries(DIMENSION_LABELS).map(([value, label]) => ({ value, label }))
 )
 
-function formatDelta(v: number): string {
+/**
+ * 短板差值展示（debug3-B7）：后端 deaths 维是 peer-my（多死 5 次 = -5），
+ * 直接渲染"-5.0 vs 对手"反直觉（像少死了 5 次）。展示层对 deaths 翻符号，
+ * 改文案为"多死 X 次"；其他维保持原样。
+ */
+function formatDelta(v: number, dimension?: string): string {
+  if (dimension === 'deaths') {
+    const extra = -v
+    if (extra <= 0) return `少死 ${(-extra).toFixed(1)} 次 vs 对手`
+    return `多死 ${extra.toFixed(1)} 次 vs 对手`
+  }
   const sign = v > 0 ? '+' : ''
   return `${sign}${v.toFixed(1)} vs 对手`
 }
 function deltaClass(v: number): string {
+  // 后端统一"落后为负"：deaths 维多死 5 次 = -5，'l'（落后红）本来就是对的，
+  // 只改文案不碰颜色。
   return v > 0 ? 'w' : 'l'
 }
 function shortDate(iso: string): string {
