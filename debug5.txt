@@ -1160,4 +1160,4 @@ let Some(enemy_id) = find_enemy(participants, me, position) else {
 3	失真	liveGameIntel.ts	实时对局将阵营固定为红蓝双方，斗魂竞技场（多队模式）经济差全场算错	增加多队模式下的全场非己方平均经济对比
 4	缺陷	launcher.rs	游戏根目录穷举仅支持 WeGame，官方独立客户端玩家一键启动报未安装	候选路径扩充腾讯独立安装路径【已完成：扫盘兜底加腾讯游戏\英雄联盟与Program Files\腾讯游戏\英雄联盟两尾缀（SWEEP_TAILS常量，仍以Client.exe存在性为准）；config记忆/进程反推两上级链路不变。附1回归（WeGame+独立双覆盖）。cargo fmt/clippy(GNU)/check --tests全过，cargo test以CI为权威】
 5	算法	patch_notes.rs	技能前摇（cast time）、延迟（delay）等缩短未反转，正面增强被误标削弱	扩充机制反转词列表
-6	模式	backtest.rs	决策回测强依赖同分路对手，导致大乱斗与轮换模式全部被判为位置未知	增加无位置模式下的全队基准对照回退
+6	模式	backtest.rs	决策回测强依赖同分路对手，导致大乱斗与轮换模式全部被判为位置未知	增加无位置模式下的全队基准对照回退【已完成：新增resolve_backtest_matchup内核：正常对位直通、无分路+ARAM回退position=ARAM/enemy取敌方首个+caveats标注、其余仍position_unknown不消费；入库侧extract_my_sample同步ARAM回退（否则永远样本不足）。附对账侧2回归+入库侧1回归。cargo fmt/clippy(GNU)/check --tests全过，cargo test以CI为权威】

@@ -12,7 +12,8 @@
 //!
 //! 对账口径：`adopted = (实际英雄 == 建议英雄)`；关联键 = gameId +
 //! suggestedAtMs + 英雄。分路无法从赛后数据归一（LCU 无 timeline）→
-//! 返回 `position_unknown` 且不消费建议（留给下局/手动处理）。
+//! 无分路模式（ARAM 等）回退敌方全队基准对照；其他模式仍返回
+//! `position_unknown` 且不消费建议（留给下局/手动处理）。
 
 use serde::{Deserialize, Serialize};
 
@@ -194,6 +195,37 @@ fn find_enemy(participants: &[Participant], me: &Participant, position: &str) ->
         .map(|p| p.champion_id)
 }
 
+/// 解析对局的对位基准 → (position, 敌方英雄, 是否ARAM回退)。
+///
+/// - 有分路且敌方有同分路 → 正常对位；
+/// - 无分路 + ARAM（大乱斗全员单中、无位置分配）→ position 取 "ARAM"，
+///   enemy 取敌方首个不同队玩家英雄作全队基准代表（debug5：此前直接判
+///   position_unknown 放弃回测，大乱斗决策回测 Tab 永远无数据）；
+/// - 其余 → None（调用方判 position_unknown，不消费建议）。
+fn resolve_backtest_matchup(
+    participants: &[Participant],
+    me: &Participant,
+    game_mode: &str,
+) -> Option<(String, i32, bool)> {
+    let position_opt = me
+        .timeline
+        .as_ref()
+        .and_then(|t| normalize_position(&t.lane, &t.role));
+    let enemy_opt = position_opt.and_then(|pos| find_enemy(participants, me, pos));
+    match (position_opt, enemy_opt) {
+        (Some(pos), Some(eid)) => Some((pos.to_string(), eid, false)),
+        _ if game_mode == "ARAM" => {
+            let eid = participants
+                .iter()
+                .find(|p| p.team_id != me.team_id)
+                .map(|p| p.champion_id)
+                .unwrap_or(0);
+            Some(("ARAM".to_string(), eid, true))
+        }
+        _ => None,
+    }
+}
+
 /// 组装双方样本：优先敌方对位样本（双方各 ≥ [`MIN_MATCHUP_SAMPLES`]），
 /// 不足退英雄+位置全样本；返回 (建议样本, 实际样本, 是否回退全样本)。
 fn build_samples(
@@ -286,10 +318,9 @@ pub async fn get_decision_backtest(game_id: i64) -> Result<DecisionBacktest, Str
             ..Default::default()
         });
     }
-    let Some(position) = me
-        .timeline
-        .as_ref()
-        .and_then(|t| normalize_position(&t.lane, &t.role))
+    // 对位基准：正常分路对位；ARAM 无分路回退全队基准；其余判 position_unknown。
+    let Some((position, enemy_id, aram_fallback)) =
+        resolve_backtest_matchup(participants, me, &game.game_mode)
     else {
         return Ok(DecisionBacktest {
             aligned: false,
@@ -297,14 +328,6 @@ pub async fn get_decision_backtest(game_id: i64) -> Result<DecisionBacktest, Str
             ..Default::default()
         });
     };
-    let Some(enemy_id) = find_enemy(participants, me, position) else {
-        return Ok(DecisionBacktest {
-            aligned: false,
-            reason: "position_unknown".to_string(),
-            ..Default::default()
-        });
-    };
-    let position = position.to_string();
     let adopted = me.champion_id == pending.suggestion_champion_id;
     let (suggestion_samples, actual_samples, used_fallback) = build_samples(
         pending.suggestion_champion_id,
@@ -320,6 +343,9 @@ pub async fn get_decision_backtest(game_id: i64) -> Result<DecisionBacktest, Str
         actual_samples,
     });
     let mut caveats = result.caveats.clone();
+    if aram_fallback {
+        caveats.push("无分路模式（大乱斗）：无单一对位对手，已回退敌方全队基准对照".to_string());
+    }
     if used_fallback {
         caveats.push(format!(
             "敌方对位样本不足（双方各 ≥{MIN_MATCHUP_SAMPLES} 局），已回退英雄+位置全样本"
@@ -490,5 +516,41 @@ mod tests {
             champion_id: champ,
             ..Default::default()
         }
+    }
+
+    /// debug5 回归：ARAM 无分路不再判 position_unknown，回退全队基准。
+    #[test]
+    fn aram_without_lane_falls_back_to_team_baseline() {
+        let me = participant(1, 100, 101);
+        let foe = participant(6, 200, 201);
+        let ps = vec![me.clone(), foe];
+        // ARAM 无 timeline → 回退 ARAM 基准，enemy 取敌方首个。
+        let (pos, eid, fallback) = resolve_backtest_matchup(&ps, &me, "ARAM").unwrap();
+        assert_eq!(pos, "ARAM");
+        assert_eq!(eid, 201);
+        assert!(fallback);
+        // 非 ARAM 无分路 → 仍判 None（调用方 position_unknown）。
+        assert!(resolve_backtest_matchup(&ps, &me, "CLASSIC").is_none());
+    }
+
+    /// 正常分路对位不受回退影响。
+    #[test]
+    fn normal_lane_matchup_unaffected_by_aram_fallback() {
+        use crate::lcu::api::model::ParticipantTimeline;
+        let mut me = participant(3, 100, 103);
+        me.timeline = Some(ParticipantTimeline {
+            lane: "MID".to_string(),
+            role: "SOLO".to_string(),
+        });
+        let mut foe = participant(8, 200, 108);
+        foe.timeline = Some(ParticipantTimeline {
+            lane: "MID".to_string(),
+            role: "SOLO".to_string(),
+        });
+        let ps = vec![me.clone(), foe];
+        let (pos, eid, fallback) = resolve_backtest_matchup(&ps, &me, "CLASSIC").unwrap();
+        assert_eq!(pos, "MIDDLE");
+        assert_eq!(eid, 108);
+        assert!(!fallback);
     }
 }

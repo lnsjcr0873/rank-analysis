@@ -54,18 +54,32 @@ fn extract_my_sample(game: &Game, my_puuid: &str) -> Option<LocalSample> {
         Some(t) => (t.lane.as_str(), t.role.as_str()),
         None => ("", ""),
     };
-    let position = normalize_position(lane, role)?;
+    // debug5：ARAM 大乱斗无分路分配，normalize 恒为 None。若直接返回 None，
+    // 大乱斗永远沉淀不出样本，对账侧回退也永远"样本不足"。回退：position 记
+    // "ARAM"，enemy 取敌方首个不同队玩家英雄作全队基准代表（与对账侧同口径）。
+    let aram_fallback = game.game_mode == "ARAM";
+    let position = match normalize_position(lane, role) {
+        Some(pos) => pos,
+        None if aram_fallback => "ARAM",
+        None => return None,
+    };
     // 敌方同分路玩家（归一化后同值）；敌方没有同分路 → 不出样本（宁缺毋滥）。
+    // ARAM 回退：取敌方首个不同队玩家（全队基准代表）。
     let enemy = game
         .game_detail
         .participants
         .iter()
         .find(|p| {
-            p.team_id != my.team_id
-                && p.timeline
-                    .as_ref()
-                    .and_then(|t| normalize_position(&t.lane, &t.role))
-                    == Some(position)
+            if p.team_id == my.team_id {
+                return false;
+            }
+            if aram_fallback && position == "ARAM" {
+                return true;
+            }
+            p.timeline
+                .as_ref()
+                .and_then(|t| normalize_position(&t.lane, &t.role))
+                == Some(position)
         })
         .map(|p| p.champion_id)?;
     let input = PlayerScoreInput {
@@ -268,6 +282,20 @@ mod tests {
             extract_my_sample(&game, "p3").is_none(),
             "无分路 → 宁缺毋滥"
         );
+    }
+
+    #[test]
+    fn aram_game_extracts_sample_with_team_baseline() {
+        // debug5 回归：ARAM 无分路不再丢样本，position 记 ARAM。
+        let mut game = ten_man_game(105, "p3");
+        game.game_mode = "ARAM".to_string();
+        for p in game.game_detail.participants.iter_mut() {
+            p.timeline = None;
+        }
+        let s = extract_my_sample(&game, "p3").expect("ARAM 应产出全队基准样本");
+        assert_eq!(s.position, "ARAM");
+        // 敌方首个不同队玩家：id 6 → champion 106。
+        assert_eq!(s.enemy_champion_id, 106);
     }
 
     #[test]
