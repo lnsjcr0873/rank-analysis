@@ -157,6 +157,22 @@ describe('UnifiedTagRow', () => {
     expect(messageMock.info).toHaveBeenCalledWith('该标签已在备注中')
   })
 
+  it('带 \\r\\n 换行的已存备注仍能按行去重（Windows 备份/编辑器导入场景）', async () => {
+    const store = usePlayerNotesStore()
+    const w = mountRow()
+    // 先直接写入带 CRLF 的存量备注（模拟 Windows 导出/编辑后的备份）
+    await store.setNote('puuid-1', {
+      note: '其他标签\r\n炸鱼嫌疑：仅供参考',
+      label: 'friendly',
+      gameName: 'Hide on bush',
+      tagLine: 'KR1'
+    })
+    await w.vm.solidifyTag(tags[0])
+    const saved = store.getNote('puuid-1')
+    expect(saved?.note).toBe('其他标签\r\n炸鱼嫌疑：仅供参考')
+    expect(messageMock.info).toHaveBeenCalledWith('该标签已在备注中')
+  })
+
   it('拼接后超过 100 字时不写入且原备注不变', async () => {
     const store = usePlayerNotesStore()
     // 95 字备注：追加任意标签行（换行 + ≥5 字）必超 100 字上限

@@ -121,8 +121,10 @@ const NOTE_MAX_LEN = 100
 async function solidifyTag(tag: RankTag): Promise<void> {
   const line = tag.tagDesc ? `${tag.tagName}：${tag.tagDesc}` : tag.tagName
   const existing = note.value
-  // 按行精确匹配去重（不能用 includes 子串匹配：「专精」是「专精：xxx」的子串会误判）
-  if (existing?.note?.split('\n').includes(line)) {
+  // 按行精确匹配去重（不能用 includes 子串匹配：「专精」是「专精：xxx」的子串会误判）。
+  // 换行符归一化：Windows 备份/编辑器可能带 \r\n，直接 split('\n') 会残留 \r 导致
+  // 同一条标签永远比对不上、重复追加。
+  if (existing?.note?.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n').includes(line)) {
     message.info('该标签已在备注中')
     return
   }
