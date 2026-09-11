@@ -224,9 +224,19 @@ const meOnly = ref(false)
 /** 本局出场英雄筛选（0 = 全部）；按英雄筛选 = 事件涉及该英雄 */
 const selectedChampionId = ref(0)
 
-const championToPid = computed(() => {
-  const map = new Map<number, number>()
-  for (const p of ctx.players.detailPlayers.value) map.set(p.championId, p.participantId)
+/**
+ * 英雄 → participantId 列表（debug4-9）。
+ *
+ * 盲选/克隆/大乱斗/斗魂中敌我经常同英雄：单值 Map 后遍历覆盖先遍历，
+ * 按英雄筛选会漏掉另一个同英雄玩家的全部事件。改多值映射 + some 判定。
+ */
+const championToPids = computed(() => {
+  const map = new Map<number, number[]>()
+  for (const p of ctx.players.detailPlayers.value) {
+    const arr = map.get(p.championId) ?? []
+    arr.push(p.participantId)
+    map.set(p.championId, arr)
+  }
   return map
 })
 
@@ -511,11 +521,11 @@ const visibleEvents = computed(() => {
   const opt = filterOptions.find(o => o.value === filter.value) ?? filterOptions[0]
   const myPid = myParticipantId.value
   const selChampion = selectedChampionId.value
-  const selPid = selChampion ? (championToPid.value.get(selChampion) ?? 0) : 0
+  const selPids = selChampion ? (championToPids.value.get(selChampion) ?? []) : []
   return events.value.filter(ev => {
     if (!opt.match({ type: ev.rawType })) return false
     if (meOnly.value && !ev.involvedPids.includes(myPid)) return false
-    if (selPid > 0 && !ev.involvedPids.includes(selPid)) return false
+    if (selPids.length > 0 && !selPids.some(pid => ev.involvedPids.includes(pid))) return false
     return true
   })
 })

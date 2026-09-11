@@ -160,7 +160,7 @@ MatchDetailInline.vue 使用了 <KeepAlive><component :is="activeTabComponent" /
 但是 MatchDetailScoreTab.vue 和 MatchDetailBacktestTab.vue 的数据加载逻辑完全写在 onMounted() 中，没有对 ctx.game 设立 watch。
 导致在切换对局后，评分 Tab 和决策回测 Tab 依然展示旧对局的数据与选手信息。
 修复方案：在各 Tab 内部添加对 ctx.game.value?.gameId 的监听并重新拉取数据，或者在 gameId 变更时使子组件 key 重新绑定。
-9. MatchDetailEventsTab.vue：镜像/同英雄对局下，事件筛选映射字典被覆盖
+9. MatchDetailEventsTab.vue：镜像/同英雄对局下，事件筛选映射字典被覆盖【已完成：championToPid 单值 Map → championToPids 多值 Map + some 判定。prettier/eslint/tsc 全过】
 文件路径：rank-analysis-app/src/components/record/tabs/MatchDetailEventsTab.vue
 问题代码：
 code
