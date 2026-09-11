@@ -190,6 +190,9 @@ export function toBuildRecommendation(
       keystone: build.keystone[0] ?? null
     },
     spells: [build.spells[0] ?? null, build.spells[1] ?? null],
-    note: `${label}：来自你的近 ${build.samples} 场战绩（胜 ${build.winCount} 场）` + rated
+    // debug6：排序是"胜场权重"(胜局权重×2)，非纯胜率——脚注点明防误解为"胜率最高"。
+    note:
+      `${label}：来自你的近 ${build.samples} 场战绩（胜 ${build.winCount} 场，按胜场加权排序，非纯胜率）` +
+      rated
   }
 }

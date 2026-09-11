@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { NSelect, NButton } from 'naive-ui'
+import { NSelect, NButton, type SelectOption } from 'naive-ui'
 import {
   type RuleCondition,
   type Position,
@@ -14,6 +14,11 @@ const props = defineProps<{
   modelValue: RuleCondition
   championOptions: championOption[]
 }>()
+
+/** debug6：championOption → Naive SelectOption 显式适配（替代 as any 类型逃逸） */
+const championSelectOptions = computed<SelectOption[]>(() =>
+  props.championOptions.map(o => ({ ...o }))
+)
 
 const emit = defineEmits<{
   (e: 'update:modelValue', v: RuleCondition): void
@@ -75,7 +80,7 @@ function setIds(ids: number[]) {
       :filter="filterChampionFunc"
       :render-label="renderLabel"
       :value="modelValue.ids"
-      :options="championOptions as any"
+      :options="championSelectOptions"
       placeholder="选择英雄"
       style="flex: 1; min-width: 200px"
       @update:value="setIds"
