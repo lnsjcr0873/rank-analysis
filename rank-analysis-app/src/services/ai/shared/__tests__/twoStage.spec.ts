@@ -321,8 +321,9 @@ describe('runTwoStage', () => {
       expect(result.kind).toBe('stage2Error')
 
       // 超时退出后，陈旧流继续回调：必须被丢弃，不得转发给 UI / 后续请求
-      lateChunk?.('残片')
-      lateChunk?.('更多残片')
+      const sendLateChunk = (c: string) => lateChunk?.(c)
+      sendLateChunk('残片')
+      sendLateChunk('更多残片')
       expect(streamCb).not.toHaveBeenCalled()
     } finally {
       vi.useRealTimers()
