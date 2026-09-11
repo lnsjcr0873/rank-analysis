@@ -349,6 +349,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                 if let Some(overlay) = window.app_handle().get_webview_window("overlay") {
                     let _ = overlay.destroy();
                 }
+                rank_analysis_lib::overlay::unregister_hotkeys(window.app_handle());
                 rank_analysis_lib::shard::dispose_all();
                 window.app_handle().exit(0);
             }
@@ -358,10 +359,11 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     app_builder
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
-        .run(|_app_handle, event| {
+        .run(|app_handle, event| {
             // 进程退出前逆序 dispose 所有 shard（Fandom 循环等长驻任务收敛停止）
             if let tauri::RunEvent::Exit = event {
                 info!("Shutting down: disposing shards...");
+                rank_analysis_lib::overlay::unregister_hotkeys(app_handle);
                 rank_analysis_lib::shard::dispose_all();
             }
         });

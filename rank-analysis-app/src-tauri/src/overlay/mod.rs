@@ -16,6 +16,7 @@ use tauri::Manager;
 use tauri::Position;
 use tauri::WebviewUrl;
 use tauri::WebviewWindowBuilder;
+use tauri_plugin_global_shortcut::GlobalShortcutExt;
 
 /// 标记 overlay 窗口是否已创建。
 static OVERLAY_CREATED: LazyLock<AtomicBool> = LazyLock::new(|| AtomicBool::new(false));
@@ -261,4 +262,17 @@ pub fn destroy() {
     OVERLAY_CREATED.store(false, Ordering::Relaxed);
     // APP_HANDLE 是 OnceLock（写入一次即生效）：进程退出时无需清空句柄，
     // 复用也无副作用；此处不再调用不存在的 `take()`。
+}
+
+/// 注销全部系统级全局热键（进程退出/主窗关闭时调用）。
+///
+/// OS 进程退出时一般会自动回收热键，但退出钩子若被长驻任务卡住，
+/// 热键会在“退出中”窗口期继续劫持 Alt+A；显式注销消掉该窗口期。
+/// hide/show 常态切换不走这里——热键正是用来唤回隐藏浮窗的，
+/// 跟随窗口隐藏注销会导致下一局热键永久失效。
+pub fn unregister_hotkeys(app: &tauri::AppHandle) {
+    match app.global_shortcut().unregister_all() {
+        Ok(()) => log::info!("[overlay] 全局热键已全部注销"),
+        Err(e) => log::warn!("[overlay] 注销全局热键失败（可忽略）: {e}"),
+    }
 }

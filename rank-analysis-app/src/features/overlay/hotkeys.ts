@@ -39,3 +39,24 @@ export async function applyOverlayHotkey(enabled: boolean, customHotkey?: string
   })
   currentRegisteredHotkey = target
 }
+
+/**
+ * 显式注销当前管理的热键（幂等）。
+ *
+ * 注意：仅在"用户彻底不想被劫持按键"的极端场景调用。overlay 的 hide/show
+ * 常态切换不走这里——热键正是用来唤回隐藏浮窗的，跟随隐藏注销会导致
+ * 下一局热键永久失效（show 侧不会重注册）。进程退出由 Rust 侧
+ * `overlay::unregister_hotkeys` 兜底。
+ */
+export async function unregisterOverlayHotkey(): Promise<void> {
+  const keys = [currentRegisteredHotkey, OVERLAY_HOTKEY].filter(
+    (k): k is string => typeof k === 'string' && k.length > 0
+  )
+  for (const key of new Set(keys)) {
+    const active = await isRegistered(key).catch(() => false)
+    if (active) {
+      await unregister(key).catch(() => {})
+    }
+  }
+  currentRegisteredHotkey = null
+}
