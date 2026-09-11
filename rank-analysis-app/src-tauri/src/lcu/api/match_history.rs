@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 use std::{sync::LazyLock, time::Duration};
 
-use crate::lcu::api::model::{Participant, ParticipantIdentity, Stats};
+use crate::lcu::api::model::{Participant, ParticipantIdentity};
 use moka::future::Cache;
 use serde::{Deserialize, Serialize};
 
@@ -35,44 +35,6 @@ pub(crate) fn resolve_queue_name_cn(queue_id: i32, game_mode: &str) -> String {
         "CLASSIC" => "召唤师峡谷".to_string(),
         _ => "未知".to_string(),
     }
-}
-
-/// WeGame 式综合评分（0~10）：KDA、输出、参团率、承伤、经济、补刀、推塔 七维加权。
-///
-/// 各维归一到 0..1（KDA 用饱和函数 `kda/(kda+3)`，其余除以全场最大值），加权和乘 10。
-/// 权重：KDA 26% / 输出 22% / 参团 18% / 承伤 10% / 经济 10% / 补刀 8% / 推塔 6%。
-///
-/// ⚠️ 与前端 `useMatchDetailPlayers.ts::computeMatchScore` 同式——两端必须同步修改。
-pub(crate) fn wegame_score(
-    stats: &Stats,
-    team_kills: i32,
-    (max_damage, max_taken, max_gold, max_cs, max_turret): (i32, i32, i32, i32, i32),
-) -> f64 {
-    let kda = (stats.kills as f64 + stats.assists as f64) / f64::from(stats.deaths.max(1));
-    let n_kda = kda / (kda + 3.0);
-    let kp = if team_kills > 0 {
-        (f64::from(stats.kills + stats.assists) / f64::from(team_kills)).min(1.0)
-    } else {
-        0.0
-    };
-    let norm = |v: i32, m: i32| {
-        if m > 0 {
-            f64::from(v) / f64::from(m)
-        } else {
-            0.0
-        }
-    };
-    10.0 * (0.26 * n_kda
-        + 0.22 * norm(stats.total_damage_dealt_to_champions, max_damage)
-        + 0.18 * kp
-        + 0.10 * norm(stats.total_damage_taken, max_taken)
-        + 0.10 * norm(stats.gold_earned, max_gold)
-        + 0.08
-            * norm(
-                stats.total_minions_killed + stats.neutral_minions_killed,
-                max_cs,
-            )
-        + 0.06 * norm(stats.damage_dealt_to_turrets, max_turret))
 }
 
 /// 对局记录响应：平台 ID、索引范围、对局列表。
@@ -325,13 +287,15 @@ impl MatchHistory {
                 ((my_damage_taken / total_damage_taken as f64) * 100.0) as i32;
             my_stats.heal_rate = ((my_heal / total_heal as f64) * 100.0) as i32;
 
-            // MVP/SVP：WeGame 式综合评分——胜方最高分 MVP、败方最高分 SVP（此前为纯 KDA）。
-            // 评分函数 wegame_score 与前端 useMatchDetailPlayers.ts 同式，两端需同步修改。
+            // MVP/SVP：17 分制（Rust score.rs 唯一权威源，与评分 Tab 同源）。
+            // 此前此处用 WeGame 式 10 分制，导致"概览 MVP 在评分 Tab 不是第一"
+            // 的口径打架（debug3-B5）。现直接复用 score_participants 纯函数：
+            // 胜方 total 最高 → MVP，败方 total 最高 → SVP；并列取 participantId 小者。
+            // 17 分输入缺 vision 等字段时该维记 0（score.rs 纪律），不回退旧口径。
             let detail = &game.game_detail.participants;
 
-            // 参团率分母：所属队伍总击杀（CHERRY 按 subteam 分组）；同时收集全场各维最大值
+            // 参团率分母：所属队伍总击杀（CHERRY 按 subteam 分组）。
             let mut group_kills: HashMap<i32, i32> = HashMap::new();
-            let mut max_v = (0i32, 0i32, 0i32, 0i32, 0i32); // damage/taken/gold/cs/turret
             for p in detail {
                 let key = if is_cherry && p.stats.player_subteam_id > 0 {
                     p.stats.player_subteam_id
@@ -339,15 +303,8 @@ impl MatchHistory {
                     p.team_id
                 };
                 *group_kills.entry(key).or_insert(0) += p.stats.kills;
-                max_v.0 = max_v.0.max(p.stats.total_damage_dealt_to_champions);
-                max_v.1 = max_v.1.max(p.stats.total_damage_taken);
-                max_v.2 = max_v.2.max(p.stats.gold_earned);
-                max_v.3 = max_v
-                    .3
-                    .max(p.stats.total_minions_killed + p.stats.neutral_minions_killed);
-                max_v.4 = max_v.4.max(p.stats.damage_dealt_to_turrets);
             }
-            // 参团率：本人 (kills+assists) / 同队总击杀（CHERRY 按 subteam），与 MVP 评分同分母。
+            // 参团率：本人 (kills+assists) / 同队总击杀（CHERRY 按 subteam）。
             // 直接写入 stats.groupRate（此前该字段从未填充，前端战绩行固定显示 0%）。
             let my_key = if is_cherry && my_subteam > 0 {
                 my_subteam
@@ -361,28 +318,42 @@ impl MatchHistory {
                     (((my_stats.kills + my_stats.assists) as f64 / team_kills as f64) * 100.0)
                         .min(100.0) as i32;
             }
-            let score_of = |p: &Participant| {
-                let key = if is_cherry && p.stats.player_subteam_id > 0 {
-                    p.stats.player_subteam_id
-                } else {
-                    p.team_id
-                };
-                wegame_score(&p.stats, *group_kills.get(&key).unwrap_or(&0), max_v)
-            };
+            // MVP/SVP 判定：17 分制 total（与评分 Tab 同源）。
+            // 复用 score.rs 的 LCU 映射（含身份按索引对应；缺字段按 0 降级），
+            // 按胜负侧分组取 total 最高者；并列取 participantId 小者（确定性）。
+            let identities = &game.game_detail.participant_identities;
+            let inputs: Vec<crate::command::score::PlayerScoreInput> = detail
+                .iter()
+                .enumerate()
+                .map(|(i, p)| {
+                    crate::command::score::input_from_lcu_participant(
+                        p,
+                        identities.get(i),
+                        game.game_duration,
+                    )
+                })
+                .collect();
+            let scores_17 = crate::command::score::score_participants(&inputs);
 
             let my_participant_id = game.participants[0].participant_id;
             if let Some(me) = detail
                 .iter()
                 .find(|p| p.participant_id == my_participant_id)
             {
-                let my_score = score_of(me);
-                // 与我同胜负侧的最高分（并列时我也算最高，与旧逻辑"平分我胜出"一致）
-                let best = detail
+                // "我视角"标记：我是同胜负侧 17 分最高（并列时我也算最高，
+                // 与旧逻辑"平分我胜出"一致，best_of 的 min_by 已保证并列取 id 小者，
+                // 此处判"我的 total 即该侧最高"等价）。
+                let my_total = scores_17
                     .iter()
-                    .filter(|p| p.stats.win == me.stats.win)
-                    .map(&score_of)
+                    .find(|s| s.participant_id == my_participant_id)
+                    .map(|s| s.total)
+                    .unwrap_or(f64::MIN);
+                let best_total = scores_17
+                    .iter()
+                    .filter(|s| s.win == me.stats.win)
+                    .map(|s| s.total)
                     .fold(f64::MIN, f64::max);
-                if my_score >= best - 1e-9 {
+                if my_total >= best_total - 1e-9 {
                     game.mvp = if me.stats.win {
                         "MVP".to_string()
                     } else {
@@ -399,6 +370,7 @@ impl MatchHistory {
 #[cfg(test)]
 mod mvp_score_tests {
     use super::*;
+    use crate::lcu::api::model::Stats;
 
     /// 测试造数：kda=(击杀,死亡,助攻)，econ=(输出,承伤,金币,补刀,推塔)
     fn stats(kda: (i32, i32, i32), econ: (i32, i32, i32, i32, i32), win: bool) -> Stats {
@@ -468,10 +440,23 @@ mod mvp_score_tests {
 
     #[test]
     fn composite_score_prefers_carry_over_no_death_farmer() {
-        let team_kills = 10 + 9;
-        let max_v = (40_000, 30_000, 15_000, 200, 5_000);
-        let s_farmer = wegame_score(&farmer().stats, team_kills, max_v);
-        let s_carry = wegame_score(&carry().stats, team_kills, max_v);
+        // 17 分制下真核 carry 的 total 应高于无死亡蹭分型（同 calculate() 口径）
+        use crate::command::score::{input_from_lcu_participant, score_participants};
+        let detail = [farmer(), carry(), loser()];
+        let inputs: Vec<_> = detail
+            .iter()
+            .map(|p| input_from_lcu_participant(p, None, 1800))
+            .collect();
+        let scores = score_participants(&inputs);
+        let total_of = |pid: i32| {
+            scores
+                .iter()
+                .find(|s| s.participant_id == pid)
+                .map(|s| s.total)
+                .unwrap()
+        };
+        let s_farmer = total_of(1);
+        let s_carry = total_of(2);
         assert!(
             s_carry > s_farmer,
             "carry {s_carry:.2} 应高于蹭分型 {s_farmer:.2}"

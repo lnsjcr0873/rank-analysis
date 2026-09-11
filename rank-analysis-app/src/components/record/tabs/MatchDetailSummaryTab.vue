@@ -88,8 +88,8 @@
                           >{{ player.mvpTag }}</span
                         >
                       </template>
-                      综合评分 {{ player.score.toFixed(1) }} · KDA/输出/参团/承伤/经济/补刀/推塔
-                      七维加权
+                      综合评分 {{ player.score.toFixed(1) }} · 17
+                      分制（KDA/胜场/输出/承伤/治疗/补刀/经济/参团/视野九维，与评分 Tab 同源）
                     </n-tooltip>
                     <span
                       v-if="player.gameName"

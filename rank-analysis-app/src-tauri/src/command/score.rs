@@ -139,7 +139,10 @@ pub struct PlayerScoreInput {
 }
 
 /// 由 LCU `Participant` + 身份（同索引对应）换算评分输入。
-fn input_from_lcu_participant(
+///
+/// `pub(crate)`：`lcu::api::match_history::calculate` 的 MVP 判定复用同一映射，
+/// 保证"列表 MVP 标记"与"评分 Tab"同源（debug3-B5）。
+pub(crate) fn input_from_lcu_participant(
     p: &Participant,
     identity: Option<&ParticipantIdentity>,
     game_duration: i32,

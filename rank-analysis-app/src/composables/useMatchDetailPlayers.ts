@@ -3,13 +3,15 @@
  * - 将 game 拍平为 DetailPlayer[]
  * - 计算队伍汇总、所属 teamRelative 占比
  * - 打"最多杀人/伤害/助攻/推塔/金币/承伤/补兵" badges
- * - WeGame 式综合评分选 MVP（胜方最高分）/ SVP（败方最高分）
+ * - 17 分制（Rust score.rs 唯一权威源）选 MVP（胜方最高分）/ SVP（败方最高分）；
+ *   17 分未就绪/失败时回退 WeGame 式 10 分（旧口径），保证首屏不断档。
  */
 
-import { computed, type MaybeRefOrGetter, toValue, type Component } from 'vue'
+import { computed, type MaybeRefOrGetter, ref, toValue, watch, type Component } from 'vue'
 import { Coins, Flag, Flame, Footprints, Users, Shield, Skull, Zap } from 'lucide-vue-next'
 import type { Game, Participant, ParticipantStats } from '@renderer/types/domain/match'
 import { safeRelativePercent } from '@renderer/utils/format'
+import { scoreGame } from '@renderer/features/record/services/playerScore'
 
 const PLACEMENT_LABEL = (p: number) => (p > 0 ? `第 ${p} 名` : '')
 
@@ -37,7 +39,10 @@ export interface DetailPlayer {
   isMe: boolean
   win: boolean
   badges: PlayerBadge[]
-  /** WeGame 式综合评分（0~10），见 {@link computeMatchScore} */
+  /**
+   * 综合评分：17 分制（Rust score.rs）就绪即用；未就绪/失败回退 WeGame 式 10 分。
+   * MVP/SVP 与评分 Tab 同源（debug3-B5），不再出现"概览 MVP 在评分 Tab 不是第一"。
+   */
   score: number
   /** 胜方最高分 MVP / 败方最高分 SVP，其余为空 */
   mvpTag: 'MVP' | 'SVP' | ''
@@ -192,6 +197,30 @@ export function useMatchDetailPlayers(
   game: MaybeRefOrGetter<Game | null>,
   currentPlayerKey: MaybeRefOrGetter<string>
 ) {
+  /**
+   * 17 分制（Rust score.rs）按 participantId 的 total 映射。
+   * `scoreGame` 纯计算秒出但仍是 async：watch game 触发，后到覆盖先到（世代 guard）。
+   * 未就绪/失败时 score/mvpTag 回退旧 10 分口径（首屏不断档，不断言无 17 分）。
+   */
+  const seventeenById = ref(new Map<number, number>())
+  const seventeenReady = ref(false)
+  let seventeenGen = 0
+  watch(
+    () => toValue(game),
+    g => {
+      const gen = ++seventeenGen
+      seventeenReady.value = false
+      seventeenById.value = new Map()
+      if (!g) return
+      void scoreGame(g).then(scores => {
+        if (gen !== seventeenGen || !scores) return
+        seventeenById.value = new Map(scores.map(s => [s.participantId, s.total]))
+        seventeenReady.value = true
+      })
+    },
+    { immediate: true }
+  )
+
   const detailPlayers = computed<DetailPlayer[]>(() => {
     const g = toValue(game)
     if (!g) return []
@@ -242,13 +271,19 @@ export function useMatchDetailPlayers(
         })
       )
     }
-    // 胜方最高分 MVP、败方最高分 SVP（并列时取 participantId 小者，保证确定性）
+    // 有效分：17 分就绪即用（与评分 Tab 同源），否则回退 10 分。
+    // MVP/SVP 按有效分取胜方/败方最高（并列取 participantId 小者，确定性）。
+    const effectiveById = new Map<number, number>()
+    for (const p of participants) {
+      const seventeen = seventeenReady.value ? seventeenById.value.get(p.participantId) : undefined
+      effectiveById.set(p.participantId, seventeen ?? scoreById.get(p.participantId) ?? 0)
+    }
     const bestOf = (win: boolean) =>
       [...participants]
         .filter(p => p.stats.win === win)
         .sort(
           (a, b) =>
-            (scoreById.get(b.participantId) ?? 0) - (scoreById.get(a.participantId) ?? 0) ||
+            (effectiveById.get(b.participantId) ?? 0) - (effectiveById.get(a.participantId) ?? 0) ||
             a.participantId - b.participantId
         )[0]?.participantId
     const mvpId = bestOf(true)
@@ -274,7 +309,7 @@ export function useMatchDetailPlayers(
         const totals = teamTotals.get(groupKey(p)) ?? { damage: 0, taken: 0, heal: 0, kills: 0 }
 
         return {
-          score: scoreById.get(p.participantId) ?? 0,
+          score: effectiveById.get(p.participantId) ?? 0,
           mvpTag: (p.participantId === mvpId
             ? 'MVP'
             : p.participantId === svpId

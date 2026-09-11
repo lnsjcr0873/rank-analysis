@@ -1,5 +1,6 @@
-﻿import { describe, it, expect, vi } from 'vitest'
+﻿import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ref } from 'vue'
+import { flushPromises } from '@vue/test-utils'
 import { useMatchDetailPlayers } from './useMatchDetailPlayers'
 import type { Game, Participant, ParticipantStats } from '@renderer/types/domain/match'
 
@@ -13,6 +14,22 @@ vi.mock('lucide-vue-next', () => ({
   Skull: {},
   Zap: {}
 }))
+
+vi.mock('@renderer/features/record/services/playerScore', async importOriginal => {
+  const mod =
+    await importOriginal<typeof import('@renderer/features/record/services/playerScore')>()
+  return { ...mod, scoreGame: vi.fn() }
+})
+
+import { scoreGame } from '@renderer/features/record/services/playerScore'
+
+const mockScoreGame = vi.mocked(scoreGame)
+
+beforeEach(() => {
+  mockScoreGame.mockReset()
+  // 默认：17 分不可用 → 回退旧 10 分口径（现有用例走此路径）
+  mockScoreGame.mockResolvedValue(null)
+})
 
 function makeStats(overrides: Partial<ParticipantStats> = {}): ParticipantStats {
   return {
@@ -261,6 +278,27 @@ describe('useMatchDetailPlayers - 伤害徽章与 WeGame 式 MVP', () => {
     expect(byId(4).mvpTag).toBe('')
     // 评分单调性：carry 分应高于蹭分型
     expect(byId(2).score).toBeGreaterThan(byId(1).score)
+  })
+
+  it('17 分就绪后 MVP/SVP 与 score 改吃 17 分制（与评分 Tab 同源）', async () => {
+    // 故意让 17 分与 10 分打架：10 分制下 carry(pid 2)最高，
+    // 17 分给蹭分型(pid 1)更高 → MVP 应跟 17 分走
+    mockScoreGame.mockResolvedValue([
+      { participantId: 1, total: 15.2 },
+      { participantId: 2, total: 9.8 },
+      { participantId: 3, total: 7.1 },
+      { participantId: 4, total: 3.3 }
+    ] as never)
+    const { detailPlayers } = useMatchDetailPlayers(ref(makeGame()), ref(''))
+    // 同步读：17 分未就绪，回退 10 分
+    const byId = (id: number) => detailPlayers.value.find(p => p.participantId === id)!
+    expect(byId(2).mvpTag).toBe('MVP')
+    await flushPromises()
+    // 17 分就绪：MVP/SVP 与 score 全跟 17 分
+    expect(byId(1).mvpTag).toBe('MVP')
+    expect(byId(2).mvpTag).toBe('')
+    expect(byId(1).score).toBeCloseTo(15.2, 5)
+    expect(byId(3).mvpTag).toBe('SVP')
   })
 })
 
