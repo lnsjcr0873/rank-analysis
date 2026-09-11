@@ -437,7 +437,7 @@ Prompt 中携带了不可信输入（如局内其他玩家的召唤师名称、�
 恶意玩家或遭到越狱（Prompt Injection）的模型若输出 <img src=x onerror="..."> 等 HTML/SVG 载荷，enhance 函数并未调用类似 DOMPurify 的库进行消毒，而是原样返回。
 重点是：在 tauri.conf.json 中配置了 "security": { "csp": null }（未开启 CSP 防护），v-html 执行的脚本拥有访问全局 window.__TAURI__.core.invoke 的能力，可任意调用本地 Rust 系统命令，构成客户端远程代码执行（RCE）链。
 修复方案：引入 DOMPurify 库对 md.render() 产物进行深度净化后再返回，同时在 tauri.conf.json 中配置严格的内容安全策略（CSP）。
-2. 战绩筛选断层：前端严格比对 queueId，导致人机/匹配合并队列筛选结果全空
+2. 战绩筛选断层：前端严格比对 queueId，导致人机/匹配合并队列筛选结果全空【已完成：镜像后端 QUEUE_ID_CANONICAL（canonicalQueueId/queueIdsSameGroup），matchesFilter 按分组匹配；附单测。13 测试全绿，tsc 全过】
 文件路径：
 rank-analysis-app/src-tauri/src/constant/game.rs
 rank-analysis-app/src/components/record/matchFilters.ts

@@ -3,10 +3,12 @@ import {
   TIME_WINDOW_HOURS,
   TIME_WINDOW_OPTIONS,
   RESULT_OPTIONS,
+  canonicalQueueId,
   createDefaultFilter,
   hasActiveFilter,
   matchesFilter,
-  filterMatches
+  filterMatches,
+  queueIdsSameGroup
 } from './matchFilters'
 import type { Game, Participant, ParticipantStats } from '@renderer/types/domain/match'
 
@@ -135,6 +137,27 @@ describe('matchFilters', () => {
       const badGame = makeGame({ gameCreationDate: 'not-a-date' })
       expect(matchesFilter(badGame, { ...createDefaultFilter(), timeWindowHours: 24 })).toBe(false)
       expect(matchesFilter(badGame, createDefaultFilter())).toBe(true)
+    })
+
+    it('同玩法分组按规范化匹配（debug4-22：870 人机命中 830 代表值）', () => {
+      const bot870 = makeGame({ queueId: 870 })
+      const bot830 = makeGame({ queueId: 830 })
+      const ranked = makeGame({ queueId: 420 })
+      const f = { ...createDefaultFilter(), queueId: 830 }
+      expect(matchesFilter(bot870, f)).toBe(true)
+      expect(matchesFilter(bot830, f)).toBe(true)
+      expect(matchesFilter(ranked, f)).toBe(false)
+      // 匹配组：490 快速对局命中 400 代表值
+      expect(
+        matchesFilter(makeGame({ queueId: 490 }), { ...createDefaultFilter(), queueId: 400 })
+      ).toBe(true)
+      // 未收录 ID 只精确匹配
+      expect(
+        matchesFilter(makeGame({ queueId: 999999 }), { ...createDefaultFilter(), queueId: 830 })
+      ).toBe(false)
+      expect(queueIdsSameGroup(870, 830)).toBe(true)
+      expect(queueIdsSameGroup(420, 440)).toBe(false)
+      expect(canonicalQueueId(420)).toBe(420)
     })
   })
 

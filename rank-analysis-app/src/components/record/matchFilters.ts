@@ -48,9 +48,35 @@ export function hasActiveFilter(filter: MatchFilterState): boolean {
   )
 }
 
+/**
+ * 同玩法多队列 ID 的规范化映射：别名 ID → 该组的「代表 ID」（debug4-22）。
+ *
+ * 与后端 `constant::game::QUEUE_ID_CANONICAL` 同源（430/490→400 匹配组；
+ * 870/880/890→830/840/850 人机难度组）。模式下拉选项按分组去重后只存
+ * 代表 ID，过滤必须按分组匹配，否则 870 人机选「人机(入门)」(830) 会
+ * 被漏掉、列表显示 0 场。后端 `queue_ids_same_group` 同款语义。
+ */
+const QUEUE_ID_CANONICAL: ReadonlyMap<number, number> = new Map([
+  [430, 400],
+  [490, 400],
+  [870, 830],
+  [880, 840],
+  [890, 850]
+])
+
+/** 队列 ID 的分组代表 ID（非别名返回自身） */
+export function canonicalQueueId(id: number): number {
+  return QUEUE_ID_CANONICAL.get(id) ?? id
+}
+
+/** 两个队列 ID 是否同属一模式分组（规范化后相等） */
+export function queueIdsSameGroup(a: number, b: number): boolean {
+  return canonicalQueueId(a) === canonicalQueueId(b)
+}
+
 /** 单场对局是否命中当前筛选 */
 export function matchesFilter(game: Game, filter: MatchFilterState): boolean {
-  if (filter.queueId > 0 && game.queueId !== filter.queueId) return false
+  if (filter.queueId > 0 && !queueIdsSameGroup(game.queueId, filter.queueId)) return false
   if (filter.championId > 0 && game.participants[0]?.championId !== filter.championId) return false
   const win = game.participants[0]?.stats?.win
   if (filter.result === 'win' && !win) return false
