@@ -303,8 +303,14 @@ pub async fn get_decision_backtest(game_id: i64) -> Result<DecisionBacktest, Str
         });
     };
     // 最近未对账的赛前建议（开赛前 ≤15min 窗口，允许最多 3min 本地时钟快于服务器的时钟偏差）
+    // debug6：with_db 是同步阻塞 SQLite（全局 Mutex），async 上下文直调会卡住
+    // Tokio worker（Worker Starvation）。与 command/meet.rs 同口径包 spawn_blocking。
     let cutoff_ms = created_ms + CLOCK_SKEW_TOLERANCE_MS;
-    let Some(pending) = store::latest_pending_before(cutoff_ms) else {
+    let Some(pending) =
+        tauri::async_runtime::spawn_blocking(move || store::latest_pending_before(cutoff_ms))
+            .await
+            .map_err(|e| format!("对账查询任务失败: {e}"))?
+    else {
         return Ok(DecisionBacktest {
             aligned: false,
             reason: "no_pending_suggestion".to_string(),
@@ -329,12 +335,19 @@ pub async fn get_decision_backtest(game_id: i64) -> Result<DecisionBacktest, Str
         });
     };
     let adopted = me.champion_id == pending.suggestion_champion_id;
-    let (suggestion_samples, actual_samples, used_fallback) = build_samples(
+    // debug6：build_samples 全是同步 SQLite 查库，同样包 spawn_blocking。
+    let (sug_id, act_id, pos_owned, eid) = (
         pending.suggestion_champion_id,
         me.champion_id,
-        &position,
+        position.clone(),
         enemy_id,
     );
+    let (suggestion_samples, actual_samples, used_fallback) =
+        tauri::async_runtime::spawn_blocking(move || {
+            build_samples(sug_id, act_id, &pos_owned, eid)
+        })
+        .await
+        .map_err(|e| format!("样本查询任务失败: {e}"))?;
     let result = compute_backtest(&BacktestInput {
         suggestion_champion_id: pending.suggestion_champion_id,
         actual_champion_id: me.champion_id,
@@ -351,7 +364,8 @@ pub async fn get_decision_backtest(game_id: i64) -> Result<DecisionBacktest, Str
             "敌方对位样本不足（双方各 ≥{MIN_MATCHUP_SAMPLES} 局），已回退英雄+位置全样本"
         ));
     }
-    store::record_decision(&store::LedgerEntry {
+    // debug6：写 ledger + 消费建议同样是同步 SQLite，包 spawn_blocking。
+    let entry = store::LedgerEntry {
         game_id,
         suggested_at_ms: pending.suggested_at_ms,
         suggestion_champion_id: pending.suggestion_champion_id,
@@ -363,12 +377,14 @@ pub async fn get_decision_backtest(game_id: i64) -> Result<DecisionBacktest, Str
         matchup_delta: result.matchup_delta,
         confidence: result.confidence,
         caveats,
-    });
-    store::mark_pending_reconciled(
-        pending.suggested_at_ms,
-        pending.suggestion_champion_id,
-        game_id,
-    );
+    };
+    let (reconcile_at, reconcile_id) = (pending.suggested_at_ms, pending.suggestion_champion_id);
+    tauri::async_runtime::spawn_blocking(move || {
+        store::record_decision(&entry);
+        store::mark_pending_reconciled(reconcile_at, reconcile_id, game_id);
+    })
+    .await
+    .map_err(|e| format!("对账落库任务失败: {e}"))?;
     Ok(DecisionBacktest {
         aligned: true,
         reason: "ok".to_string(),
@@ -386,7 +402,11 @@ pub async fn get_decision_backtest(game_id: i64) -> Result<DecisionBacktest, Str
 /// 采纳 vs 未采纳的统计分布（前端"决策回测"区块数据源）。
 #[tauri::command]
 pub async fn get_adoption_stats() -> Result<store::AdoptionStats, String> {
-    store::adoption_stats().ok_or_else(|| "回测库不可用".to_string())
+    // debug6：同步 SQLite 查库，包 spawn_blocking（与上同口径）。
+    tauri::async_runtime::spawn_blocking(store::adoption_stats)
+        .await
+        .map_err(|e| format!("统计查询任务失败: {e}"))?
+        .ok_or_else(|| "回测库不可用".to_string())
 }
 
 #[cfg(test)]
