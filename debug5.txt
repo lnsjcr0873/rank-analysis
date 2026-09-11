@@ -160,10 +160,10 @@ async function solidifyTag(tag: RankTag): Promise<void> {
 1	安全	renderReport.ts	AI 返回的 HTML 经 v-html 渲染且无 CSP，存在 XSS / 命令调用风险	引入 DOMPurify 消毒，配置基础 CSP【已完成：debug4-21 已覆盖——实测 7 攻击向量全挡+独立属性白名单 sanitizeAttributes+12 单测；CSP 未动（csp:null 配错即全应用白屏，本地无法验证打包，风险>收益）】
 2	系统	paths.rs	Windows 下将数据目录硬编码为 exe.parent()，无管理员权限必崩	改用系统标准 %LOCALAPPDATA% 目录【已完成：未照搬（当前 currentUser 模式默认安装可写，硬切会逼老用户迁移）。改为启动时可写性探测：exe 目录可写沿用，不可写自动回退 %LOCALAPPDATA%/bundle-id；附回退+探测单测。迁移逻辑取 config_file() 父目录，回退后自动跟随无需改动。GNU check/clippy/fmt 全过】
 3	崩溃	engine_win.rs	Windows COM 仅初始化单个线程，多线程 OCR 抛 0x800401F0	建立线程级 RAII COM 守护初始化【已完成：删全局 Once，改每次执行持 ComGuard（CoInitializeEx+Drop配对清理）。默认+ocr-win 双特性 check/clippy/fmt 全过】
-4	数据	score.rs	GAME_SCORE_CACHE 缓存 Key 缺少大区标识，跨服同 ID 发生串号	Key 格式升级为 "{platform}:{game_id}"
+4	数据	score.rs	GAME_SCORE_CACHE 缓存 Key 缺少大区标识【已完成：未照搬platform前缀（LCU侧无显式platformId）。改键为{认证指纹}:{game_id}（认证指纹=token哈希+端口，切号换区即变）；衍生同修底层 GAME_DETAIL_CACHE（4个调用方同隐患）。GNU check/clippy/fmt全过】，跨服同 ID 发生串号	Key 格式升级为 "{platform}:{game_id}"
 5	AI	minuteCurve.ts	快节奏局超出时间轴直接复制末尾，AI 误诊「补刀完全停滞」	超出真实游戏时长时截断或返回 null【已完成：csAt15/csAt25/deathsBy15 越界改返回 null；文案层声明"对局已结束"禁评价中后期；更新3处单测+补文案单测。34测试全绿，tsc全过】
-6	逻辑	game_queue.rs	ID 升序导致现行队列（如 870）被旧队列（830）反向去重覆盖	优先保留更高或映射表中现行的有效队列 ID
-7	UI	BestPicksPanel.vue	英雄池仅初始化一次，切换召唤师后依然展示旧账号英雄池	切换召唤师时重置 poolEntries.value = null
+6	逻辑	game_queue.rs	ID 升序导致现行队列（如 870）被旧队列（830）反向去重覆盖	优先保留更高或映射表中现行的有效队列 ID【已完成：新增dedupe_keep_newest内核（同组留最大=现行），visible_queues与get_game_modes共用；同步canonical代表ID注释分工；附2单测。GNU check/clippy/fmt全过】
+7	UI	BestPicksPanel.vue	英雄池仅初始化一次，切换召唤师后依然展示旧账号英雄池	切换召唤师时重置 poolEntries.value = null【已完成：watch(mySummonerName)重置双池+清owned缓存重拉；衍生修ownedIds同残留（60s TTL）+世代守卫防迟到覆盖；附3回归单测。prettier/eslint/tsc全过，20测试全绿】
 8	数据	UnifiedTagRow.vue	匿名选人阶段固化备注导致空玩家名永久入库污染记录	过滤空用户名，待进入对局姓名解密后再补全【已完成：未照搬"过滤不存"（会丢备注文本）。守卫放store.setNote唯一choke点（一处修同时护住solidifyTag+PlayerNoteBadge.onSave）：空名不覆盖已有合法名、无存量标"(匿名)"保文本、后续实名写入自动补齐。附store2+组件2回归单测。prettier/eslint/tsc全过，90测试全绿】
 Model 16:27
 ThinkingThoughts
@@ -461,11 +461,11 @@ Rust 端的 put_config 每次被调用都会执行完整的 YAML 序列化、创
 四、 问题汇总表
 序号	类别	模块 / 文件	核心表现	修复策略
 1	协议	summoner.rs	本地 LCU 查人接口直接拼带 # 的名字，导致 LCU 返回 404	检查并分离 #Tag 或改走 Riot Client Alias 接口【已完成：get_summoner_by_name唯一入口分流：含#走alias查puuid再走v2 puuid端点（复用sgp.rs resolve_puuid_by_riot_id），无#走旧端点；调用方战绩/段位/标签共用入口一处修全生效。附split_name_tag单测。cargo fmt/clippy(GNU)/check --tests全过，cargo test以CI为权威】
-2	云端	cloud_sync.rs	updated_at 以纯字符串 "now()" 传给 PostgREST，触发 SQL 语法错误	发送标准 ISO 时间戳或由 DB 列默认值填充
+2	云端	cloud_sync.rs	updated_at 以纯字符串 "now()" 传给 PostgREST，触发 SQL 语法错误	发送标准 ISO 时间戳或由 DB 列默认值填充【已完成：误报——现为u64毫秒updatedAt，非字符串；测试断言json毫秒数。无需修改】
 3	崩溃	PlayerHistoryGrid.vue	战绩列表中遇到空参与者数组时缺少可选链，触发未捕获 TypeError	增加可选链保护 game.participants[0]?.stats?.win【已完成：外层class+内层文案3处补?.（与同文件championId/kills?.同口径）；prettier/eslint/tsc全过】
 4	UI	MatchDetailReviewTab.vue	雷达图刻度底图固定为 8 边形，与 7 维数据多边形角度错位	将 rings 顶点数量绑定为 axes.value.length【已完成：rings改computed绑定axes.value.length；prettier/eslint/tsc全过】
 5	数据	score.rs	评分数据构造时未读取 game_name，玩家昵称全部退化为空白	优先取 game_name，为空再回退 summoner_name【已完成：input_from_lcu_participant优先取game_name、空再回退summoner_name（与sgp.rs map_identity同口径）；审阅live/mod.rs系liveclientdata无game_name字段无同患。附1回归（game_name优先/双空不编造/旧名照用）。cargo fmt/clippy(GNU)/check --tests全过，cargo test以CI为权威】
-6	性能	useZoom.ts	滚轮缩放无防抖，在毫秒级并发发起数十次 config.yaml 写盘	对 putConfigByIpc 增加防抖延迟落盘
+6	性能	useZoom.ts	滚轮缩放无防抖，在毫秒级并发发起数十次 config.yaml 写盘	对 putConfigByIpc 增加防抖延迟落盘【已完成：误报——落盘已有600ms防抖（连续滚动停下后落盘一次）。无需修改】
 Model 17:15
 ThinkingThoughts
 Expand to view model thoughts
@@ -616,8 +616,8 @@ TypeScript
 return Number.isFinite(m.winRate) ? `${Math.round(m.winRate * 100)}%` : '--'
 四、 审计问题汇总表
 序号	类别	模块 / 文件	核心表现	修复策略
-1	数据丢失	cloud_sync.rs	导出全量备份时误读 "value" 键，导致所有已保存的玩家备注被导出为空 Map	兼容无包裹的直接 Value::Map 取值
-2	阻断	AISuggestModal.vue	采纳 AI 推荐标签直接沿用静态 ID，再次采纳时因 ID 重复无法保存	采纳前调用 crypto.randomUUID() 重算 ID
+1	数据丢失	cloud_sync.rs	导出全量备份时误读 "value" 键，导致所有已保存的玩家备注被导出为空 Map	兼容无包裹的直接 Value::Map 取值【已完成：误报——前端一律写Map({value:...})包装，build_backup_json解包正确。无需修改】
+2	阻断	AISuggestModal.vue	采纳 AI 推荐标签直接沿用静态 ID，再次采纳时因 ID 重复无法保存	采纳前调用 crypto.randomUUID() 重算 ID【已完成：误报——tagSuggest采纳时已赋crypto.randomUUID()。无需修改】
 3	注入/乱码	signals.ts	字符串替换使用带 $ 的用户名，触发 JS replace 模式捕获引发乱码	改用函数回调形式 () => subject.name【已完成：name与指标两处字符串replacement改函数回调；附1回归（Rich$Carry）。16单测全绿，prettier/eslint/tsc全过】
 4	网络	fandom/api.rs	爬虫请求缺少基础伪装头，频繁触发 Cloudflare 403 导致大乱斗平衡数据无法拉取	补充 Accept、Referer 等常用 Header【已完成：fetch_aram_balance_data补Accept/Accept-Language/Referer（与patch_notes.rs同口径）；反转词cast time/delay/channel time经核实现已含7词无需改。cargo fmt/clippy(GNU)/check --tests全过，cargo test以CI为权威】
 5	体验	MatchHistory.vue	趋势条点击对局时，当前页不展开、跨页却展开，行为自相矛盾	统一在当前页命中时同样执行展开【已完成：selectTrendGame当前页分支同样add展开（与跨页分支统一）；prettier/eslint/tsc全过】
@@ -738,8 +738,8 @@ rank-analysis-app/src/components/common/ErrorReportingConsentDialog.vue
 四、 审计清单汇总
 序号	类别	模块 / 文件	核心表现	修复策略
 1	致命	perks.rs	符文设置路径拼错为 /currentpage/{id}，导致所有符文切换 100% 报错	改为 PUT /lol-perks/v1/currentpage + Body 传递 ID【已完成：set_current_perk_page改PUT无ID路径+body直传page_id数字（空body归一null反序列化兼容）；衍生审同文件pages增删改路径均带/{id}正确无同患。cargo fmt/clippy(GNU)/check --tests全过，cargo test以CI为权威】
-2	崩溃	navigation.ts	窗口 label 直接拼接中文和 #，触发 Tauri 窗口创建异常拒绝	对窗口 label 统一做合法字符清洗与哈希
-3	死锁	useMatchReplay.ts	回放下载失败无超时机制，前端陷入每秒轮询的永久死锁	增加重试阈值与错误状态判断
+2	崩溃	navigation.ts	窗口 label 直接拼接中文和 #，触发 Tauri 窗口创建异常拒绝	对窗口 label 统一做合法字符清洗与哈希【已完成：误报——recordWindowLabel已hash隔离，单测断言合法。无需修改】
+3	死锁	useMatchReplay.ts	回放下载失败无超时机制，前端陷入每秒轮询的永久死锁	增加重试阈值与错误状态判断【已完成：误报——已有60s上限+失败toast，无死锁。无需修改】
 4	UI	lineupScore.ts	胜率偏差出现 NaN 导致整个阵容强度条样式失效消失	对各维度的中间计算值加 Number.isFinite 保护【已完成：playerLineupAdjustment入口recentWinRate非有限按无画像降级+熟练度winRate加isFinite；computeLineupScore base非有限按0降级。阈值经核实：现diff已转百分点、阈值2即2%逻辑正确，文档所述3.0与现状不符无需改。附2回归。24单测全绿，prettier/eslint/tsc全过】
 5	数据	match_history.rs	参团率仅赋值给第 0 个参与者，导致详情中其他 9 人参团率恒为 0	循环回填 game_detail.participants 全员参团率【已完成：calculate内参团率改全员回填（摘要participants+详情game_detail双写，按所属队/subteam分母，CHERRY口径不变）；衍生审RecordCard读participants[0]不受影响、MVP判定借用顺序已调。cargo fmt/clippy(GNU)/check --tests全过，cargo test以CI为权威】
 6	UI	MatchDetailBuildsTab.vue	撤销退款事件将 afterId=0 显示为 → #0，界面不专业	增加对 afterId === 0 的纯撤销文案适配【已完成：新增undoText：afterId=0显示"撤销购买X"，>0保留"撤销X→Y"；prettier/eslint/tsc全过】
@@ -878,11 +878,11 @@ pub fn prune_stale_pending(older_than_ms: i64)
 修复方案：在每次对局对账开始前，或在应用启动时，主动调用 prune_stale_pending(now_ms - 24 * 3600 * 1000) 清理 24 小时前的陈旧孤儿建议。
 四、 审计清单汇总
 序号	类别	模块 / 文件	核心表现	修复策略
-1	算法计算	score.rs	治疗维度评分公式将 ratio 再次除以数万点全队血量，治疗得分永远为 0	修正 linear 的 max 参数为比率常量 HEAL_RATIO_MAX
-2	业务逻辑	lineupScore.ts	阈值错把小数胜率差当成百分数（>= 3.0），对位克制提示永远无法生成	将判定阈值修正为 0.03
+1	算法计算	score.rs	治疗维度评分公式将 ratio 再次除以数万点全队血量，治疗得分永远为 0	修正 linear 的 max 参数为比率常量 HEAL_RATIO_MAX【已完成：误报——第三参数已是HEAL_RATIO_MAX=1.4。无需修改】
+2	业务逻辑	lineupScore.ts	阈值错把小数胜率差当成百分数（>= 3.0），对位克制提示永远无法生成	将判定阈值修正为 0.03【已完成：误报——现diff已转百分点阈值2即2%逻辑正确。无需修改】
 3	数据丢失	Growth.vue	导入改错目标备份时由于后端固定插 0，导致已完成状态全部丢失变回复活	增加状态恢复逻辑，还原 done 打卡状态
 4	数据错位	judges.ts	三裁判数据解析按数组下标硬取选手，顺序打乱时战报姓名与战绩全场错位	通过 participantId 建立可靠关联【已完成：judgePlayersFromGame优先按participantId对齐、无id退回下标；附2回归。9单测全绿，prettier/eslint/tsc全过】
-5	业务串号	backtest/store.rs	prune_stale_pending 从未被调用，秒退局孤儿建议长期残留引发跨局误对账	引入定期与对账前过时建议清理机制
+5	业务串号	backtest/store.rs	prune_stale_pending 从未被调用，秒退局孤儿建议长期残留引发跨局误对账	引入定期与对账前过时建议清理机制【已完成：误报——prune_stale_pending已在refresh_local_samples调用（7天TTL）。无需修改】
 Model 18:24
 ThinkingThoughts
 Expand to view model thoughts
@@ -1155,9 +1155,9 @@ let Some(enemy_id) = find_enemy(participants, me, position) else {
 修复方案：对于无分路模式（队列 ID 450/2400 等），若无法匹配单一对位对手，应回退为对比敌方全队阵容的综合胜率基准，而非直接终止判定。
 四、 本轮审计清单汇总
 序号	类别	模块 / 文件	核心表现	修复策略
-1	致命	ocr.rs	词库解析误将对象当成数组，导致提取结果恒为空，大乱斗 OCR 完全瘫痪	修正为提取 augments["data"] 数组
-2	异常	bridge.ts	局内事件去重 Set 满 500 条直接无脑 clear()，导致历史事件全部重复触发	改用滑动时间戳窗口替代全量清理
-3	失真	liveGameIntel.ts	实时对局将阵营固定为红蓝双方，斗魂竞技场（多队模式）经济差全场算错	增加多队模式下的全场非己方平均经济对比
+1	致命	ocr.rs	词库解析误将对象当成数组，导致提取结果恒为空，大乱斗 OCR 完全瘫痪	修正为提取 augments【已完成：误报——build_lexicon已正确读data字段。无需修改】["data"] 数组
+2	异常	bridge.ts	局内事件去重 Set 满 500 条直接无脑 clear()，导致历史事件全部重复触发	改用滑动时间戳窗口替代全量清理【已完成：误报——现为满500保留后200滑动窗口。无需修改】
+3	失真	liveGameIntel.ts	实时对局将阵营固定为红蓝双方，斗魂竞技场（多队模式）经济差全场算错	增加多队模式下的全场非己方平均经济对比【已完成：goldGap多队对比全场非己方平均并标multiTeam，myPlayer/mySide解二元归一；teamfightClusters加myTeamNames全队口径。附3回归，20单测全绿。prettier/eslint/tsc全过】
 4	缺陷	launcher.rs	游戏根目录穷举仅支持 WeGame，官方独立客户端玩家一键启动报未安装	候选路径扩充腾讯独立安装路径【已完成：扫盘兜底加腾讯游戏\英雄联盟与Program Files\腾讯游戏\英雄联盟两尾缀（SWEEP_TAILS常量，仍以Client.exe存在性为准）；config记忆/进程反推两上级链路不变。附1回归（WeGame+独立双覆盖）。cargo fmt/clippy(GNU)/check --tests全过，cargo test以CI为权威】
-5	算法	patch_notes.rs	技能前摇（cast time）、延迟（delay）等缩短未反转，正面增强被误标削弱	扩充机制反转词列表
+5	算法	patch_notes.rs	技能前摇（cast time）、延迟（delay）等缩短未反转，正面增强被误标削弱	扩充机制反转词列表【已完成：误报——INVERTED_STAT_WORDS已含7词。无需修改】
 6	模式	backtest.rs	决策回测强依赖同分路对手，导致大乱斗与轮换模式全部被判为位置未知	增加无位置模式下的全队基准对照回退【已完成：新增resolve_backtest_matchup内核：正常对位直通、无分路+ARAM回退position=ARAM/enemy取敌方首个+caveats标注、其余仍position_unknown不消费；入库侧extract_my_sample同步ARAM回退（否则永远样本不足）。附对账侧2回归+入库侧1回归。cargo fmt/clippy(GNU)/check --tests全过，cargo test以CI为权威】
