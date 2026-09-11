@@ -131,7 +131,9 @@
           >
           <div v-if="topTags.length" class="short-list">
             <div v-for="t in topTags" :key="t.dimension" class="short-row">
-              <span class="tagp loss">{{ dimLabel(t.dimension) }} {{ fmtDelta(t.avgVsPeer) }}</span>
+              <span class="tagp loss"
+                >{{ dimLabel(t.dimension) }} {{ fmtDelta(t.avgVsPeer, t.dimension) }}</span
+              >
               <span class="short-bar" aria-hidden="true"
                 ><i :style="{ width: barWidth(t.avgVsPeer) }"></i
               ></span>
@@ -455,8 +457,17 @@ onBeforeUnmount(() => {
 function dimLabel(d: string) {
   return DIMENSION_LABELS[d as keyof typeof DIMENSION_LABELS] ?? d
 }
-function fmtDelta(v: number) {
-  return `${v > 0 ? '+' : ''}${Math.round(v)}%`
+/**
+ * 短板差值展示（debug4-26）：6 个维度全是绝对数值差（场均阵亡/击杀/补刀差、
+ * 视野得分差），此前无脑拼接 "%"（「死亡数 -5%」语义全错）。与 Growth.vue
+ * 的 formatDelta 同口径：deaths 翻符号说"多死 X 次"，其余说"落后 X"。
+ */
+function fmtDelta(v: number, dimension?: string) {
+  const rounded = Math.abs(v).toFixed(1)
+  if (dimension === 'deaths') {
+    return v < 0 ? `多死 ${rounded} 次` : `少死 ${rounded} 次`
+  }
+  return v < 0 ? `落后 ${rounded}` : `领先 ${rounded}`
 }
 function barWidth(v: number) {
   return `${Math.min(100, Math.max(6, Math.abs(Math.round(v))))}%`

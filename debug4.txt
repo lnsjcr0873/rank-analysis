@@ -523,7 +523,7 @@ const addPickData = async (value: number | string) => {
 但是绑定到 <n-select v-model:value="selectPickChampionId"> 的变量没有被置回 null。
 下拉框一直停留在刚刚选中的英雄名称上，无法恢复为「添加英雄」的 Placeholder 提示；用户若想再次选择同一个英雄进行配置调整时，无法触发 update:value 事件。
 修复方案：在 addPickData 和 addBanData 尾部加上 selectPickChampionId.value = null 与 selectBanChampionId.value = null。
-6. Home.vue：全量将所有短板维度的差值格式化为百分比（%）
+6. Home.vue：全量将所有短板维度的差值格式化为百分比（%）【已完成：fmtDelta 按维度分流（deaths 说多死/少死 X 次，其余说落后/领先 X），与 Growth 同口径。prettier/eslint/tsc 全过，Home 4 测试全绿】
 文件路径：rank-analysis-app/src/views/Home.vue
 问题代码：
 code
