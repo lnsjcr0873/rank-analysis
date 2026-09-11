@@ -10,9 +10,9 @@ debug2.txt 修复进度（按 debug2 报告逐项，一项一 commit）
 - [x] #7 windows.ts macOS 未守卫 —— f213026 applyOverlayHotkey 非 Windows 直接 no-op；tileWindowsSideBySide 使用 Tauri2 跨平台窗口 API（LogicalPosition/Size 在 macOS 均支持），无需守卫
 - [ ] #8 cloud_sync 明文/无鉴权（E2EE）——范围大，另行评估
 - [x] #9 parse_game_time_to_epoch_ms 精度（微秒/ISO 边缘） —— b66deab 秒/毫秒/微秒三级判定 + ISO 超 3 位小数截断，+3 单测
-- [ ] #10 team.ts 玩家名注入 AI prompt
+- [x] #10 team.ts 玩家名注入 AI prompt —— 8e3424a 新增 sanitizeUserText（控制符/围栏/结构定界符剥离 + 截断），team.ts/team-player.ts 插值前净化，+4 单测
 - [x] #11 autoBpHint.ts 空目标判定 —— 【已验证无需修改】静态配置空目标已正确判定（hasNoExecutableTarget，仅规则与兜底均空才报警）；「运行态被 Ban/被抢导致无目标」属对局实时阶段逻辑（gaming BP 决策层处理回退），设置页仅做静态配置校验，不可也无从感知实时可用性
-- [ ] #12 lcu/http.rs get_auth 阻塞 async worker
+- [x] #12 lcu/http.rs get_auth 阻塞 async worker —— c63a599 get_auth 扫描前先释放节流锁（防并发请求排队等一次扫描）；扫描频率已被 1s 节流 + AUTH 缓存兜底限制为每秒一次，不至于占满 worker；全量移入 spawn_blocking 的改造风险高（同步/异步双调用方），暂不采用
 - [ ] #13 meet_db 单连接 Mutex 大写入卡读（WAL/分页）
 - [x] #14 cloud_sync MAX_PULL vs MAX_PUSH 自锁 —— 4b5fc76 拉取上限放宽至推送 4 倍（20MB，多设备叠加不永久自锁）
 - [x] #15 detect_override current_hover=0 用户取消被弹回 —— 1a234ff 已 hover 后清成 0 视为接管（防按键争夺）
@@ -33,13 +33,13 @@ debug2.txt 修复进度（按 debug2 报告逐项，一项一 commit）
 - [x] #30 timelineData fillSeries 稀疏分钟越界 —— 【已验证无需修改】fillSeries 已按分钟轴遍历 + 缺失沿用前值（line 104-111，单测「缺失分钟沿用前值补齐全轴」）
 - [x] #31 score/events cluster_teamfights 除零/负时长 —— 【已验证无需修改】deaths 先按 timestamp 排序使 t 单调，无负时长
 - [ ] #32 asset.rs ensure_offline_assets alias/字符串 ID
-- [ ] #33 overlay position_by_anchor 多显示器/DPI
-- [ ] #34 overlay show() SW_SHOWNOACTIVATE
+- [x] #33 overlay position_by_anchor 多显示器/DPI —— 7791e0e 优先当前显示器、回退主显示器；继续用甲逻辑坐标（无二次缩放歧义）
+- [x] #34 overlay show() SW_SHOWNOACTIVATE —— 【已验证无需修改】create() 已 `.focusable(false)`（Windows 映射 WS_EX_NOACTIVATE），show() 不夺取游戏焦点
 - [x] #35 playerNotes 跨窗口互相覆写 —— 【已验证无需修改】写盘后 emit 广播，其它窗口 listen 后从后端 config 重载（playerNotes.ts line 19/138/252）；后端 config 是唯一权威源 + mergeNotesMaps 单调时钟合并，顺序写入不丢
 - [ ] #36 meet_db load_collected_games OOM（单行大 JSON）
-- [ ] #37 patch_notes SNAPSHOT 锁队头阻塞
-- [ ] #38 automation execute_at_secs_left 暂停误锁
-- [ ] #39 autoTrade ARAM 误换人
+- [x] #37 patch_notes SNAPSHOT 锁队头阻塞 —— 【已验证无需修改】网络请求已在 FETCH_LOCK 单飞下进行、绝不持有 SNAPSHOT 锁（line 318-321 注释为证），等待者对锁获后再双检快照直接从缓存返回；每 patch 仅一次网络请求
+- [ ] #38 automation execute_at_secs_left 暂停误锁 —— 【暂缓】需双采样单调递减确认；单采样窗口是既有设计，暂停/断连属低频手动场景，改动风险大于收益，留待专项
+- [x] #39 autoTrade ARAM 误换人 —— 67ef5fd trade 自动同意加队列门（ARAM/custom 跳过）
 - [x] #40 SummaryTab badge.icon、LazyImg 重试 —— 7452a32 LazyImg 有界延迟重试（LCU 启动 404 自愈）+ badge.icon v-if 守卫
 - [x] #41 score/events frame_increments 负数、format.ts 微秒 —— 【events.rs 已验证】inc>=0 跳过复位 + avg>0 门禁；【format.ts 已修复】8a98b65 微秒归毫秒 + >2100 年拒收
 - [x] #42 cloudSync markConfigDirty 竞态、UserSidePanel activeChampion 复位 —— beec6e0（activeChampion 随英雄池换源复位）+ b8a386a（apply 后 500ms 抑制 config-changed 回声，防再推送空转）
