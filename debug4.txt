@@ -540,7 +540,7 @@ Vue
 只有在 Growth.vue 中正确做了单位适配（如“多死 X 次”）；但在首页主看板的 fmtDelta 却无脑拼接了 "%"，导致界面赫然出现「死亡数 -5%」、「补刀 -35%」、「视野控制 -12%」，语意完全错误。
 修复方案：根据 dimension 分流展示单位，仅对真正的百分比维度展示 "%"，其余维度根据绝对数值展示「落后 X 次 / 分」。
 三、 LCU 通信与架构隐患 (Architecture & Stability)
-7. lcu_get_raw 启动首秒认证锁死：时间戳初始化导致突发 401 无法重试
+7. lcu_get_raw 启动首秒认证锁死：时间戳初始化导致突发 401 无法重试【已完成：初始时间戳回拨10s；衍生修 AUTH 未初始化时 expect panic（改走真实扫描）。GNU check/clippy/fmt 全过】
 文件路径：rank-analysis-app/src-tauri/src/lcu/util/http.rs
 原因分析：
 code

@@ -118,20 +118,33 @@ fn hash_auth_fingerprint(token: &str, port: &str) -> String {
 }
 
 fn refresh_auth() -> Result<(String, String), String> {
-    let last_refresh = LAST_REFRESH_TIME.get_or_init(|| Mutex::new(Instant::now()));
+    // debug4-27：初始时间戳回拨 10s——`get_or_init(Instant::now())` 会让进程
+    // 启动首秒的 refresh 误判"刚刚刷新过"，直接返回失效旧凭据（白白错失
+    // 401 自愈）；AUTH 尚未初始化时 `expect` 还会直接 panic。
+    let last_refresh =
+        LAST_REFRESH_TIME.get_or_init(|| Mutex::new(Instant::now() - Duration::from_secs(10)));
 
     // 1s 内已刷新过：直接复用缓存，不重复做进程扫描
     {
         let last_refresh_guard = lock_or_recover(last_refresh);
         let now = Instant::now();
         if now.duration_since(*last_refresh_guard) < Duration::from_secs(1) {
-            let auth = AUTH.get().expect("AUTH not initialized");
+            let Some(auth) = AUTH.get() else {
+                // AUTH 尚未初始化：没有旧凭据可复用，落到下方走真实扫描。
+                // （旧 `expect` 在此直接 panic，启动首秒 401 从"错失自愈"升级成崩溃。）
+                drop(last_refresh_guard);
+                return refresh_auth_uncached(last_refresh);
+            };
             let auth_guard = lock_or_recover(auth);
             return Ok(auth_guard.clone());
         }
     } // ← 立即释放节流锁：get_auth() 的进程扫描（数十~上百 ms）不能再占着这把锁，
       //   否则并发请求的 refresh_auth 会全部排队在这把 std Mutex 上干等一个扫描
+    refresh_auth_uncached(last_refresh)
+}
 
+/// refresh_auth 的真实扫描分支（节流未命中 / AUTH 未初始化时走这里）。
+fn refresh_auth_uncached(last_refresh: &Mutex<Instant>) -> Result<(String, String), String> {
     // 尝试获取最新凭证，若重新读取因反作弊/系统抖动失败但既有凭据有效，则继续沿用
     match get_auth() {
         Ok((token, port)) => {
