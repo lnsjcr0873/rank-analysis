@@ -1,0 +1,577 @@
+项目核心逻辑问题诊断报告
+
+chevron_right
+通过对项目代码库的深入静态分析与逻辑审查，我们在 Rust 后端核心逻辑、LCU 事件通信、自动化规则引擎、前端状态与组件生命周期等方面发现了若干重要问题与潜在隐患。
+以下按严重程度分类列出问题分析及修复建议：
+一、 严重缺陷 (Critical / High Severity)
+1. meet_db.rs：SQL 插入参数数量不匹配（导致对局持久化 100% 失败）【已完成：文档描述的是旧代码；现状 debug3-C7 已重构为 v2 分行表（4 占位符/4 参数，无崩溃）。实际修复：删除残留死代码 now_millis + _updated_at 参数（v2 表无该列），GNU check/clippy/fmt 全过】
+文件路径：rank-analysis-app/src-tauri/src/meet_db.rs
+问题代码（save_collected_games_in 函数）：
+code
+Rust
+let mut stmt = tx.prepare_cached(
+    "INSERT INTO collected_games_v2 (region, name, game_id, json, updated_at)
+     VALUES (?1, ?2, ?3, ?4, ?5)
+     ON CONFLICT(region, name, game_id) DO UPDATE SET
+     json=excluded.json, updated_at=excluded.updated_at",
+)?;
+for g in games {
+    let json = serde_json::to_string(g).map_err(serde_to_sqlite_err)?;
+    stmt.execute(params![region, name, g.game_id, json])?; // ❌ 仅传了 4 个参数，SQL 要求 5 个
+}
+原因分析：SQL 语句中声明了 ?1, ?2, ?3, ?4, ?5 五个占位符，且表字段包含 updated_at TEXT NOT NULL，但循环执行时只传入了 4 个参数（updated_at 变量被传入函数后未被传入 params!）。这会导致 rusqlite::Error::InvalidParameterCount(4, 5)，造成跨区及已收集对局持久化每次调用必崩/必报事务回滚。
+修复方案：
+code
+Rust
+stmt.execute(params![region, name, g.game_id, json, updated_at])?;
+2. lcu/listener.rs：未校验事件 URI，导致全局游戏阶段（Phase）被任意字符串污染
+文件路径：rank-analysis-app/src-tauri/src/lcu/listener.rs
+问题代码（handle_event 函数）：
+code
+Rust
+async fn handle_event(&self, event: &Value, debounce_tx: &tokio::sync::mpsc::Sender<String>) {
+    if let Some(uri) = event.get("uri").and_then(|v| v.as_str()) {
+        let data = event.get("data");
+        if let Some(phase) = data.and_then(|d| d.as_str()) {
+            // ❌ 没有校验 uri 是否为 /lol-gameflow/v1/gameflow-phase！
+            crate::lcu::api::phase::update_phase_cache(phase.to_string());
+        }
+        let _ = debounce_tx.try_send(uri.to_string());
+    }
+}
+原因分析：LCU WebSocket 会广播大量 WAMP 事件。只要任意事件的 data 是一个 JSON 字符串（例如召唤师状态信息、聊天通道名、通知提示文本等），都会执行 update_phase_cache，将缓存的游戏阶段覆写为该无关文本。这会导致 get_phase() 返回错误状态，使自动接受匹配、自动 BP、浮窗弹出等依赖 Phase 的核心功能完全紊乱。
+修复方案：校验 URI 是否确实是 Gameflow 阶段接口：
+code
+Rust
+if uri == "/lol-gameflow/v1/gameflow-phase" {
+    if let Some(phase) = data.and_then(|d| d.as_str()) {
+        crate::lcu::api::phase::update_phase_cache(phase.to_string());
+    }
+}
+3. automation.rs & champion_select.rs：选人会话 1 秒缓存导致自动 BP 产生自发性误判接管（False Override）
+文件路径：
+rank-analysis-app/src-tauri/src/lcu/api/champion_select.rs
+rank-analysis-app/src-tauri/src/automation.rs
+原因分析：
+get_champion_select_session() 内部维护了一个 1 秒的内存缓存（SELECT_CACHE）。
+自动选人逻辑执行 patch_session_action 预选英雄 X 后，调用 store::set_last_hovered(Some(X))。
+但 patch_session_action 之后并没有使 SELECT_CACHE 失效。
+随后在 start_bp_decision_automation 中调用 get_champion_select_session() 时，因为时间未过 1 秒，读到的是上一次本地或 LCU 旧的 champion_id（例如 Y）。
+detect_override 检测到 current_hover(Y) != 0 && current_hover(Y) != our_hover(X)，判定为「用户手动干预接管」（User Overridden），并调用 store::mark_overridden(action_id)。
+一旦被标记为 overridden，后续哪怕时间到了，程序也直接跳过，导致整局选人自动锁定被彻底放弃。
+修复方案：在 patch_session_action 和 swap_bench_champion 成功后，立即清理或重置 SELECT_CACHE；或者在 detect_override 中增加短期防抖容忍，等待 LCU 实际回执。
+4. Gaming.vue 生命周期孤立化：用户切页导致局内浮窗（Overlay）与对局辅助直接中断
+文件路径：rank-analysis-app/src/views/Gaming.vue
+问题代码：
+code
+TypeScript
+watch([() => sessionData.phase, () => sessionData.queueId], ([phase, queueId]) => {
+  if (phase === 'InProgress') {
+    void invoke('show_overlay_window').catch(() => {})
+    // 启动定时轮询
+  } else {
+    stopMayhemAssist()
+    void invoke('hide_overlay_window').catch(() => {})
+  }
+})
+onUnmounted(() => {
+  if (nextActionTimer) clearInterval(nextActionTimer)
+  nextActions.value = []
+  stopMayhemAssist()
+  void invoke('hide_overlay_window').catch(() => {}) // ❌ 切页即销毁浮窗与监听
+})
+原因分析：局内动作建议轮询（nextActions）、大乱斗三选一监听（MayhemAssist）以及 Overlay 悬浮窗控制完全写在 Gaming.vue 的 <script setup> 中。根据 useGameState.ts 的设计，用户在对局中自由切换到「战绩」或「设置」页面是被允许的（且不会被强行切回）。但是一旦用户离开 Gaming 路由，Gaming.vue 触发 onUnmounted，浮窗被立即隐藏，Mayhem 截图/OCR 调度器被强制 stop。
+修复方案：将对局内的常驻服务（Overlay 状态、NextAction 定时轮询、Mayhem 对局监听）提升至全局层（如 Framework.vue 或独立的全局 Pinia/Composable 中管理），与具体的页面路由解耦。
+二、 业务逻辑与一致性缺陷 (Medium Severity)
+5. rule_engine.rs：分路别名归一化不全，导致中路/下路等常见分路规则无法匹配
+文件路径：rank-analysis-app/src-tauri/src/rule_engine.rs
+问题代码：
+code
+Rust
+pub(crate) fn parse_position(s: &str) -> Option<Position> {
+    match s.to_ascii_lowercase().as_str() {
+        "top" => Some(Position::Top),
+        "jungle" => Some(Position::Jungle),
+        "middle" => Some(Position::Middle),
+        "bottom" => Some(Position::Bottom),
+        "utility" => Some(Position::Utility),
+        _ => None, // ❌ "mid"、"adc"、"support" 等全部返回 None！
+    }
+}
+原因分析：在同仓库的 pugg/aggregate.rs、intel.rs、counterIntel.ts 中，均明确支持 "mid" -> Middle，"adc" -> Bottom，"support" -> Utility。而在 LCU 选人会话里，assignedPosition 经常直接返回 "mid"。在此处如果返回 None，detect_my_position 将返回 None，导致任何带有 RuleCondition::Position 的中路规则在实机选人期永远判定为不匹配。
+修复方案：补充别名匹配：
+code
+Rust
+"middle" | "mid" => Some(Position::Middle),
+"bottom" | "adc" | "bot" => Some(Position::Bottom),
+"utility" | "support" => Some(Position::Utility),
+6. rule_engine.rs：AllyChampionsContains/NotContains 包含玩家自身，引发自指振荡
+文件路径：rank-analysis-app/src-tauri/src/rule_engine.rs
+问题代码：
+code
+Rust
+RuleCondition::AllyChampionsContains { ids } => team_has_any(&session.my_team, ids),
+RuleCondition::AllyChampionsNotContains { ids } => {
+    !ids.is_empty()
+        && team_has_any_selection(&session.my_team)
+        && !team_has_any(&session.my_team, ids)
+}
+原因分析：session.my_team 包含了本地玩家自身（local_player_cell_id）。
+若用户配置：「队友未选择亚索 -> 我选亚索」。当程序自动 hover 亚索后，my_team 的 display_champion_id 变成了亚索。
+下一秒检测时，team_has_any(&session.my_team, [亚索]) 成立，导致 AllyChampionsNotContains 判定失效，规则被撤销并退回到兜底池。
+退到兜底池后自身不再是亚索，条件再次满足，再次选亚索……造成每秒在规则与兜底英雄之间疯狂切换/抖动。
+修复方案：在校验「队友」（Ally）条件时，必须过滤掉本地玩家自己的格子：
+code
+Rust
+let allies: Vec<_> = session.my_team.iter().filter(|p| p.cell_id != session.local_player_cell_id).cloned().collect();
+7. main.rs：资产自定义协议（asset://）发生错误时返回 HTTP 200
+文件路径：rank-analysis-app/src-tauri/src/main.rs
+问题代码：
+code
+Rust
+let (bytes, mime) = match command::asset::get_asset_binary(kind, id).await {
+    Ok(data) => data,
+    Err(e) => {
+        let response = Response::builder()
+            .header("Cache-Control", "no-store")
+            .body(e.into_bytes())
+            .unwrap(); // ❌ 缺少 .status(404) 或 .status(500)，默认是 HTTP 200！
+        responder.respond(response);
+        return;
+    }
+};
+原因分析：Response::builder() 缺省状态码是 200 OK。当本地或 LCU 图片未找到时，返回给前端的是状态码 200、内容为报错字符串的响应。前端 <img> 标签可能无法正常触发 onError 回调（或在请求时误认为资源存在），导致无法正确走降级头像逻辑。
+修复方案：明确指定错误状态码：
+code
+Rust
+Response::builder()
+    .status(404)
+    .header("Cache-Control", "no-store")
+    .body(e.into_bytes())
+    .unwrap()
+8. MatchDetailInline.vue：Tab 组件使用 <KeepAlive> 但子 Tab 未响应 gameId 变化
+文件路径：
+rank-analysis-app/src/components/record/MatchDetailInline.vue
+rank-analysis-app/src/components/record/tabs/MatchDetailScoreTab.vue
+rank-analysis-app/src/components/record/tabs/MatchDetailBacktestTab.vue
+原因分析：
+MatchDetailInline.vue 使用了 <KeepAlive><component :is="activeTabComponent" /></KeepAlive>。
+在宽屏双栏模式下，用户点击列表切换「上一局」/「下一局」时，props.game 变化。
+但是 MatchDetailScoreTab.vue 和 MatchDetailBacktestTab.vue 的数据加载逻辑完全写在 onMounted() 中，没有对 ctx.game 设立 watch。
+导致在切换对局后，评分 Tab 和决策回测 Tab 依然展示旧对局的数据与选手信息。
+修复方案：在各 Tab 内部添加对 ctx.game.value?.gameId 的监听并重新拉取数据，或者在 gameId 变更时使子组件 key 重新绑定。
+9. MatchDetailEventsTab.vue：镜像/同英雄对局下，事件筛选映射字典被覆盖
+文件路径：rank-analysis-app/src/components/record/tabs/MatchDetailEventsTab.vue
+问题代码：
+code
+TypeScript
+const championToPid = computed(() => {
+  const map = new Map<number, number>()
+  for (const p of ctx.players.detailPlayers.value) map.set(p.championId, p.participantId)
+  return map
+})
+原因分析：在盲选、克隆、大乱斗或斗魂竞技场等模式中，敌我双方经常出现相同英雄（例如双方都有亚索）。以 championId 为 Key 存入 Map<number, number> 会导致后遍历的玩家覆盖先遍历的玩家。当用户在事件流上方点击该英雄头像筛选时，另一个相同英雄玩家的所有关键击杀/死亡事件将被完全过滤排除。
+修复方案：将映射调整为 Map<number, number[]>，并在筛选时匹配 pids.some(...)。
+10. command/match_history.rs：get_game_by_id 缺失 queue_name 字段填充
+文件路径：rank-analysis-app/src-tauri/src/command/match_history.rs
+原因分析：当从列表批量查询时，通过 mh.enrich_info_cn() 为每局解析并写入了 queue_name。但是在 get_game_by_id 单局详情获取中，创建 Game 结构体时未调用 resolve_queue_name_cn，也没有给 queue_name 赋值（默认为空串）。当从历史遇见记录等独立入口直接调取单局详情弹窗时，顶部模式名称将显示为空。
+三、 UI/UX 与实现细节问题 (Low Severity / Code Smells)
+11. Framework.vue 中 liveBridge 重复启动
+文件路径：rank-analysis-app/src/components/Framework.vue
+代码片段：
+code
+TypeScript
+const isMain = isMainWindow()
+const liveBridge = isMain ? startLiveBridge() : null // ⚠️ startLiveBridge 内部已调用 start()
+onMounted(() => {
+  if (isMain) {
+    liveBridge?.start() // ⚠️ 再次调用 start()
+  }
+  // ...
+})
+原因分析：startLiveBridge 内部已经调用过一次 bridge.start()；在 onMounted 中又调用了一次 liveBridge?.start()。虽然有 running 守卫，但初始化逻辑散落在组件 setup 执行阶段和生命周期钩子中，不够规范。
+12. MayhemAugmentPanel.vue：界面提示「F1 手动重试」为空头提示
+文件路径：rank-analysis-app/src/components/overlay/MayhemAugmentPanel.vue
+现象：当卡位未识别时，卡片底部展示文字 F1 手动重试。但全局快捷键配置中（hotkeys.ts / overlayPrefs.ts）默认只注册了 Alt+A 作为显隐快捷键，完全没有对 F1 键做任何按键监听或 IPC 绑定，用户在游戏内按 F1 无任何反应。
+13. GrowthTrendCard.vue：selfPuuid 兜底逻辑错误
+文件路径：rank-analysis-app/src/components/record/GrowthTrendCard.vue
+代码片段：
+code
+TypeScript
+const selfPuuid = computed(
+  () => props.myPuuid || props.games[0]?.participantIdentities?.[0]?.player?.puuid || ''
+)
+原因分析：在 LCU 历史对局数据中，participantIdentities[0] 对应的是编号为 1 的玩家（通常是蓝方上单），不一定是当前登录玩家。当 props.myPuuid 因边界情况为空时，此兜底会将该局 1 号选手的补刀/阵亡数据作为本人的成长曲线来分析。
+14. 剪贴板写入操作缺少 .catch() 处理
+文件路径：
+rank-analysis-app/src/views/MayhemChampionDetail.vue (onCopyReport)
+rank-analysis-app/src/components/gaming/MayhemDraftPanel.vue (copyGuide)
+原因分析：代码直接调用了 navigator.clipboard?.writeText(text).then(...)，缺少 .catch(...) 错误处理。当操作系统安全策略拒绝访问剪贴板，或者应用窗口未获得系统焦点时，会触发 Unhandled Promise Rejection。
+四、 总结与排查优先级建议
+优先级	问题模块	影响范围
+P0	meet_db.rs	修复 save_collected_games_in 缺失参数，恢复已收集战绩的正常保存。
+P0	lcu/listener.rs	增加 URI 校验，防止全局 phase 被随意污染导致自动化与状态机失效。
+P1	automation.rs & champion_select.rs	移除或降低选人 Session 缓存对决策评估的竞态干扰，修复自动选人误判问题。
+P1	Gaming.vue	将局内动作建议与 Mayhem 监听提升至全局层，避免切页断联。
+P1	rule_engine.rs	修正分路别名（支持 "mid"）与 my_team 过滤自身逻辑，修复自动 BP 规则引擎。
+P2	main.rs & 前端 Tab 联动	资产协议补齐错误状态码、详情弹窗各 Tab 适配 gameId 动态更新。
+Model 16:14
+ThinkingThoughts
+Expand to view model thoughts
+
+chevron_right
+承接上文，我们对代码库的其他模块（包括 LCU 数据映射、SGP 跨区通信、Fandom/OP.GG 补丁比对、云同步一致性、AI Prompt 注入以及前端多维图表渲染）进行了更深入的全面排查，发现了以下同样影响系统稳定性与功能正确性的核心问题：
+一、 核心逻辑与运行时崩溃缺陷 (Critical & High Severity)
+1. command/fandom.rs：补丁改动比对大小写不匹配，导致英雄改动笔记 100% 匹配失败
+文件路径：rank-analysis-app/src-tauri/src/command/fandom.rs
+问题代码（get_champion_patch_note 函数）：
+code
+Rust
+let alias_key = match cache.get(&champion_id) {
+    Some(c) => c.alias.clone(), // ❌ LCU 下发的 alias 是 PascalCase，如 "MonkeyKing", "MissFortune", "Aatrox"
+    None => return Ok(None),
+};
+let hit = snapshot.champions
+    .iter()
+    .find(|(wiki_key, _)| patch_notes::wiki_name_to_alias_key(wiki_key) == alias_key) // ❌ wiki_key 是全小写！
+    .map(|(_, note)| note.clone());
+原因分析：
+patch_notes::wiki_name_to_alias_key 返回的是经过小写归一化后的键（如 "monkeyking", "missfortune"）。
+而 c.alias 直接取自 LCU 客户端静态数据（首字母大写的 PascalCase，如 "MonkeyKing"）。
+字符串 == 区分大小写，导致 "monkeyking" == "MonkeyKing" 永远为 false。
+后果：除了少数全小写的别名，绝大多数英雄在查询版本改动日志时完全无法命中 Fandom 快照，导致客户端所有英雄卡片的「版本↑/↓」与改动详情无法正确显示。
+修复方案：
+code
+Rust
+let alias_key = match cache.get(&champion_id) {
+    Some(c) => c.alias.to_ascii_lowercase(), // 统一转换为小写
+    None => return Ok(None),
+};
+2. automation.rs：非征召模式（如海克斯大乱斗）下自动备选席换人（Bench Swap）逻辑成为死代码
+文件路径：
+rank-analysis-app/src-tauri/src/bp_decision/evaluate.rs
+rank-analysis-app/src-tauri/src/automation.rs
+原因分析：
+大乱斗（450）和海克斯大乱斗（2400）中，英雄是由系统直接随机分配给每个人的，LCU 根本不会生成 BP Actions（session.actions 为空）。
+但在 evaluate_bp_decision 中，第一行就是：
+code
+Rust
+let pending = find_my_pending_action(ctx.session)?; // ❌ actions 为空时直接返回 None！
+这导致在这些模式下，evaluate_bp_decision 永远返回 None。
+而自动从板凳席换人（swap_bench_champion）的代码恰恰被放在了依赖 decision 的 apply_bp_decision 之中：
+code
+Rust
+if decision.action_type == BpActionType::Pick && should_act(decision) {
+    // bench_champions.contains(&target.champion_id)
+}
+后果：在最需要板凳席自动抢英雄的大乱斗与 Mayhem 模式中，该逻辑永远不会被执行，完全沦为死代码。
+修复方案：将板凳席换人评估从传统的 find_my_pending_action 流程中分离，允许在 actions 为空但存在 bench_champions 和 my_team 的随机英雄模式下独立求值并执行 swap。
+3. stage2-player.ts：单人复盘 Prompt 构建未判空，可能引发前端未捕获异常崩溃
+文件路径：rank-analysis-app/src/services/ai/matchDetail/prompts/stage2-player.ts
+问题代码：
+code
+TypeScript
+export function buildStage2PlayerPrompt(
+  attribution: AttributionResult,
+  snapshot: MatchSnapshot,
+  participantId: number,
+  vocabSamples: string[]
+): string {
+  const player = snapshot.players.find(p => p.participantId === participantId)
+  // ❌ 未做任何空值判断，直接传给 playerBrief
+  const brief = playerBrief(player!)
+code
+TypeScript
+function playerBrief(p: MatchSnapshot['players'][number]): string {
+  return `${p.name} (${p.champion} / ${p.teamPosition})` // ❌ 若 p 为 undefined，直接抛出 TypeError
+}
+原因分析：当由于网络重试、跨局切换、或者异常对局数据导致传入的 participantId 未在 snapshot.players 列表中匹配成功时，player 为 undefined。此时调用 playerBrief 会直接解构属性并触发 Cannot read properties of undefined，导致整个 AI 复盘面板发生白屏崩溃。
+修复方案：
+code
+TypeScript
+const player = snapshot.players.find(p => p.participantId === participantId)
+if (!player) {
+  throw new Error(`未在对局快照中找到 participantId 为 ${participantId} 的玩家`)
+}
+二、 网络与数据同步隐患 (Medium Severity)
+4. cloud_sync.rs：PUUID 白名单限制过窄，导致国际服/Riot 全球账号同步被拒
+文件路径：rank-analysis-app/src-tauri/src/command/cloud_sync.rs
+问题代码：
+code
+Rust
+fn validate_puuid(puuid: &str) -> Result<(), String> {
+    if puuid.is_empty()
+        || puuid.len() >= MAX_PUUID_LEN // MAX_PUUID_LEN 限制较短
+        || !puuid.chars().all(|c| c.is_ascii_hexdigit() || c == '-') // ❌ 仅允许 16 进制字符和连字符
+    {
+        return Err("puuid 格式非法".to_string());
+    }
+    Ok(())
+}
+原因分析：
+腾讯国服 LCU 下发的 PUUID 通常是标准 36 位 UUID 格式（16 进制字符）。
+但 Riot 官方国际服（NA/KR/EUW 等）以及新一代 Riot ID 体系下的 PUUID 是 78 位的 Base64URL 安全字符（包含字母 g-z, G-Z 以及下划线 _）。
+当在国际服或跨区查询国际服账号时，validate_puuid 会将合法的 Riot PUUID 判定为格式非法，导致云同步直接报错拒绝执行。
+修复方案：放宽字符集与长度限制，兼容 Riot 78 位 Base64URL 格式（[A-Za-z0-9_-]）。
+5. cloud_sync.rs：时钟未来漂移保护与增量盖戳冲突，导致多机同步陷入死锁
+文件路径：rank-analysis-app/src-tauri/src/command/cloud_sync.rs
+原因分析：
+cloud_push_config 采用了防止时间倒退的保护逻辑：
+updated_at = std::cmp::max(local_ts, latest_cloud_ts.saturating_add(1000));
+但在 pick_latest_config 中，有一道安全防护：
+filter(|p| p.updated_at <= now_ms.saturating_add(MAX_FUTURE_SKEW_MS))
+如果用户在设备 A 上系统时间稍快（例如快了数小时），设备 A 推送了一个较大的时间戳；或者多设备反复推送不断 +1000ms 累计。
+一旦云端时间戳超过了当前标准时间加 MAX_FUTURE_SKEW_MS，设备 B 在拉取时就会将该条配置全部判定为恶意/未来污染而直接丢弃（返回 None）。
+设备 B 认为云端无配置，以本地时间重新推送；而设备 A 再次拉取并 max() 放大……导致两台机器的配置再也无法合并，反复发生时钟踩踏。
+修复方案：不应仅依赖本地不受信客户端时钟计算单调时间，而应借助 Supabase 服务端的 now() 时间戳，或在本地时间大幅落后云端时进行显式校准告警。
+6. command/config.rs：get_champion_options 返回列表次序非确定性抖动
+文件路径：rank-analysis-app/src-tauri/src/command/config.rs
+问题代码：
+code
+Rust
+pub fn get_champion_options() -> Result<Vec<ChampionOption>, String> {
+    let mut options = vec![];
+    // ❌ CHAMPION_CACHE 底层是 std::collections::HashMap
+    for (id, item) in asset::CHAMPION_CACHE.read().unwrap().iter() {
+        // ... 组装 options
+    }
+    Ok(options) // ❌ 未排序直接返回
+}
+原因分析：Rust 的 HashMap 采用随机哈希种子（SipHash），每次程序重启或缓存重建时，迭代顺序完全是随机的。这导致前端在自动 BP 设置、规则编辑弹窗、战绩筛选中，英雄下拉菜单的顺序每次启动都会随机乱跳，严重影响用户查找英雄的体验。
+修复方案：在返回前按英雄 ID 或拼音名称进行稳定排序：
+code
+Rust
+options.sort_by_key(|o| o.value);
+三、 算法与图表计算边界缺陷 (Medium / Low Severity)
+7. score/events.rs：计算团队平均增量时未排除玩家自身，导致小团队停滞判定失灵
+文件路径：rank-analysis-app/src-tauri/src/score/events.rs
+问题代码：
+code
+Rust
+fn team_avg_increment(
+    detail: &SgpGameDetail,
+    team_pids: &HashSet<i32>, // ❌ 这里包含了玩家自身的 participant_id
+    field: impl Fn(&SgpFrameParticipantStats) -> i32,
+) -> HashMap<i64, f64>
+原因分析：
+该函数用于判断玩家是否出现「个人补刀/经济停滞，而队友正在推线发育」的脱节情况（frame_stall_events）。
+但 team_pids 把玩家自己也算进了平均值。在斗魂竞技场（2人队）等小队模式中：若队友在 1 分钟内补了 20 刀，而玩家由于挂机/阵亡补了 0 刀，团队均值直接被拉低到 10 刀。
+若阈值设为 12 刀，系统会判定「全队发育都慢，并非个人脱节」，从而漏报这一关键失误事件。
+修复方案：计算队伍参考均值时，必须先将当前评估的玩家从 team_pids 中排除，只计算其余队友的增量均值。
+8. detailsTable.ts：出装对比逻辑基于物品栏槽位索引，引发大面积假阳性「乱出装/换装」误判
+文件路径：rank-analysis-app/src/components/record/tabs/detailsTable.ts
+原因分析：
+在英雄联盟中，6 个普通装备槽位（0 到 5 槽）是平权的，玩家将神话/核心装备放在 1 槽还是 2 槽纯属个人键位习惯（比如主动装备习惯放 2 键）。
+diffBuild 在比对实际装备与推荐装备时，直接按数组下标逐一比对：
+cell.diff.slots 对每个下标比对 playerItems[i] 与 recommendItems[i]。
+玩家购买了与推荐完全一致的 3 件核心装，仅仅因为放置在物品栏的顺序不同，就会被系统标上黄色「换装」甚至红色「乱出」，并在战绩总览中闪烁警报。
+修复方案：应采用多重集集合包含判定（Multiset Intersection）代替固定槽位下标强比对，只有在购买了与推荐装备完全无关/相克属性的装备时才标记为「乱出」。
+9. liveGameIntel.ts：对局未开始时游戏时钟为负，输出畸形时钟字符串
+文件路径：rank-analysis-app/src/features/gaming/services/liveGameIntel.ts
+问题代码：
+code
+TypeScript
+export function formatGameClock(secs: number): string {
+  const m = Math.floor(secs / 60)
+  const s = Math.floor(secs % 60)
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+}
+原因分析：在游戏刚载入、小兵尚未刷新的前 15 秒准备阶段，LCU 实时数据端点 /liveclientdata/allgamedata 返回的 gameTime 是负数（例如 -14.8）。
+JavaScript 中 Math.floor(-14.8 / 60) 结果为 -1，-14.8 % 60 为 -14.8。
+padStart(2, '0') 对带负号的字符串无效，最终拼出 "-1:-14" 这种畸形时间戳。
+修复方案：对负数进行预处理，未到 0 秒统一格式化为 00:00 或明确显示负倒计时：
+code
+TypeScript
+if (secs <= 0) return '00:00'
+10. sanitize.ts 与 Prompt 注入漏洞：玩家自定义备注未经清洗直接拼入 AI 提示词
+文件路径：
+rank-analysis-app/src/services/ai/prompts/team.ts
+rank-analysis-app/src/services/ai/shared/noteBrief.ts
+原因分析：
+在 team.ts 中，召唤师名字均经过了 sanitizeUserText 转义，防止换行和特殊字符。
+但是用户自己编写的玩家备注（noteBrief）通过 buildNoteBrief(puuid) 获取后，被原封不动地直接拼入了 AI Prompt：
+code
+TypeScript
+const noteBrief = opts.useNotes !== false ? buildNoteBrief(player.summoner.puuid) : undefined
+// 随后直接插在字符串模板中
+如果用户在备注中填入换行符、JSON 闭合符号、或者类似 \n\n[System Instruction: Ignore previous instructions...] 的提示词注入载荷，会导致 AI 模型输出格式崩溃（引发 JSON 解析失败），甚至绕过系统预设的分析指令。
+修复方案：对 buildNoteBrief 返回的备注文本同样强制执行 sanitizeUserText 过滤。
+四、 修复优先级全景图
+模块	问题点	影响面	建议操作
+Fandom 补丁同步	大小写比对导致补丁改动永远查不到	全局英雄改动显示为空	在比对前统一做 to_ascii_lowercase()
+BP 自动化引擎	非征召模式（大乱斗等）Actions 为空导致决策提前退出	大乱斗无法自动换英雄	解耦动作检测与板凳席检测
+AI 复盘流水线	stage2-player.ts 缺少空玩家防御	单人复盘偶尔抛出 TypeError 崩溃	增加 player 存在性断言与错误提示
+数据同步模块	PUUID 格式校验过严拒绝 Base64URL 字符	国际服/新账号无法云同步	正则放宽为 [A-Za-z0-9_-]
+AI 提示词安全	玩家备注文本未过滤即注入 Prompt	容易引发 Prompt 注入与 JSON 解析报错	备注在拼装前必须过 sanitizeUserText
+战绩出装对比	强行按物品栏格子槽位索引做严格对齐	出现大量误报的「换装/乱出」标签	改用集合交集算法比对 6 大件
+桌面端 UI 一致性	英雄下拉框基于随机迭代的 HashMap	每次打开设置下拉菜单顺序不一致	后端返回前增加排序 sort_by_key
+Model 16:16
+ThinkingThoughts
+Expand to view model thoughts
+
+chevron_right
+承接上文的分析，我们在进一步深入审查前端过滤算法、安全防护机制、后端协议边界处理以及配置持久化等模块后，再次发现了以下若干隐蔽性极高、但在特定场景下会导致功能异常、甚至引发严重安全风险与数据不一致的问题：
+一、 严重缺陷与安全漏洞 (Critical & Security Issues)
+1. XSS 漏洞：未过滤的 AI 流式输出通过 v-html 渲染，可执行任意代码（RCE 风险）
+文件路径：
+rank-analysis-app/src/services/ai/matchDetail/renderReport.ts
+rank-analysis-app/src/components/record/MatchAIPanel.vue
+rank-analysis-app/src/views/Gaming.vue
+rank-analysis-app/src/components/record/GrowthTrendCard.vue
+rank-analysis-app/src-tauri/tauri.conf.json
+问题代码：
+code
+Vue
+<!-- MatchAIPanel.vue & Gaming.vue -->
+<div v-else-if="renderedResult" class="ai-result-content ai-report" v-html="renderedResult"></div>
+code
+TypeScript
+// renderReport.ts
+export function renderAnalysisReport(markdown: string): string {
+  const html = md.render(markdown)
+  return enhance(html) // ❌ enhance 仅对 <a> 标签做协议检查，未剔除 <script>、<svg onload>、<img onerror> 等
+}
+原因分析：
+renderAnalysisReport 接收外部大模型（DashScope / OpenAI / Ollama 等兼容端点）返回的 Markdown 文本并转换为 HTML。
+Prompt 中携带了不可信输入（如局内其他玩家的召唤师名称、玩家备注等）。
+恶意玩家或遭到越狱（Prompt Injection）的模型若输出 <img src=x onerror="..."> 等 HTML/SVG 载荷，enhance 函数并未调用类似 DOMPurify 的库进行消毒，而是原样返回。
+重点是：在 tauri.conf.json 中配置了 "security": { "csp": null }（未开启 CSP 防护），v-html 执行的脚本拥有访问全局 window.__TAURI__.core.invoke 的能力，可任意调用本地 Rust 系统命令，构成客户端远程代码执行（RCE）链。
+修复方案：引入 DOMPurify 库对 md.render() 产物进行深度净化后再返回，同时在 tauri.conf.json 中配置严格的内容安全策略（CSP）。
+2. 战绩筛选断层：前端严格比对 queueId，导致人机/匹配合并队列筛选结果全空
+文件路径：
+rank-analysis-app/src-tauri/src/constant/game.rs
+rank-analysis-app/src/components/record/matchFilters.ts
+原因分析：
+后端在 constant/game.rs 中将历史旧队列与现行队列进行了合并规范化（canonical_queue_id），例如将现行的新手人机 870 映射归并为代表 ID 830，现行征召匹配 400 与历史盲选 430/490 归并。
+因此，前端「模式筛选」下拉菜单拿到的选项值是规范化后的代表值（如 830）。
+但是前端在 matchFilters.ts 中过滤本地对局列表时，写的是绝对严格相等：
+code
+TypeScript
+if (filter.queueId && filter.queueId !== 0) {
+  if (game.queueId !== filter.queueId) return false // ❌ 870 !== 830！
+}
+后果：当前版本玩家打完一局人机（实际 queueId: 870），在战绩页面下拉框选择「人机(入门)」时，因为 870 !== 830，该局会被直接过滤掉，列表显示为 0 场。匹配模式同理。
+修复方案：前端 matchFilters.ts 必须同步引入队列组别比对逻辑（canonicalQueueId(game.queueId) === filter.queueId），而不能只做原始 ID 的绝对比对。
+3. ts_second_key 字符串切片 Panic：非 ASCII 或异常时间戳触发 UTF-8 边界崩溃
+文件路径：rank-analysis-app/src-tauri/src/lcu/api/sgp_league_servers.rs
+问题代码：
+code
+Rust
+fn ts_second_key(s: &str) -> &str {
+    let b = s.as_bytes();
+    if b.len() > 20 && b[19] == b'.' {
+        return &s[..19]; // ❌ 直接按字节索引 19 切片，未校验 char boundary！
+    }
+    if b.last() == Some(&b'Z') {
+        return &s[..b.len() - 1]; // ❌ 若末尾是多字节字符，同样 panic
+    }
+    s
+}
+原因分析：Rust 的 &str[..N] 切片索引是字节偏移量（Byte Index），而非字符索引。如果上游 CDN 或网络网关下发了损坏的、携带非 ASCII 字符（如中文日期或带 BOM 的日期串）的时间戳，当索引 19 恰好落在某个多字节 UTF-8 字符的中间时，整个进程会立即发生 Panic 崩溃。
+修复方案：使用安全切片方法：
+code
+Rust
+if let Some((prefix, _)) = s.split_once('.') {
+    return prefix;
+}
+s.strip_suffix('Z').unwrap_or(s)
+二、 业务逻辑与状态同步缺陷 (Medium Severity)
+4. MatchHistory.vue：改变筛选条件时未重置页码，导致展示虚假「无数据」空页
+文件路径：rank-analysis-app/src/components/record/MatchHistory.vue
+问题代码：
+code
+TypeScript
+watch(
+  () => [
+    filterQueueId.value,
+    filterChampionId.value,
+    filterResult.value,
+    filterTimeWindowHours.value
+  ],
+  () => emit('filter-change', activeFilter.value), // ❌ 仅向外 emit，没有重置 page.value = 1
+  { immediate: true }
+)
+原因分析：
+用户在全部对局（如 50 场）翻到了第 3 页（page.value = 3）。
+用户随后在顶部切换「仅看胜利」或切换「模式筛选」。
+符合条件的对局总数收缩到 8 场（仅够排满 1 页，pageCount.value = 1）。
+计算属性 games 取 slice((3 - 1) * 10, 3 * 10) -> slice(20, 30)，得到空数组。
+后果：用户看到列表一片空白，误以为自己没有该模式的胜场记录，体验非常困惑。
+修复方案：在任何筛选条件变更时，强制将 page.value 重置为 1：
+code
+TypeScript
+watch(
+  () => [filterQueueId.value, filterChampionId.value, filterResult.value, filterTimeWindowHours.value],
+  () => {
+    page.value = 1
+    emit('filter-change', activeFilter.value)
+  }
+)
+5. Automation.vue：下拉选择添加英雄后，输入框未重置回占位符状态
+文件路径：rank-analysis-app/src/views/settings/Automation.vue
+问题代码：
+code
+TypeScript
+const addPickData = async (value: number | string) => {
+  if (myPickData.value.includes(value as number) || value === 0) return
+  myPickData.value?.push(value as number)
+  await updatePickData()
+  // ❌ 缺失：selectPickChampionId.value = null
+}
+原因分析：
+用户在「添加英雄」下拉框选择了一个英雄后，该英雄被追加到 myPickData 列表。
+但是绑定到 <n-select v-model:value="selectPickChampionId"> 的变量没有被置回 null。
+下拉框一直停留在刚刚选中的英雄名称上，无法恢复为「添加英雄」的 Placeholder 提示；用户若想再次选择同一个英雄进行配置调整时，无法触发 update:value 事件。
+修复方案：在 addPickData 和 addBanData 尾部加上 selectPickChampionId.value = null 与 selectBanChampionId.value = null。
+6. Home.vue：全量将所有短板维度的差值格式化为百分比（%）
+文件路径：rank-analysis-app/src/views/Home.vue
+问题代码：
+code
+TypeScript
+function fmtDelta(v: number) {
+  return `${v > 0 ? '+' : ''}${Math.round(v)}%` // ❌ 统统加上了 %
+}
+code
+Vue
+<span class="tagp loss">{{ dimLabel(t.dimension) }} {{ fmtDelta(t.avgVsPeer) }}</span>
+原因分析：
+六维短板包括：deaths（场均阵亡次数差）、kills（场均击杀数差）、cs（场均补刀数差）、vision（视野得分差）。
+这些指标全部是绝对数值差，而非百分比。
+只有在 Growth.vue 中正确做了单位适配（如“多死 X 次”）；但在首页主看板的 fmtDelta 却无脑拼接了 "%"，导致界面赫然出现「死亡数 -5%」、「补刀 -35%」、「视野控制 -12%」，语意完全错误。
+修复方案：根据 dimension 分流展示单位，仅对真正的百分比维度展示 "%"，其余维度根据绝对数值展示「落后 X 次 / 分」。
+三、 LCU 通信与架构隐患 (Architecture & Stability)
+7. lcu_get_raw 启动首秒认证锁死：时间戳初始化导致突发 401 无法重试
+文件路径：rank-analysis-app/src-tauri/src/lcu/util/http.rs
+原因分析：
+code
+Rust
+let last_refresh = LAST_REFRESH_TIME.get_or_init(|| Mutex::new(Instant::now()));
+// ...
+if now.duration_since(*last_refresh_guard) < Duration::from_secs(1) {
+    // ❌ 距离上次刷新不足 1 秒，直接返回旧的 AUTH！
+    let auth = AUTH.get().expect("AUTH not initialized");
+    return Ok(auth_guard.clone());
+}
+LAST_REFRESH_TIME 在进程启动时被直接初始化为 Instant::now()。
+这意味着：在程序启动后的最初 1 秒内，refresh_auth 会认为「刚刚才刷新过」。
+如果应用在启动瞬间遇到 LCU 令牌变更或重连，首次请求触发 401 并尝试 refresh_auth()，由于命中了 1 秒冷却，它直接返回了失效的旧凭据，导致重试依旧 401 并彻底抛错，白白错失自愈机会。
+修复方案：将初始时间初始化为一个较早的时刻，例如 Instant::now() - Duration::from_secs(10)，允许启动初期的自愈重试立即生效。
+8. cloud_push_notes：Tombstone（墓碑记录）导致超过 5MB 限制的用户永远无法清理空间
+文件路径：
+rank-analysis-app/src-tauri/src/command/cloud_sync.rs
+rank-analysis-app/src/features/settings/stores/playerNotes.ts
+原因分析：
+后端在 push_payload 中设置了防御：if payload_bytes.len() > MAX_PUSH_BYTES { return Err("本地备注过大（>5MB），已拒绝推送，请先清理备注"); }。
+前端在 playerNotes.ts 中删除备注时，为了支持跨设备同步的 CRDT 最终一致性，采用的是打墓碑标记（deleted: true，TTL 30天），并不会立刻在 JSON 中将该 key 物理移除。
+后果：一旦某个用户通过频繁添加/导入导致备注超过 5MB 限制被云端拦截，即便他在前端界面上点击删除所有备注，本地 JSON 的体积反而因为追加了 deleted: true 变大，无法缩减回 5MB 以内。这会导致该账号的云同步永久死锁，除非等待 30 天墓碑过期或手动清空本地配置文件。
+修复方案：在推送云端前，如果检测到超限，可提供「立即物理清理（彻底清除已标记删除的记录）」操作，或对 encounters 历史遇见大数组进行智能裁剪后再推送。
+四、 综合排查问题清单一览
+序号	缺陷严重度	涉及文件	问题表现
+1	High	renderReport.ts	AI 报告 Markdown 解析缺少标签消毒，结合 v-html 和 csp: null 存在 XSS / RCE 隐患
+2	High	matchFilters.ts	模式筛选严格比对 ID，忽视规范化分组，导致人机/匹配筛选出空列表
+3	High	sgp_league_servers.rs	字符串切片 &s[..19] 假定固定字节位，遇非 ASCII 字符引发 Panic 崩溃
+4	Medium	MatchHistory.vue	切换筛选条件不复位当前页数，高页码直接返回空对局切片
+5	Medium	Automation.vue	自动 BP 设置添加英雄后 select 绑定值未重置为 null
+6	Medium	Home.vue	习惯弱点数值错误拼接 "%"，导致次数与分数单位全错
+7	Medium	http.rs	LAST_REFRESH_TIME 冷启动时间戳未偏移，扼杀启动首秒的 401 自愈重试
+8	Medium	cloud_sync.rs	备注超限（>5MB）与前端 30 天 Tombstone 机制冲突，导致用户无法通过删除自愈

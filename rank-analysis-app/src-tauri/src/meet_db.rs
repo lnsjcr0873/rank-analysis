@@ -251,22 +251,14 @@ fn query_summary_in(conn: &Connection, puuid: &str) -> rusqlite::Result<MeetSumm
     })
 }
 
-/// 当前 epoch 毫秒，做 collected_games 的 updated_at 时间戳。
-fn now_millis() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0)
-}
-
 /// 跨区「收集全部」结果持久化：逐局分行 upsert，`(region, name, game_id)` 主键。
 /// 对局数据不可变，重启后恢复即可直接看全量 / 续收，零重复拉取。失败静默降级。
 ///
 /// 空数组语义 = 清空该键（DELETE），保留旧整包覆盖语义；非空时增量 upsert，
 /// 只写新增行（已存在 game_id 跳过，不反复重写）。
+/// v2 分行表无 updated_at 列（SQL 4 占位符与 params 4 参数严格对应）。
 pub fn save_collected_games(region: &str, name: &str, games: &[Game]) {
-    let updated_at = now_millis().to_string();
-    with_db(|conn| save_collected_games_in(conn, region, name, games, &updated_at));
+    with_db(|conn| save_collected_games_in(conn, region, name, games));
 }
 
 /// 在指定连接上保存（测试可注入内存连接）。serde 失败映射为 rusqlite 错误。
@@ -275,7 +267,6 @@ fn save_collected_games_in(
     region: &str,
     name: &str,
     games: &[Game],
-    _updated_at: &str,
 ) -> rusqlite::Result<()> {
     migrate_collected_v1(conn)?;
     if games.is_empty() {
@@ -590,12 +581,12 @@ mod tests {
     fn collected_games_roundtrip_and_overwrite() {
         let conn = mem_conn();
         let g = mk_game(101);
-        save_collected_games_in(&conn, "na", "Kill#NA1", std::slice::from_ref(&g), "t1").unwrap();
+        save_collected_games_in(&conn, "na", "Kill#NA1", std::slice::from_ref(&g)).unwrap();
         let loaded = load_collected_games_in(&conn, "na", "Kill#NA1").unwrap();
         assert_eq!(loaded.len(), 1);
         assert_eq!(loaded[0].game_id, g.game_id);
         // 同一 (region, name) 传空数组 = 清空该键（保留旧整包覆盖语义）
-        save_collected_games_in(&conn, "na", "Kill#NA1", &[], "t2").unwrap();
+        save_collected_games_in(&conn, "na", "Kill#NA1", &[]).unwrap();
         let loaded2 = load_collected_games_in(&conn, "na", "Kill#NA1").unwrap();
         assert!(loaded2.is_empty());
     }
@@ -604,16 +595,10 @@ mod tests {
     fn collected_games_incremental_upsert_only_writes_new_rows() {
         let conn = mem_conn();
         // 首轮 2 场
-        save_collected_games_in(&conn, "na", "A#NA1", &[mk_game(1), mk_game(2)], "t1").unwrap();
+        save_collected_games_in(&conn, "na", "A#NA1", &[mk_game(1), mk_game(2)]).unwrap();
         // 次轮传累计 3 场（含重复）：只新增 game_id=3 一行
-        save_collected_games_in(
-            &conn,
-            "na",
-            "A#NA1",
-            &[mk_game(1), mk_game(2), mk_game(3)],
-            "t2",
-        )
-        .unwrap();
+        save_collected_games_in(&conn, "na", "A#NA1", &[mk_game(1), mk_game(2), mk_game(3)])
+            .unwrap();
         let loaded = load_collected_games_in(&conn, "na", "A#NA1").unwrap();
         assert_eq!(
             loaded.iter().map(|g| g.game_id).collect::<Vec<_>>(),
@@ -660,7 +645,7 @@ mod tests {
     #[test]
     fn collected_games_is_scoped_by_region_and_name() {
         let conn = mem_conn();
-        save_collected_games_in(&conn, "na", "A#NA1", &[mk_game(1)], "t").unwrap();
+        save_collected_games_in(&conn, "na", "A#NA1", &[mk_game(1)]).unwrap();
         // 同玩家不同区 / 同区不同玩家：无记录（空数组，不再是 NoRows 错）
         assert!(load_collected_games_in(&conn, "kr", "A#NA1")
             .unwrap()
@@ -673,7 +658,7 @@ mod tests {
     #[test]
     fn collected_games_clear_removes_row() {
         let conn = mem_conn();
-        save_collected_games_in(&conn, "na", "A#NA1", &[mk_game(1)], "t").unwrap();
+        save_collected_games_in(&conn, "na", "A#NA1", &[mk_game(1)]).unwrap();
         conn.execute(
             "DELETE FROM collected_games_v2 WHERE region = 'na' AND name = 'A#NA1'",
             [],
