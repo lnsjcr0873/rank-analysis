@@ -361,7 +361,8 @@ async function handleMayhemViewModeUpdate(val: string | number) {
     await putConfigByIpc('mayhem.viewMode', mode)
     message.success(`大乱斗界面已切换为「${mode === 'matrix' ? 'Meta 矩阵看板' : '经典列表卡片'}」`)
   } catch {
-    /* ignore */
+    // debug6：落盘失败留日志（localStorage 已写，重启仍生效；此前静默吞错）
+    console.warn('[settings] mayhem.viewMode 落盘失败，仅本地生效')
   }
 }
 
@@ -496,7 +497,8 @@ onMounted(async () => {
       }
     }
   } catch {
-    /* ignore */
+    // debug6：配置损坏时留日志（此前静默吞错，用户只见"设置没生效"无从排查）
+    console.warn('[settings] mayhem.viewMode 读取失败，已回退 matrix')
   }
   try {
     const enabled = await getConfigByIpc<boolean>(CONFIG_KEYS.errorReportingEnabled)
