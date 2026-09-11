@@ -618,7 +618,7 @@ return Number.isFinite(m.winRate) ? `${Math.round(m.winRate * 100)}%` : '--'
 序号	类别	模块 / 文件	核心表现	修复策略
 1	数据丢失	cloud_sync.rs	导出全量备份时误读 "value" 键，导致所有已保存的玩家备注被导出为空 Map	兼容无包裹的直接 Value::Map 取值
 2	阻断	AISuggestModal.vue	采纳 AI 推荐标签直接沿用静态 ID，再次采纳时因 ID 重复无法保存	采纳前调用 crypto.randomUUID() 重算 ID
-3	注入/乱码	signals.ts	字符串替换使用带 $ 的用户名，触发 JS replace 模式捕获引发乱码	改用函数回调形式 () => subject.name
+3	注入/乱码	signals.ts	字符串替换使用带 $ 的用户名，触发 JS replace 模式捕获引发乱码	改用函数回调形式 () => subject.name【已完成：name与指标两处字符串replacement改函数回调；附1回归（Rich$Carry）。16单测全绿，prettier/eslint/tsc全过】
 4	网络	fandom/api.rs	爬虫请求缺少基础伪装头，频繁触发 Cloudflare 403 导致大乱斗平衡数据无法拉取	补充 Accept、Referer 等常用 Header【已完成：fetch_aram_balance_data补Accept/Accept-Language/Referer（与patch_notes.rs同口径）；反转词cast time/delay/channel time经核实现已含7词无需改。cargo fmt/clippy(GNU)/check --tests全过，cargo test以CI为权威】
 5	体验	MatchHistory.vue	趋势条点击对局时，当前页不展开、跨页却展开，行为自相矛盾	统一在当前页命中时同样执行展开【已完成：selectTrendGame当前页分支同样add展开（与跨页分支统一）；prettier/eslint/tsc全过】
 6	UI	PlayerProfileCard.vue	m.winRate 遇 NaN 直接输出 "胜率 NaN%"	增加 Number.isFinite 安全保护兜底显示 "--"【已完成：masteryWinRateText加isFinite（与kdaText同口径）；prettier/eslint/tsc全过】
@@ -740,9 +740,9 @@ rank-analysis-app/src/components/common/ErrorReportingConsentDialog.vue
 1	致命	perks.rs	符文设置路径拼错为 /currentpage/{id}，导致所有符文切换 100% 报错	改为 PUT /lol-perks/v1/currentpage + Body 传递 ID【已完成：set_current_perk_page改PUT无ID路径+body直传page_id数字（空body归一null反序列化兼容）；衍生审同文件pages增删改路径均带/{id}正确无同患。cargo fmt/clippy(GNU)/check --tests全过，cargo test以CI为权威】
 2	崩溃	navigation.ts	窗口 label 直接拼接中文和 #，触发 Tauri 窗口创建异常拒绝	对窗口 label 统一做合法字符清洗与哈希
 3	死锁	useMatchReplay.ts	回放下载失败无超时机制，前端陷入每秒轮询的永久死锁	增加重试阈值与错误状态判断
-4	UI	lineupScore.ts	胜率偏差出现 NaN 导致整个阵容强度条样式失效消失	对各维度的中间计算值加 Number.isFinite 保护
+4	UI	lineupScore.ts	胜率偏差出现 NaN 导致整个阵容强度条样式失效消失	对各维度的中间计算值加 Number.isFinite 保护【已完成：playerLineupAdjustment入口recentWinRate非有限按无画像降级+熟练度winRate加isFinite；computeLineupScore base非有限按0降级。阈值经核实：现diff已转百分点、阈值2即2%逻辑正确，文档所述3.0与现状不符无需改。附2回归。24单测全绿，prettier/eslint/tsc全过】
 5	数据	match_history.rs	参团率仅赋值给第 0 个参与者，导致详情中其他 9 人参团率恒为 0	循环回填 game_detail.participants 全员参团率【已完成：calculate内参团率改全员回填（摘要participants+详情game_detail双写，按所属队/subteam分母，CHERRY口径不变）；衍生审RecordCard读participants[0]不受影响、MVP判定借用顺序已调。cargo fmt/clippy(GNU)/check --tests全过，cargo test以CI为权威】
-6	UI	MatchDetailBuildsTab.vue	撤销退款事件将 afterId=0 显示为 → #0，界面不专业	增加对 afterId === 0 的纯撤销文案适配
+6	UI	MatchDetailBuildsTab.vue	撤销退款事件将 afterId=0 显示为 → #0，界面不专业	增加对 afterId === 0 的纯撤销文案适配【已完成：新增undoText：afterId=0显示"撤销购买X"，>0保留"撤销X→Y"；prettier/eslint/tsc全过】
 7	体验	useStartupDialogs.ts	对局中启动时弹出无法 Esc 关闭的启动弹窗，遮挡局内分析	游戏进行中静默延迟弹窗
 Model 17:57
 ThinkingThoughts
