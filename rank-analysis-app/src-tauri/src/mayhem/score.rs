@@ -37,6 +37,12 @@ const CHAMP_MIN_GAMES: i64 = 30;
 /// 两级，输出极具误导性的推荐（95 分 vs 50 分）。
 const MIN_NORM_SPREAD: f64 = 0.005;
 
+/// 词表匹配最低置信度：低于此值的命中视为未识别（debug6）。
+/// OCR 是高风险基础设施——模糊匹配不得参与打分标 best，空槽占位 +
+/// reasons 注明手动核对。0.5 对应编辑距离约一半词长，短词条动态容差
+/// 已先收紧一轮，此处是第二道闸。
+pub const MIN_MATCH_CONFIDENCE: f64 = 0.5;
+
 /// 单个强化的全局统计（来自 augments.json stats）。
 #[derive(Debug, Clone, Default)]
 pub struct GlobalStats {
@@ -230,13 +236,23 @@ pub fn load_tables_opt(champion_id: Option<i64>) -> Result<ScoreTables, String> 
 /// - `hits`: 词表匹配结果（按卡位）；None 卡位保留空槽占位
 /// - `metas`: id → 展示元数据（名称/稀有度，来自词表）
 /// - `rerolls_left`: 重随剩余次数（v1 仅透传展示）
+///
+/// debug6：低置信命中（confidence < MIN_MATCH_CONFIDENCE）按未识别处理——
+/// 空槽占位 + reasons 注明手动核对，不给确定推荐（OCR 是高风险基础设施，
+/// 模糊匹配不得标 best 误导）。
 pub fn score_round(
     hits: [Option<&MatchHit>; 3],
     metas: &HashMap<i64, CandidateMeta>,
     tables: &ScoreTables,
     rerolls_left: Option<u8>,
 ) -> serde_json::Value {
-    let non_empty: Vec<&MatchHit> = hits.iter().copied().flatten().collect();
+    // debug6：低置信命中先过滤，不参与归一化与打分（防模糊匹配拉偏相对分）。
+    let confident: Vec<Option<&MatchHit>> = hits
+        .iter()
+        .copied()
+        .map(|h| h.filter(|hit| hit.confidence >= MIN_MATCH_CONFIDENCE))
+        .collect();
+    let non_empty: Vec<&MatchHit> = confident.iter().copied().flatten().collect();
 
     let global_norms = min_max_norm(
         &non_empty
@@ -261,8 +277,10 @@ pub fn score_round(
     let mut scored: Vec<(u8, ScoredCandidate)> = Vec::with_capacity(3);
 
     let mut ki = 0usize;
-    for (slot, hit) in hits.iter().enumerate() {
+    for (slot, hit) in confident.iter().enumerate() {
         let Some(hit) = hit else {
+            // None = 未识别或低置信过滤：空槽占位，不标 best
+            let filtered_low_conf = hits[slot].is_some_and(|h| h.confidence < MIN_MATCH_CONFIDENCE);
             scored.push((
                 slot as u8,
                 ScoredCandidate {
@@ -273,7 +291,8 @@ pub fn score_round(
                     score: None,
                     grade: None,
                     best: false,
-                    reasons: None,
+                    reasons: filtered_low_conf
+                        .then(|| vec!["识别置信度不足，请手动核对该卡".to_string()]),
                 },
             ));
             continue;
@@ -489,6 +508,24 @@ mod tests {
             assert!(c["score"].is_null());
             assert_eq!(c["best"], serde_json::Value::Bool(false));
         }
+    }
+
+    #[test]
+    fn low_confidence_hit_should_not_score_or_mark_best() {
+        // debug6：confidence < 0.5 的模糊匹配按未识别处理，不打分不标 best
+        let t = tables_with(&[(1, 0.60), (2, 0.55)], &[], &[]);
+        let m = meta_map(&[1, 2]);
+        let payload = score_round([Some(&hit(1, 0.3)), Some(&hit(2, 1.0)), None], &m, &t, None);
+        let cands = payload["candidates"].as_array().unwrap();
+        assert!(cands[0]["score"].is_null(), "低置信卡不得打分");
+        assert_eq!(cands[0]["best"], serde_json::Value::Bool(false));
+        assert!(cands[0]["reasons"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|r| r.as_str().unwrap().contains("手动核对")));
+        // 高置信卡正常打分且可标 best
+        assert!(cands[1]["score"].as_f64().is_some());
     }
 
     #[test]
