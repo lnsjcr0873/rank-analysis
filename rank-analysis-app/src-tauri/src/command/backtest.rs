@@ -59,9 +59,14 @@ fn parse_game_time_to_epoch_ms(s: &str) -> Option<i64> {
     }
     if let Ok(num) = trimmed.parse::<i64>() {
         if num > 0 {
-            // < 1000 亿视为秒，转毫秒；否则视为毫秒
+            // 数值精度三级判定（不同来源下发精度不一）：
+            // - < 1000 亿（秒级 Unix 时间，10 位）→ 秒，×1000
+            // - 1000 亿 ~ 1e15（毫秒级，13~14 位）→ 原样
+            // - ≥ 1e15（微秒级，16 位，个别 SGP/镜像源下发）→ ÷1000
             return Some(if num < 100_000_000_000 {
                 num * 1000
+            } else if num >= 1_000_000_000_000_000 {
+                num / 1000
             } else {
                 num
             });
@@ -108,13 +113,18 @@ fn iso_to_epoch_ms(s: &str) -> Option<i64> {
     let mut offset_min = 0i64;
     if b.len() > idx && b[idx] == b'.' {
         idx += 1;
+        // 吸纳小数毫秒，最多 6 位（微秒精度源也兼容）；前 3 位为毫秒值，超出截断。
         let mut ndigits = 0usize;
         while idx < b.len() && b[idx].is_ascii_digit() && ndigits < 3 {
             millis = millis * 10 + i64::from(b[idx] - b'0');
             idx += 1;
             ndigits += 1;
         }
-        for _ in ndigits..3 {
+        while idx < b.len() && b[idx].is_ascii_digit() && ndigits < 6 {
+            idx += 1;
+            ndigits += 1;
+        }
+        for _ in ndigits.min(3)..3 {
             millis *= 10;
         }
     }
@@ -398,6 +408,25 @@ mod tests {
         );
         assert_eq!(parse_game_time_to_epoch_ms(""), None);
         assert_eq!(parse_game_time_to_epoch_ms("invalid"), None);
+    }
+
+    #[test]
+    fn parse_game_time_handles_micros_and_fractional_iso() {
+        // 微秒级（16 位数字）→ ÷1000 归毫秒
+        assert_eq!(
+            parse_game_time_to_epoch_ms("1755200000000123"),
+            Some(1_755_200_000_000)
+        );
+        // ISO 小数毫秒超 3 位（微秒精度源）→ 截断到毫秒
+        assert_eq!(
+            parse_game_time_to_epoch_ms("2021-01-01T00:00:00.123456Z"),
+            Some(1_609_459_200_123)
+        );
+        // 小数毫秒不足 3 位 → 右补零
+        assert_eq!(
+            parse_game_time_to_epoch_ms("2021-01-01T00:00:00.5Z"),
+            Some(1_609_459_200_500)
+        );
     }
 
     #[test]
