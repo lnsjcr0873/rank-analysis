@@ -123,7 +123,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, inject, onMounted, ref } from 'vue'
+import { computed, inject, onMounted, ref, watch } from 'vue'
 import { ChevronDown } from 'lucide-vue-next'
 import { matchDetailContextKey } from '../matchDetailContext'
 import type { DetailPlayer } from '@renderer/composables/useMatchDetailPlayers'
@@ -174,7 +174,19 @@ const drilldowns = ref<ScoreBreakdownDrilldown[] | null>(null)
 const drilldownLoading = ref(false)
 const selectedPid = ref<number | null>(null)
 
-onMounted(async () => {
+/**
+ * 加载本局评分 + L3 归因（debug4-8：KeepAlive 保活下 onMounted 只跑一次，
+ * 切局时 gameId 变化必须重拉，否则展示旧局数据）。
+ *
+ * 世代守卫：切局频繁时在途旧请求迟到作废，避免旧局结果覆盖新局。
+ */
+let scoreGeneration = 0
+async function loadScores(): Promise<void> {
+  const gen = ++scoreGeneration
+  scores.value = null
+  drilldowns.value = null
+  scoreError.value = ''
+  selectedPid.value = null
   const game = ctx.game.value
   if (!game) return
   const result = await computePlayerScores(buildScoreInputsFromGame(game)).catch((err: unknown) => {
@@ -182,6 +194,7 @@ onMounted(async () => {
     scoreError.value = '评分服务不可用'
     return null
   })
+  if (gen !== scoreGeneration) return
   scores.value = result && result.length > 0 ? result : null
   if (result && result.length === 0) scoreError.value = '对局无参与者数据'
 
@@ -190,9 +203,21 @@ onMounted(async () => {
     console.warn('[score] drilldown failed', err)
     return null
   })
+  if (gen !== scoreGeneration) return
   drilldowns.value = dd && dd.length > 0 ? dd : null
   drilldownLoading.value = false
+}
+
+onMounted(() => {
+  void loadScores()
 })
+
+watch(
+  () => ctx.game.value?.gameId,
+  () => {
+    void loadScores()
+  }
+)
 
 function toggleSelect(pid: number) {
   selectedPid.value = selectedPid.value === pid ? null : pid

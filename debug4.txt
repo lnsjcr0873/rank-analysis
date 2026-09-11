@@ -149,7 +149,7 @@ Response::builder()
     .header("Cache-Control", "no-store")
     .body(e.into_bytes())
     .unwrap()
-8. MatchDetailInline.vue：Tab 组件使用 <KeepAlive> 但子 Tab 未响应 gameId 变化
+8. MatchDetailInline.vue：Tab 组件使用 <KeepAlive> 但子 Tab 未响应 gameId 变化【已完成：Score/Backtest 补 gameId watch 重拉+世代守卫；衍生：Events 重置本地筛选、Timeline 重置选中。prettier/eslint/tsc 全过】
 文件路径：
 rank-analysis-app/src/components/record/MatchDetailInline.vue
 rank-analysis-app/src/components/record/tabs/MatchDetailScoreTab.vue

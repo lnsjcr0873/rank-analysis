@@ -120,7 +120,7 @@
 </template>
 
 <script lang="ts" setup>
-import { inject, onMounted, ref } from 'vue'
+import { inject, onMounted, ref, watch } from 'vue'
 import { matchDetailContextKey } from '../matchDetailContext'
 import { useAssetUrl } from '@renderer/composables/useAssetUrl'
 import {
@@ -141,7 +141,15 @@ const loading = ref(true)
 const result = ref<DecisionBacktest | null>(null)
 const stats = ref<AdoptionStats | null>(null)
 
-onMounted(async () => {
+/**
+ * 加载本局决策回测（debug4-8：KeepAlive 保活下 onMounted 只跑一次，
+ * 切局时 gameId 变化必须重拉，否则展示旧局数据）。
+ *
+ * 世代守卫：在途旧请求迟到作废，避免旧局结果覆盖新局。
+ */
+let backtestGeneration = 0
+async function loadBacktest(): Promise<void> {
+  const gen = ++backtestGeneration
   const gameId = ctx.game.value?.gameId
   if (gameId == null) {
     loading.value = false
@@ -149,10 +157,22 @@ onMounted(async () => {
   }
   loading.value = true
   const [r, s] = await Promise.all([fetchDecisionBacktest(gameId), fetchAdoptionStats()])
+  if (gen !== backtestGeneration) return
   result.value = r
   stats.value = s
   loading.value = false
+}
+
+onMounted(() => {
+  void loadBacktest()
 })
+
+watch(
+  () => ctx.game.value?.gameId,
+  () => {
+    void loadBacktest()
+  }
+)
 
 function formatPercent(gap: number): string {
   return `${gap > 0 ? '+' : ''}${(gap * 100).toFixed(1)}%`

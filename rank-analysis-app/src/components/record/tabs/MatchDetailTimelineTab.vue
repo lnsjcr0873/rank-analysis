@@ -170,6 +170,16 @@ watch(
   { immediate: true }
 )
 
+// debug4-8 衍生：KeepAlive 保活下切局时选中必须重置，否则旧局 participantId
+// 在新局继续选中（participantId 跨局复用 → 选中完全错乱）。
+watch(
+  () => ctx.game.value?.gameId,
+  () => {
+    selected.value = new Set()
+    ensureDefaultSelection()
+  }
+)
+
 function togglePlayer(pid: number) {
   const next = new Set(selected.value)
   if (next.has(pid)) next.delete(pid)

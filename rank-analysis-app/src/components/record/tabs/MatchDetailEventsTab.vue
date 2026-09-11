@@ -148,7 +148,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, inject, onMounted, ref } from 'vue'
+import { computed, inject, onMounted, ref, watch } from 'vue'
 import { NScrollbar, NSpin, NTooltip } from 'naive-ui'
 import type { SgpFrameEvent } from '@renderer/features/record/services/sgp'
 import type { DetailPlayer } from '@renderer/composables/useMatchDetailPlayers'
@@ -174,6 +174,17 @@ onMounted(() => {
   void ctx.loadSgpDetail()
   void loadChampionNames()
 })
+
+// debug4-8 衍生：KeepAlive 保活下切局时本地筛选状态必须重置，
+// 否则旧局的英雄筛选/只看我在新局继续生效（新局可能根本没这个英雄）。
+watch(
+  () => ctx.game.value?.gameId,
+  () => {
+    filter.value = 'all'
+    meOnly.value = false
+    selectedChampionId.value = 0
+  }
+)
 
 const loading = computed(
   () => ctx.sgpDetailStatus.value === 'loading' || ctx.sgpDetailStatus.value === 'idle'
