@@ -60,7 +60,7 @@ get_champion_select_session() 内部维护了一个 1 秒的内存缓存（SELEC
 detect_override 检测到 current_hover(Y) != 0 && current_hover(Y) != our_hover(X)，判定为「用户手动干预接管」（User Overridden），并调用 store::mark_overridden(action_id)。
 一旦被标记为 overridden，后续哪怕时间到了，程序也直接跳过，导致整局选人自动锁定被彻底放弃。
 修复方案：在 patch_session_action 和 swap_bench_champion 成功后，立即清理或重置 SELECT_CACHE；或者在 detect_override 中增加短期防抖容忍，等待 LCU 实际回执。
-4. Gaming.vue 生命周期孤立化：用户切页导致局内浮窗（Overlay）与对局辅助直接中断
+4. Gaming.vue 生命周期孤立化：用户切页导致局内浮窗（Overlay）与对局辅助直接中断【已完成：useSessionSync 单例化（共享数据+单一监听+refcount）；新建 useInGameServices（nextAction轮询+overlay显隐+mayhem调度）挂 Framework 主窗口；Gaming 瘦身只读共享。prettier/eslint/tsc 全过，12 个相关测试全绿】
 文件路径：rank-analysis-app/src/views/Gaming.vue
 问题代码：
 code

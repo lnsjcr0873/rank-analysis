@@ -2,7 +2,7 @@
 /**
  * 对局内 Overlay 视图（B1 多面板宿主）。
  *
- * - 兼容通道：`overlay:update`（NextAction 列表，Gaming 轮询推送）
+ * - 兼容通道：`overlay:update`（NextAction 列表，全局局内服务轮询推送）
  * - 面板信封：`overlay:panel` → { panel, payload }，按注册表分发渲染
  *   （mayhem-augments = 三选一卡组；后续面板在此扩展）
  * - `overlay:config` 可选推送 { maxItems, opacity } 覆盖本地偏好。

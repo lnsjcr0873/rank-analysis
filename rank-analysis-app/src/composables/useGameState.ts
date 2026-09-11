@@ -46,6 +46,14 @@ export const lcuConnected = readonly(isConnected)
 
 const currentPhase = ref<string | null>(null)
 const summoner = ref<GameStateEvent['summoner'] | null>(null)
+
+/**
+ * 当前登录召唤师的模块级只读引用（debug4-4）。
+ *
+ * 局内常驻服务（useInGameServices）在组件生命周期之外运行，不能调用
+ * useGameState（会触发 onMounted 警告），故直接共享该单例。
+ */
+export const gameSummoner = readonly(summoner)
 const reasonCode = ref<string | null>(null)
 const reasonMessage = ref<string | null>(null)
 

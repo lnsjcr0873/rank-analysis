@@ -333,7 +333,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { invoke } from '@tauri-apps/api/core'
 import { getConfigByIpc, putConfigByIpc } from '@renderer/services/ipc'
@@ -358,7 +358,7 @@ import { useSessionTiers } from '@renderer/composables/useSessionTiers'
 import { useGameState } from '@renderer/composables/useGameState'
 import { useReconnectBanner } from '@renderer/composables/useReconnectBanner'
 import { useAssetUrl } from '@renderer/composables/useAssetUrl'
-import { getSharedAssistScheduler } from '@renderer/features/mayhem/trigger'
+import { useInGameServices } from '@renderer/composables/useInGameServices'
 import { usePickRules, useBanRules } from '@renderer/composables/useRules'
 import {
   ensureOpggData,
@@ -373,7 +373,6 @@ import { buildRuleDraft } from '@renderer/features/gaming/services/bpRuleDraft'
 import { normalizeLcuPosition } from '@renderer/features/gaming/services/counterIntel'
 import { getChampionName, loadChampionNames } from '@renderer/services/ai/champion-names'
 import { getThreatRatings, type ThreatRating } from '@renderer/services/scouting'
-import { getNextActions, type NextAction } from '@renderer/services/nextAction'
 import type { Position, PickRule, BanRule } from '@renderer/types/rules'
 import type { ChampSelect, Subteam } from '@renderer/types/domain/gaming'
 import type { championOption } from '@renderer/types/domain/champion'
@@ -612,91 +611,13 @@ watch(
   }
 )
 
-/** 对局中下一动作建议（M5a 战场四）：InProgress 阶段轮询 */
-const nextActions = ref<NextAction[]>([])
-let nextActionTimer: ReturnType<typeof setInterval> | null = null
-let lastNextActionAt = 0
-const NEXT_ACTION_THROTTLE_MS = 30_000
-const NEXT_ACTION_POLL_MS = 2_000
-
-async function pollNextActions(): Promise<void> {
-  if (sessionData.phase !== 'InProgress') return
-  const now = Date.now()
-  if (now - lastNextActionAt < NEXT_ACTION_THROTTLE_MS) return
-  lastNextActionAt = now
-  const me = orderedSubteams.value
-    .flatMap(s => s.players)
-    .find(p => p.summoner.puuid === mySummonerPuuid.value)
-  if (!me || me.championId <= 0) return
-  try {
-    const actions = await getNextActions(
-      me.championId,
-      mySummoner.value?.gameName ?? '',
-      mySummonerPuuid.value,
-      sessionData.queueId
-    )
-    // 同 threatRatings：归一为数组防 undefined（mock 桩/后端异常都可能返回空）
-    nextActions.value = Array.isArray(actions) ? actions : []
-    // 推送数据到 overlay 窗口（4b overlay POC）
-    invoke('push_overlay_data', { actions: nextActions.value }).catch(e => {
-      console.warn('push_overlay_data failed:', e)
-    })
-  } catch {
-    nextActions.value = []
-  }
-}
-
-function startMayhemAssistIfNeeded() {
-  if (sessionData.queueId === 2400) {
-    const s = getSharedAssistScheduler()
-    if (!s.running) {
-      s.start()
-    }
-  }
-}
-
-function stopMayhemAssist() {
-  const s = getSharedAssistScheduler()
-  if (s.running) {
-    s.stop()
-  }
-}
-
-watch([() => sessionData.phase, () => sessionData.queueId], ([phase, queueId]) => {
-  if (phase === 'InProgress') {
-    // 先建/显示窗口再首推：overlay 懒创建，若先 poll 后 show，
-    // 首条 overlay:update 会落在窗口 mount+listen 就绪之前而丢失。
-    void invoke('show_overlay_window').catch(() => {})
-    lastNextActionAt = 0
-    void pollNextActions()
-    if (!nextActionTimer) {
-      nextActionTimer = setInterval(() => void pollNextActions(), NEXT_ACTION_POLL_MS)
-    }
-    if (queueId === 2400) {
-      startMayhemAssistIfNeeded()
-    } else {
-      stopMayhemAssist()
-    }
-  } else {
-    if (nextActionTimer) {
-      clearInterval(nextActionTimer)
-      nextActionTimer = null
-    }
-    nextActions.value = []
-    stopMayhemAssist()
-    void invoke('hide_overlay_window').catch(() => {})
-  }
-})
-
-onUnmounted(() => {
-  if (nextActionTimer) {
-    clearInterval(nextActionTimer)
-    nextActionTimer = null
-  }
-  nextActions.value = []
-  stopMayhemAssist()
-  void invoke('hide_overlay_window').catch(() => {})
-})
+/**
+ * 对局中下一动作建议（M5a 战场四）：只读绑定全局局内服务（debug4-4）。
+ *
+ * 轮询 + overlay 推送 + mayhem 调度已提升到 Framework 常驻的 useInGameServices，
+ * 切页不再中断；这里不再自建 timer、不再 stop 调度、不再 hide 浮窗。
+ */
+const { nextActions } = useInGameServices()
 
 /** 展示用 champSelect：实时数据优先，选人期结束后回退到最后一次快照，供离开选人期后继续展示阶段/ban 条 */
 const displayChampSelect = computed(() => sessionData.champSelect ?? lastChampSelect.value)

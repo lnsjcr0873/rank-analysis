@@ -214,201 +214,202 @@ export function syncPlayers(
   }
 }
 
-export function useSessionSync() {
-  const sessionData = reactive<SessionData>({
-    phase: '',
-    type: '',
-    typeCn: '',
-    queueId: 0,
-    gameMode: '',
-    isMultiTeam: false,
-    mySubteamId: 0,
-    subteams: [],
-    cherrySubteamsPending: false
-  })
+// ─── module-level singleton state ─────────────────────────────────────────────
+// debug4-4：Gaming.vue 切页即 onUnmounted，清掉监听与定时器；局内常驻服务需要
+// 全局化（Framework 常驻挂载），前提是数据源本身全局单例。此前每个调用方各建
+// 一份 reactive + 各注册 6 个 listener，会导致事件双倍分发。这里改为共享
+// sessionData + 单一 listener + refcount（与 useGameState 同一模式）。
+const sessionData = reactive<SessionData>({
+  phase: '',
+  type: '',
+  typeCn: '',
+  queueId: 0,
+  gameMode: '',
+  isMultiTeam: false,
+  mySubteamId: 0,
+  subteams: [],
+  cherrySubteamsPending: false
+})
 
-  const unlisteners: Array<() => void> = []
-  const pendingTimers = new Set<ReturnType<typeof setTimeout>>()
+const unlisteners: Array<() => void> = []
+const pendingTimers = new Set<ReturnType<typeof setTimeout>>()
+let sessionSyncInstances = 0
+let sessionSyncSetupDone = false
 
-  /**
-   * 包装 setTimeout，把 id 记入 pendingTimers，回调执行时自动移除。
-   * onUnmounted 会清掉仍未触发的 timer，避免组件卸载后写响应式状态。
-   */
-  function trackedSetTimeout(fn: () => void, ms: number) {
-    const id = setTimeout(() => {
-      pendingTimers.delete(id)
-      fn()
-    }, ms)
-    pendingTimers.add(id)
-    return id
+/**
+ * 包装 setTimeout，把 id 记入 pendingTimers，回调执行时自动移除。
+ * 最后一个消费者 unmount 会清掉仍未触发的 timer，避免写已卸载的响应式状态。
+ */
+function trackedSetTimeout(fn: () => void, ms: number) {
+  const id = setTimeout(() => {
+    pendingTimers.delete(id)
+    fn()
+  }, ms)
+  pendingTimers.add(id)
+  return id
+}
+
+async function requestSessionData() {
+  try {
+    await invoke('get_session_data')
+  } catch (error) {
+    console.error('Failed to request session data:', error)
   }
+}
 
-  async function requestSessionData() {
-    try {
-      await invoke('get_session_data')
-    } catch (error) {
-      console.error('Failed to request session data:', error)
-    }
-  }
+/**
+ * 新开一局：清空上一局残留的对局面板（尤其是敌方小队）并重新拉取。
+ *
+ * 结算后停留在对局页时，面板刻意保留上一局数据供复盘（空 phase 事件被忽略）。
+ * 但进入下一局选人时必须清场——否则在新数据到达前，右侧仍显示上一局的敌方。
+ * phase 置空让页面回到「等待加入游戏...」态，随后选人数据会立刻填充我方。
+ */
+function resetForNewGame() {
+  sessionData.phase = ''
+  sessionData.type = ''
+  sessionData.typeCn = ''
+  sessionData.queueId = 0
+  sessionData.gameMode = ''
+  sessionData.isMultiTeam = false
+  sessionData.mySubteamId = 0
+  sessionData.cherrySubteamsPending = false
+  sessionData.champSelect = undefined
+  sessionData.subteams.splice(0, sessionData.subteams.length)
+  requestSessionData()
+}
 
-  /**
-   * 新开一局：清空上一局残留的对局面板（尤其是敌方小队）并重新拉取。
-   *
-   * 结算后停留在对局页时，面板刻意保留上一局数据供复盘（空 phase 事件被忽略）。
-   * 但进入下一局选人时必须清场——否则在新数据到达前，右侧仍显示上一局的敌方。
-   * phase 置空让页面回到「等待加入游戏...」态，随后选人数据会立刻填充我方。
-   */
-  function resetForNewGame() {
-    sessionData.phase = ''
-    sessionData.type = ''
-    sessionData.typeCn = ''
-    sessionData.queueId = 0
-    sessionData.gameMode = ''
-    sessionData.isMultiTeam = false
-    sessionData.mySubteamId = 0
-    sessionData.cherrySubteamsPending = false
-    sessionData.champSelect = undefined
-    sessionData.subteams.splice(0, sessionData.subteams.length)
-    requestSessionData()
-  }
+let retryCount = 0
+function checkAndRetryFetch() {
+  if (sessionData.phase !== 'InProgress' && sessionData.phase !== 'GameStart') return
 
-  let retryCount = 0
-  function checkAndRetryFetch() {
-    if (sessionData.phase !== 'InProgress' && sessionData.phase !== 'GameStart') return
-
-    const enoughSubteams = sessionData.isMultiTeam
-      ? sessionData.subteams.length >= 2
-      : sessionData.subteams.some(
-          s => s.subteamId !== sessionData.mySubteamId && s.players.some(p => p.summoner.gameName)
-        )
-
-    if (!enoughSubteams && retryCount < MAX_RETRIES) {
-      retryCount++
-      const delay = RETRY_DELAY_MS * retryCount // 线性退避：3s, 6s, 9s
-      trackedSetTimeout(() => {
-        requestSessionData()
-        trackedSetTimeout(checkAndRetryFetch, RETRY_RECHECK_DELAY_MS + delay)
-      }, delay)
-    }
-  }
-
-  function applyMeta(data: SessionData) {
-    sessionData.phase = data.phase
-    sessionData.type = data.type
-    sessionData.typeCn = data.typeCn
-    sessionData.queueId = data.queueId
-    sessionData.gameMode = data.gameMode ?? ''
-    sessionData.isMultiTeam = !!data.isMultiTeam
-    sessionData.mySubteamId = data.mySubteamId ?? 0
-    sessionData.cherrySubteamsPending = !!data.cherrySubteamsPending
-    // 后端仅在 ChampSelect 期间下发该字段（skip_serializing_if）；离开选人后
-    // 事件里 data.champSelect 缺席 → undefined 直接覆盖旧值，面板自动清空阶段/ban 展示。
-    sessionData.champSelect = data.champSelect
-  }
-
-  /**
-   * CHERRY/斗魂模式专用轮询：直到 EOG 端点 ready（cherrySubteamsPending 转 false）才停。
-   *
-   * 触发条件：CHERRY + 处于 InProgress / GameStart / PreEndOfGame / EndOfGame 之一 + 当前 pending=true
-   * 间隔：CHERRY_POLL_INTERVAL_MS
-   * 上限：CHERRY_POLL_MAX_ATTEMPTS 次（一般几次内就能拿到权威分队）
-   */
-  let cherryPollAttempts = 0
-  function pollCherrySubteams() {
-    if (!sessionData.cherrySubteamsPending) return
-    const inGame = ['InProgress', 'GameStart', 'PreEndOfGame', 'EndOfGame'].includes(
-      sessionData.phase
-    )
-    if (!inGame || sessionData.gameMode !== 'CHERRY') return
-    if (cherryPollAttempts >= CHERRY_POLL_MAX_ATTEMPTS) return
-    cherryPollAttempts++
-    requestSessionData()
-    trackedSetTimeout(pollCherrySubteams, CHERRY_POLL_INTERVAL_MS)
-  }
-
-  onMounted(async () => {
-    unlisteners.push(
-      await listen<SessionData>('session-complete', event => {
-        const data = event.payload
-        if (!data.phase) return
-        applyMeta(data)
-        syncSubteams(
-          sessionData.subteams,
-          Array.isArray(data.subteams) ? data.subteams : [],
-          'full'
-        )
-      })
-    )
-
-    unlisteners.push(
-      await listen<SessionData>('session-basic-info', event => {
-        const data = event.payload
-        if (!data.phase) return
-        applyMeta(data)
-        syncSubteams(
-          sessionData.subteams,
-          Array.isArray(data.subteams) ? data.subteams : [],
-          'basic'
-        )
-      })
-    )
-
-    unlisteners.push(
-      await listen<Record<string, PreGroupMarkers>>('session-pre-group', event => {
-        updatePreGroupMarkers(sessionData.subteams, event.payload)
-      })
-    )
-
-    unlisteners.push(
-      await listen<{ subteamId: number; index: number; total: number; player: SessionSummoner }>(
-        'session-player-update',
-        event => {
-          const { subteamId, index, player } = event.payload
-          updatePlayerInSubteam(sessionData.subteams, subteamId, index, player)
-        }
+  const enoughSubteams = sessionData.isMultiTeam
+    ? sessionData.subteams.length >= 2
+    : sessionData.subteams.some(
+        s => s.subteamId !== sessionData.mySubteamId && s.players.some(p => p.summoner.gameName)
       )
+
+  if (!enoughSubteams && retryCount < MAX_RETRIES) {
+    retryCount++
+    const delay = RETRY_DELAY_MS * retryCount // 线性退避：3s, 6s, 9s
+    trackedSetTimeout(() => {
+      requestSessionData()
+      trackedSetTimeout(checkAndRetryFetch, RETRY_RECHECK_DELAY_MS + delay)
+    }, delay)
+  }
+}
+
+function applyMeta(data: SessionData) {
+  sessionData.phase = data.phase
+  sessionData.type = data.type
+  sessionData.typeCn = data.typeCn
+  sessionData.queueId = data.queueId
+  sessionData.gameMode = data.gameMode ?? ''
+  sessionData.isMultiTeam = !!data.isMultiTeam
+  sessionData.mySubteamId = data.mySubteamId ?? 0
+  sessionData.cherrySubteamsPending = !!data.cherrySubteamsPending
+  // 后端仅在 ChampSelect 期间下发该字段（skip_serializing_if）；离开选人后
+  // 事件里 data.champSelect 缺席 → undefined 直接覆盖旧值，面板自动清空阶段/ban 展示。
+  sessionData.champSelect = data.champSelect
+}
+
+/**
+ * CHERRY/斗魂模式专用轮询：直到 EOG 端点 ready（cherrySubteamsPending 转 false）才停。
+ *
+ * 触发条件：CHERRY + 处于 InProgress / GameStart / PreEndOfGame / EndOfGame 之一 + 当前 pending=true
+ * 间隔：CHERRY_POLL_INTERVAL_MS
+ * 上限：CHERRY_POLL_MAX_ATTEMPTS 次（一般几次内就能拿到权威分队）
+ */
+let cherryPollAttempts = 0
+function pollCherrySubteams() {
+  if (!sessionData.cherrySubteamsPending) return
+  const inGame = ['InProgress', 'GameStart', 'PreEndOfGame', 'EndOfGame'].includes(
+    sessionData.phase
+  )
+  if (!inGame || sessionData.gameMode !== 'CHERRY') return
+  if (cherryPollAttempts >= CHERRY_POLL_MAX_ATTEMPTS) return
+  cherryPollAttempts++
+  requestSessionData()
+  trackedSetTimeout(pollCherrySubteams, CHERRY_POLL_INTERVAL_MS)
+}
+
+/** 模块级单例监听注册：首个消费者 mount 时执行一次。 */
+async function setupSessionListeners(): Promise<void> {
+  unlisteners.push(
+    await listen<SessionData>('session-complete', event => {
+      const data = event.payload
+      if (!data.phase) return
+      applyMeta(data)
+      syncSubteams(sessionData.subteams, Array.isArray(data.subteams) ? data.subteams : [], 'full')
+    })
+  )
+
+  unlisteners.push(
+    await listen<SessionData>('session-basic-info', event => {
+      const data = event.payload
+      if (!data.phase) return
+      applyMeta(data)
+      syncSubteams(sessionData.subteams, Array.isArray(data.subteams) ? data.subteams : [], 'basic')
+    })
+  )
+
+  unlisteners.push(
+    await listen<Record<string, PreGroupMarkers>>('session-pre-group', event => {
+      updatePreGroupMarkers(sessionData.subteams, event.payload)
+    })
+  )
+
+  unlisteners.push(
+    await listen<{ subteamId: number; index: number; total: number; player: SessionSummoner }>(
+      'session-player-update',
+      event => {
+        const { subteamId, index, player } = event.payload
+        updatePlayerInSubteam(sessionData.subteams, subteamId, index, player)
+      }
     )
+  )
 
-    unlisteners.push(
-      await listen<string>('session-error', event => {
-        console.error('Session error:', event.payload)
-      })
-    )
+  unlisteners.push(
+    await listen<string>('session-error', event => {
+      console.error('Session error:', event.payload)
+    })
+  )
 
-    // 监听 game_state_monitor 的可靠 phase 流（每 2s 轮询 + 变化即推）：
-    // 检测到进入选人（= 新开一局）且面板还挂着上一局数据时，立即清场重拉。
-    // 以 sessionData.phase !== 'ChampSelect' 防抖——若选人数据已先行到达则无需清。
-    let lastMonitorPhase = ''
-    unlisteners.push(
-      await listen<{ phase: string | null }>('game-state-changed', event => {
-        const phase = event.payload.phase ?? ''
-        if (
-          phase === 'ChampSelect' &&
-          lastMonitorPhase !== 'ChampSelect' &&
-          sessionData.phase !== 'ChampSelect'
-        ) {
-          resetForNewGame()
-        } else if (
-          [
-            'ChampSelect',
-            'GameStart',
-            'InProgress',
-            'Reconnect',
-            'PreEndOfGame',
-            'EndOfGame'
-          ].includes(phase) &&
-          (!sessionData.phase ||
-            (lastMonitorPhase !== phase && phase !== 'GameStart' && phase !== 'InProgress'))
-        ) {
-          requestSessionData()
-        }
-        lastMonitorPhase = phase
-      })
-    )
+  // 监听 game_state_monitor 的可靠 phase 流（每 2s 轮询 + 变化即推）：
+  // 检测到进入选人（= 新开一局）且面板还挂着上一局数据时，立即清场重拉。
+  // 以 sessionData.phase !== 'ChampSelect' 防抖——若选人数据已先行到达则无需清。
+  let lastMonitorPhase = ''
+  unlisteners.push(
+    await listen<{ phase: string | null }>('game-state-changed', event => {
+      const phase = event.payload.phase ?? ''
+      if (
+        phase === 'ChampSelect' &&
+        lastMonitorPhase !== 'ChampSelect' &&
+        sessionData.phase !== 'ChampSelect'
+      ) {
+        resetForNewGame()
+      } else if (
+        [
+          'ChampSelect',
+          'GameStart',
+          'InProgress',
+          'Reconnect',
+          'PreEndOfGame',
+          'EndOfGame'
+        ].includes(phase) &&
+        (!sessionData.phase ||
+          (lastMonitorPhase !== phase && phase !== 'GameStart' && phase !== 'InProgress'))
+      ) {
+        requestSessionData()
+      }
+      lastMonitorPhase = phase
+    })
+  )
 
-    await requestSessionData()
-  })
+  await requestSessionData()
+}
 
+/** 模块级 watch 只注册一次（随首个 setup。闭包读共享 sessionData，无需清理）。 */
+function setupSessionWatchers(): void {
   watch(
     () => sessionData.phase,
     (newVal, oldVal) => {
@@ -429,11 +430,41 @@ export function useSessionSync() {
       }
     }
   )
+}
+
+function teardownSessionListeners(): void {
+  for (const off of unlisteners.splice(0)) off()
+  for (const id of pendingTimers) clearTimeout(id)
+  pendingTimers.clear()
+  sessionSyncSetupDone = false
+}
+
+/**
+ * 对局会话数据同步（debug4-4 起为全局单例）。
+ *
+ * 多组件调用共享同一份 sessionData + 同一份后台 listener（refcount），
+ * Gaming 切页卸载不再清掉监听——Framework 常驻挂载兜底，局内服务可全局化。
+ */
+export function useSessionSync() {
+  onMounted(() => {
+    sessionSyncInstances += 1
+    if (!sessionSyncSetupDone) {
+      sessionSyncSetupDone = true
+      setupSessionWatchers()
+      setupSessionListeners().catch(e => {
+        // 非 Tauri 环境（浏览器 dev）无事件后端，listen 必然 reject——静默降级
+        console.warn('[session-sync] 事件监听不可用，运行于离线模式:', e)
+        sessionSyncSetupDone = false
+      })
+    }
+  })
 
   onUnmounted(() => {
-    for (const off of unlisteners) off()
-    for (const id of pendingTimers) clearTimeout(id)
-    pendingTimers.clear()
+    sessionSyncInstances -= 1
+    if (sessionSyncInstances <= 0) {
+      sessionSyncInstances = 0
+      teardownSessionListeners()
+    }
   })
 
   return { sessionData, requestSessionData }

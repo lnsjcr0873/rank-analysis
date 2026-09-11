@@ -49,6 +49,7 @@ import CornerCard from './ui/CornerCard.vue'
 import ErrorReportingConsentDialog from '@renderer/components/common/ErrorReportingConsentDialog.vue'
 import DiagnosticsModal from '@renderer/components/common/DiagnosticsModal.vue'
 import { useGameState } from '@renderer/composables/useGameState'
+import { useInGameServices } from '@renderer/composables/useInGameServices'
 import { useWindowShortcuts } from '@renderer/composables/useWindowShortcuts'
 import { useZoom } from '@renderer/composables/useZoom'
 import { useStartupDialogs } from '@renderer/composables/useStartupDialogs'
@@ -118,6 +119,12 @@ useWindowShortcuts()
 // 仅在主窗口执行轮询，避免每个子窗口重复发起 Live Client 请求与浮窗气泡
 const isMain = isMainWindow()
 const liveBridge = isMain ? startLiveBridge() : null
+
+// 局内常驻服务（debug4-4：nextAction 轮询 + overlay 显隐 + mayhem 调度）：
+// 与路由解耦，Gaming 切页不再中断。同样仅主窗口启动。
+if (isMain) {
+  useInGameServices()
+}
 onMounted(() => {
   if (isMain) {
     liveBridge?.start()
