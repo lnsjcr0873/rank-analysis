@@ -295,7 +295,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { getConfigByIpc, putConfigByIpc } from '@renderer/services/ipc'
 import { CONFIG_KEYS } from '@renderer/services/configKeys'
 import { DEFAULT_PAGE_SIZE, type MatchPageMode } from '@renderer/components/record/pageSize'
@@ -326,6 +326,12 @@ const aiProvider = ref<AiProviderKind>('dashscope')
 const aiBaseUrl = ref('')
 const aiModel = ref('')
 const aiApiKey = ref('')
+// debug6：Key 明文只在设置页内存短暂停留（输入框 password 掩码），离开页面即清空，
+// 缩短 renderer 侧 Secret 生命周期（测试连接仍需经 IPC 传 key，属可信边界内搬运）。
+onUnmounted(() => {
+  dashscopeKey.value = ''
+  aiApiKey.value = ''
+})
 /** AI 分析是否携带玩家备注（默认开：键不存在时视为 true） */
 const aiUseNotes = ref(true)
 /** 战术情报开关（默认开：键不存在或非 false 均视为开） */

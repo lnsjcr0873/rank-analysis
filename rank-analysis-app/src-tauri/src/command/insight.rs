@@ -2,7 +2,8 @@
 //!
 //! - `get_habit_tags`：全量收集 → 聚合 → 幂等落库 → 返回（重算一体，前端
 //!   只需调一个命令）。拿不到本机 summoner 时如实报错。
-//! - 改错清单：`list_habit_goals` / `add_habit_goal` / `toggle_habit_goal`。
+//! - 改错清单：`list_habit_goals` / `add_habit_goal_cmd` / `toggle_habit_goal_cmd`
+//!   （命令名带 _cmd 后缀，前端 invoke 同名，debug6 核实一致无 mismatch）。
 
 use crate::insight::aggregate_habit_tags;
 use crate::insight::store::{
