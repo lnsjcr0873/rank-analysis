@@ -324,7 +324,7 @@ filter(|p| p.updated_at <= now_ms.saturating_add(MAX_FUTURE_SKEW_MS))
 一旦云端时间戳超过了当前标准时间加 MAX_FUTURE_SKEW_MS，设备 B 在拉取时就会将该条配置全部判定为恶意/未来污染而直接丢弃（返回 None）。
 设备 B 认为云端无配置，以本地时间重新推送；而设备 A 再次拉取并 max() 放大……导致两台机器的配置再也无法合并，反复发生时钟踩踏。
 修复方案：不应仅依赖本地不受信客户端时钟计算单调时间，而应借助 Supabase 服务端的 now() 时间戳，或在本地时间大幅落后云端时进行显式校准告警。
-6. command/config.rs：get_champion_options 返回列表次序非确定性抖动
+6. command/config.rs：get_champion_options 返回列表次序非确定性抖动【已完成：返回前按英雄 ID 稳定排序；get_game_modes 已有排序无需改动。GNU check/clippy/fmt 全过】
 文件路径：rank-analysis-app/src-tauri/src/command/config.rs
 问题代码：
 code

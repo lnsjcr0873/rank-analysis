@@ -117,6 +117,9 @@ pub fn get_champion_options() -> Result<Vec<ChampionOption>, String> {
         });
     }
 
+    // debug4-16：CHAMPION_CACHE 是 HashMap（随机哈希种子），迭代顺序每次启动
+    // 都不同。按英雄 ID 稳定排序，下拉菜单不再随机乱跳。
+    options.sort_by_key(|o| o.value);
     Ok(options)
 }
 
