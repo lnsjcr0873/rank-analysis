@@ -300,6 +300,27 @@ describe('requestAIContent 缓存容错（R12）', () => {
     expect(ret).toEqual({ success: true, content: 'hello' })
     expect(sessionStorage.getItem('throw-key')).toBeNull()
   })
+
+  it('debug6：磁盘命中直接返回，不走网络（跨会话、TTL 14 天）', async () => {
+    const { invoke } = await import('@tauri-apps/api/core')
+    ;(invoke as unknown as ReturnType<typeof vi.fn>).mockImplementation(async (cmd: string) => {
+      if (cmd === 'ai_cache_get') return 'disk-hit'
+      throw new Error('should not reach network')
+    })
+    const ret = await requestAIContent('p', 'disk-key')
+    expect(ret).toEqual({ success: true, content: 'disk-hit' })
+  })
+
+  it('debug6：写缓存同时落磁盘与会话（磁盘失败不阻断）', async () => {
+    await driveSuccess()
+    const { invoke } = await import('@tauri-apps/api/core')
+    const mockInvoke = invoke as unknown as ReturnType<typeof vi.fn>
+    await requestAIContent('p', 'dual-key')
+    const puts = mockInvoke.mock.calls.filter(c => c[0] === 'ai_cache_put')
+    expect(puts).toHaveLength(1)
+    expect(puts[0][1]).toMatchObject({ key: 'dual-key', value: 'hello' })
+    expect(sessionStorage.getItem('dual-key')).toBe('hello')
+  })
 })
 
 describe('requestAIContentStream 透传服务商配置（D-P4）', () => {

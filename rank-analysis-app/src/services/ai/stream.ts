@@ -175,8 +175,22 @@ function readCacheSafe(key: string): string | null {
   }
 }
 
+/** Rust 磁盘缓存读（失败/未命中返回 null，调用方回退 session） */
+async function readDiskCache(key: string): Promise<string | null> {
+  try {
+    // patch=None：通用文本缓存不做版本分片，仅 14 天 TTL（ai_cache.rs 语义）
+    const value = await invoke<string | null>('ai_cache_get', { key, patch: null })
+    return value ?? null
+  } catch {
+    return null
+  }
+}
+
 /** 安全写缓存：QuotaExceeded 等写入失败不得阻断成功响应。 */
 function writeCacheSafe(key: string, content: string): void {
+  // debug6：磁盘优先（Rust ai_cache，14天TTL+400条上限），sessionStorage 只作
+  // 同步兜底——大文本不再长期占用浏览器配额，playerNotes 等同域键不受冲垮。
+  void invoke('ai_cache_put', { key, patch: 'generic', value: content }).catch(() => {})
   try {
     sessionStorage.setItem(key, content)
   } catch {
@@ -186,7 +200,7 @@ function writeCacheSafe(key: string, content: string): void {
       evictLargestCacheEntries()
       sessionStorage.setItem(key, content)
     } catch {
-      // 忽略：无缓存只是下次重算，不能让本次成功变挂起
+      // 忽略：磁盘已有一份，无缓存只是下次重算，不能让本次成功变挂起
     }
   }
 }
@@ -228,6 +242,9 @@ export async function requestAIContent(
   model: string = DEFAULT_MODEL,
   opts: AiRequestOptions = {}
 ): Promise<AIAnalysisResult> {
+  // debug6：磁盘优先（跨会话、14天TTL），未命中回退 session（会话级）。
+  const disk = await readDiskCache(cacheKey)
+  if (disk) return { success: true, content: disk }
   const cached = readCacheSafe(cacheKey)
   if (cached) {
     return { success: true, content: cached }
