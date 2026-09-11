@@ -8,7 +8,7 @@ debug2.txt 修复进度（按 debug2 报告逐项，一项一 commit）
 - [x] #5 Gaming/OverlayView nextActionTimer 生命周期 —— 【已验证无需修改】单例守卫 + phase 退出分支与 onUnmounted 双清理（S9 已审）
 - [x] #6 main.rs asset:// 协议路径未解码/host/反斜杠 —— 7d0e0f3 percent-decode + \\ 归一 + 空段剔除
 - [x] #7 windows.ts macOS 未守卫 —— f213026 applyOverlayHotkey 非 Windows 直接 no-op；tileWindowsSideBySide 使用 Tauri2 跨平台窗口 API（LogicalPosition/Size 在 macOS 均支持），无需守卫
-- [ ] #8 cloud_sync 明文/无鉴权（E2EE）——范围大，另行评估
+- [x] #8 cloud_sync 明文/无鉴权（E2EE） —— 【已缓解 + E2EE 另行评估】模块级威胁模型 S1 已实施：validate_puuid 字符集/长度、拉推字节上限、mergeNotesMaps 逐条校验（白名单/限长/LWW 漂移熔断）、配置黑名单（API Key 永不上云）。攻击者可匿名写毒行但无法注入可执行载荷或 Key；**端到端加密**需设备密钥管理 + 加密算法评审，列为独立专项
 - [x] #9 parse_game_time_to_epoch_ms 精度（微秒/ISO 边缘） —— b66deab 秒/毫秒/微秒三级判定 + ISO 超 3 位小数截断，+3 单测
 - [x] #10 team.ts 玩家名注入 AI prompt —— 8e3424a 新增 sanitizeUserText（控制符/围栏/结构定界符剥离 + 截断），team.ts/team-player.ts 插值前净化，+4 单测
 - [x] #11 autoBpHint.ts 空目标判定 —— 【已验证无需修改】静态配置空目标已正确判定（hasNoExecutableTarget，仅规则与兜底均空才报警）；「运行态被 Ban/被抢导致无目标」属对局实时阶段逻辑（gaming BP 决策层处理回退），设置页仅做静态配置校验，不可也无从感知实时可用性
