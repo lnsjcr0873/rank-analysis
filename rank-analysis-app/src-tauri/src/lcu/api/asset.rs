@@ -805,6 +805,24 @@ fn build_asset_key(type_string: &str, id: i64) -> String {
     format!("{}:{}", type_string, id)
 }
 
+/// 离线数据源条目 id 取值：兼容数字 id、字符串 "3031"、别名键（itemId/key 等）。
+/// 部分 mayhem/ 本地 JSON 的装备字段用大写 itemId 或字符串 ID，旧只认 as_i64 会漏装。
+fn entry_id(obj: &serde_json::Value, aliases: &[&str]) -> Option<i64> {
+    for key in aliases {
+        if let Some(v) = obj.get(key) {
+            if let Some(n) = v.as_i64() {
+                return Some(n);
+            }
+            if let Some(s) = v.as_str() {
+                if let Ok(n) = s.trim().parse::<i64>() {
+                    return Some(n);
+                }
+            }
+        }
+    }
+    None
+}
+
 /// 从本地 mayhem 数据源加载离线装备/技能/符文/英雄元数据兜底。
 /// 当 LCU 未运行、断连或静态数据尚未拉取时，保证前端能正确解析出装备/技能名称及描述而非显示「#数字」。
 pub fn ensure_offline_assets_loaded() {
@@ -825,7 +843,9 @@ pub fn ensure_offline_assets_loaded() {
             if let Some(arr) = list {
                 let mut cache = ITEM_CACHE.write().unwrap_or_else(|e| e.into_inner());
                 for it in arr {
-                    if let (Some(id), Some(name)) = (it["id"].as_i64(), it["name"].as_str()) {
+                    if let (Some(id), Some(name)) =
+                        (entry_id(it, &["id", "itemId", "key"]), it["name"].as_str())
+                    {
                         let desc = it["description"].as_str().unwrap_or_default().to_string();
                         let icon_path = it["iconUrl"].as_str().unwrap_or_default().to_string();
                         cache.entry(id).or_insert(Item {
@@ -848,7 +868,9 @@ pub fn ensure_offline_assets_loaded() {
             if let Some(arr) = list {
                 let mut cache = SPELL_CACHE.write().unwrap_or_else(|e| e.into_inner());
                 for sp in arr {
-                    if let (Some(id), Some(name)) = (sp["id"].as_i64(), sp["name"].as_str()) {
+                    if let (Some(id), Some(name)) =
+                        (entry_id(sp, &["id", "spellId", "key"]), sp["name"].as_str())
+                    {
                         let desc = sp["description"].as_str().unwrap_or_default().to_string();
                         let icon_path = sp["iconUrl"].as_str().unwrap_or_default().to_string();
                         cache.entry(id).or_insert(Spell {
@@ -871,7 +893,10 @@ pub fn ensure_offline_assets_loaded() {
             if let Some(arr) = list {
                 let mut cache = PERK_CACHE.write().unwrap_or_else(|e| e.into_inner());
                 for aug in arr {
-                    if let (Some(id), Some(name)) = (aug["id"].as_i64(), aug["name"].as_str()) {
+                    if let (Some(id), Some(name)) = (
+                        entry_id(aug, &["id", "augmentId", "key"]),
+                        aug["name"].as_str(),
+                    ) {
                         let desc = aug["description"]
                             .as_str()
                             .or_else(|| aug["tooltip"].as_str())
@@ -906,7 +931,7 @@ pub fn ensure_offline_assets_loaded() {
                 let mut cache = CHAMPION_CACHE.write().unwrap_or_else(|e| e.into_inner());
                 for c in arr {
                     if let (Some(id), Some(title)) = (
-                        c["id"].as_i64(),
+                        entry_id(c, &["id", "championId", "key"]),
                         c["title"].as_str().or_else(|| c["name"].as_str()),
                     ) {
                         let alias = c["alias"].as_str().unwrap_or_default().to_string();
