@@ -56,8 +56,39 @@ fn lock_or_recover<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
-/// 更新 phase 缓存（供 WebSocket 事件调用）
+/// LCU gameflow 已知阶段白名单（见 `crate::constant::game::{...}`）。
+///
+/// WS 事件 data 若携带未知字符串（协议外/损坏帧），拒绝写入缓存，
+/// 避免 `get_phase` 在 2s 窗口内返回毒化阶段（debug4-2 纵深防御；
+/// URI 校验本身在 `listener.rs::handle_event` 已存在）。
+fn is_known_phase(phase: &str) -> bool {
+    use crate::constant::game;
+    matches!(
+        phase,
+        game::MATCHMAKING
+            | game::CHAMPSELECT
+            | game::READYCHECK
+            | game::INPROGRESS
+            | game::ENDOFGAME
+            | game::LOBBY
+            | game::GAMESTART
+            | game::NONE
+            | game::RECONNECT
+            | game::WAITINGFORSTATS
+            | game::PREENDOFGAME
+            | game::WATCHINPROGRESS
+            | game::TERMINATEDINERROR
+    )
+}
+
+/// 更新 phase 缓存（供 WebSocket 事件调用）。
+///
+/// 未知阶段值直接拒绝并告警，不污染缓存。
 pub fn update_phase_cache(phase: String) {
+    if !is_known_phase(&phase) {
+        log::warn!("Phase cache 拒绝未知阶段值: {phase:?}（疑似污染/协议外帧）");
+        return;
+    }
     let fingerprint = auth_fingerprint();
     let mut cache = lock_or_recover(&PHASE_CACHE);
     cache.last_phase = phase;
@@ -146,6 +177,39 @@ mod tests {
         c.cached_at = Some(std::time::Instant::now());
         let other = Some(("newtok".to_string(), "5678".to_string()));
         assert!(!c.is_valid(&other));
+    }
+
+    #[test]
+    fn known_phases_cover_gameflow_set() {
+        // 白名单必须覆盖 gameflow 全部合法阶段（debug4-2）
+        for p in [
+            "Matchmaking",
+            "ChampSelect",
+            "ReadyCheck",
+            "InProgress",
+            "EndOfGame",
+            "Lobby",
+            "GameStart",
+            "None",
+            "Reconnect",
+            "WaitingForStats",
+            "PreEndOfGame",
+            "WatchInProgress",
+            "TerminatedInError",
+        ] {
+            assert!(is_known_phase(p), "{p} 应为已知阶段");
+        }
+        assert!(!is_known_phase(""));
+        assert!(!is_known_phase("some random chat text"));
+        assert!(!is_known_phase("champselect"));
+    }
+
+    #[test]
+    fn update_rejects_unknown_phase() {
+        // 未知值不得污染缓存：写入后缓存仍不可信（cached_at 为 None）
+        update_phase_cache("恶意污染文本".to_string());
+        let cache = lock_or_recover(&PHASE_CACHE);
+        assert!(!cache.is_valid(&fp()));
     }
 
     #[test]

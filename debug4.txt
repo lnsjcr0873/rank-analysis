@@ -24,7 +24,7 @@ for g in games {
 code
 Rust
 stmt.execute(params![region, name, g.game_id, json, updated_at])?;
-2. lcu/listener.rs：未校验事件 URI，导致全局游戏阶段（Phase）被任意字符串污染
+2. lcu/listener.rs：未校验事件 URI，导致全局游戏阶段（Phase）被任意字符串污染【已完成：URI 校验在 listener.rs:316 早已存在（早于 debug 周期）；纵深防御补上 update_phase_cache 已知阶段白名单（13 个 gameflow 阶段），未知值拒绝+告警，附 2 个单测。GNU check/clippy/fmt 全过】
 文件路径：rank-analysis-app/src-tauri/src/lcu/listener.rs
 问题代码（handle_event 函数）：
 code
