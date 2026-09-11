@@ -21,6 +21,13 @@ const CACHE_TTL_MS = 10 * 60 * 1000
  */
 const CACHE = new Map<string, { profile: RecentPlayerProfile; expireAt: number }>()
 
+/**
+ * 在途请求去重（debug3-C4）：鼠标快速滑过 5 张卡时，同 puuid 的并发 IPC
+ * 复用同一 promise，不再各发各的。settled 后删除（成功进 CACHE，失败不留痕，
+ * 下次 hover 重试）。
+ */
+const IN_FLIGHT = new Map<string, Promise<RecentPlayerProfile | null>>()
+
 function profileKey(req: ProfileRequest): string {
   return req.puuid || req.name || ''
 }
@@ -86,8 +93,19 @@ export async function fetchBatchProfiles(requests: ProfileRequest[]): Promise<Pr
     }
   }
 
-  // Concurrent fetch
-  const fetched = await Promise.all(toFetch.map(req => fetchSingleProfile(req)))
+  // Concurrent fetch（同 key 在途复用：hover 快速滑过不打重复 IPC）
+  const fetched = await Promise.all(
+    toFetch.map(req => {
+      const key = cacheKey(req)
+      const flying = IN_FLIGHT.get(key)
+      if (flying) return flying
+      const p = fetchSingleProfile(req).finally(() => {
+        if (IN_FLIGHT.get(key) === p) IN_FLIGHT.delete(key)
+      })
+      IN_FLIGHT.set(key, p)
+      return p
+    })
+  )
 
   for (let i = 0; i < toFetch.length; i++) {
     const req = toFetch[i]
@@ -237,9 +255,10 @@ type RawSgpGame = {
   }
 }
 
-/** Test-only: clears the LRU cache. */
+/** Test-only: clears the LRU cache and in-flight map. */
 export function __resetCacheForTests(): void {
   CACHE.clear()
+  IN_FLIGHT.clear()
 }
 
 /**

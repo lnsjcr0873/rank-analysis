@@ -12,7 +12,7 @@
         <template #trigger>
           <span
             class="trend-bar-cell"
-            :class="game.participants[0].stats.win ? 'trend-bar-cell-win' : 'trend-bar-cell-loss'"
+            :class="game.win ? 'trend-bar-cell-win' : 'trend-bar-cell-loss'"
             :style="{ width: cellWidth(game) }"
             role="listitem"
             tabindex="0"
@@ -43,13 +43,29 @@
 <script lang="ts" setup>
 import { NTooltip } from 'naive-ui'
 import { formatGameDate } from '@renderer/utils/format'
-import type { Game } from '@renderer/types/domain/match'
 import type { championOption } from '@renderer/types/domain/champion'
+
+/**
+ * 趋势格轻量快照（debug3-C4）：此前直接传完整 Game（含 gameDetail 数百事件/
+ * 坐标流），200 场全量收集时数百 MB 级大对象常驻响应式依赖树。
+ * 此处实际只用 8 个标量，调用方传前映射，Game 大对象不再进 TrendBar。
+ */
+export interface TrendCell {
+  gameId: number
+  gameDuration: number
+  gameCreationDate: string
+  mvp: string
+  win: boolean
+  championId: number
+  kills: number
+  deaths: number
+  assists: number
+}
 
 const props = withDefaults(
   defineProps<{
-    /** 已过滤的对局列表（时间降序：新 → 旧） */
-    games: Game[]
+    /** 已过滤的对局轻量快照（时间降序：新 → 旧） */
+    games: TrendCell[]
     championOptions?: championOption[]
   }>(),
   { championOptions: () => [] }
@@ -60,7 +76,7 @@ const emit = defineEmits<{
 }>()
 
 /** 格宽 = 时长归一化（10-60 分钟 → 4-24px），最短 4px 保证可点击 */
-const cellWidth = (game: Game) => {
+const cellWidth = (game: TrendCell) => {
   const minutes = game.gameDuration / 60
   const clamped = Math.min(60, Math.max(10, minutes))
   const width = 4 + ((clamped - 10) / 50) * 20
@@ -68,29 +84,25 @@ const cellWidth = (game: Game) => {
 }
 
 /** 死亡暗格数：1 死亡即 1 格，最多 4 格（>4 不再加深，避免高死亡局糊成黑块） */
-const deathCellCount = (game: Game) => {
-  const deaths = game.participants[0]?.stats?.deaths ?? 0
-  return Math.min(4, Math.max(1, deaths))
+const deathCellCount = (game: TrendCell) => {
+  return Math.min(4, Math.max(1, game.deaths))
 }
 
 /** 死亡太多时整格压暗一档（视觉语言：暗格 = 死亡） */
-const deathCellClass = (game: Game) => {
-  const deaths = game.participants[0]?.stats?.deaths ?? 0
-  if (deaths >= 10) return 'trend-bar-death-cells-heavy'
+const deathCellClass = (game: TrendCell) => {
+  if (game.deaths >= 10) return 'trend-bar-death-cells-heavy'
   return ''
 }
 
-const championName = (game: Game) => {
-  const id = game.participants[0].championId
+const championName = (game: TrendCell) => {
+  const id = game.championId
   return props.championOptions.find(option => option.value === id)?.label ?? `英雄 ${id}`
 }
 
-const tooltipDate = (game: Game) => formatGameDate(game.gameCreationDate, 'full')
+const tooltipDate = (game: TrendCell) => formatGameDate(game.gameCreationDate, 'full')
 
-const tooltipKda = (game: Game) => {
-  const s = game.participants[0]?.stats
-  if (!s) return ''
-  return `${s.kills}/${s.deaths}/${s.assists}`
+const tooltipKda = (game: TrendCell) => {
+  return `${game.kills}/${game.deaths}/${game.assists}`
 }
 </script>
 

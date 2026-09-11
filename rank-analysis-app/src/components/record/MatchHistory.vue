@@ -416,7 +416,24 @@ const noMoreMatches = computed(() => page.value >= pageCount.value)
 const sgpStartIndex = ref(0)
 
 /** 趋势条：与列表共用同一份过滤（客户端过滤不重拉） */
-const trendFiltered = computed(() => filteredGames.value)
+const trendFiltered = computed(() =>
+  // 轻量映射（debug3-C4）：TrendBar 只需 8 个标量，不把含 gameDetail 事件流的
+  // 完整 Game 传进去，避免 200 场全量收集时大对象常驻响应式树。
+  filteredGames.value.map(g => {
+    const s = g.participants[0]?.stats
+    return {
+      gameId: g.gameId,
+      gameDuration: g.gameDuration,
+      gameCreationDate: g.gameCreationDate,
+      mvp: g.mvp,
+      win: s?.win ?? false,
+      championId: g.participants[0]?.championId ?? 0,
+      kills: s?.kills ?? 0,
+      deaths: s?.deaths ?? 0,
+      assists: s?.assists ?? 0
+    }
+  })
+)
 
 /** 导出当前筛选对局（格式记忆：主按钮按上次格式直出，▾ 重选并记忆） */
 const exporting = ref(false)

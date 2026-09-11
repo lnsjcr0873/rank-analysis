@@ -114,6 +114,32 @@ describe('fetchBatchProfiles', () => {
     expect(historyCallCount()).toBe(1)
   })
 
+  it('dedups concurrent same-key requests: hover 快速滑过只打 1 次 IPC（debug3-C4）', async () => {
+    const releases: Array<() => void> = []
+    mockInvoke.mockImplementation(async (cmd: string, args: HistoryArgs) => {
+      if (cmd === 'get_match_history_by_puuid') {
+        // 挂起 invoke，直到两个并发调用都进入在途态
+        await new Promise<void>(resolve => releases.push(resolve))
+        return rawHistory(args.puuid, [
+          rawMatch({ puuid: args.puuid, teamPosition: 'JUNGLE', championId: 64, win: true })
+        ])
+      }
+    })
+
+    const req = { puuid: 'p1', teamPosition: 'JUNGLE', championId: 64 } as ProfileRequest
+    const a = fetchBatchProfiles([req])
+    const b = fetchBatchProfiles([{ ...req }])
+    // 两轮事件循环：让两个调用都走完缓存检查、挂到 IN_FLIGHT 上
+    await Promise.resolve()
+    await Promise.resolve()
+    releases.forEach(r => r())
+    const [ra, rb] = await Promise.all([a, b])
+
+    expect(historyCallCount()).toBe(1)
+    expect(ra.get('p1')).not.toBeNull()
+    expect(rb.get('p1')).not.toBeNull()
+  })
+
   it('re-fetches if cache expired (advance fake timers)', async () => {
     vi.useFakeTimers()
     mockInvoke.mockImplementation(async (_cmd: string, args: HistoryArgs) =>
