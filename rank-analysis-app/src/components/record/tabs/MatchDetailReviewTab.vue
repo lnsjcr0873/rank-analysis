@@ -89,7 +89,9 @@ const axisLabelPos = computed(() =>
     }
   })
 )
-const rings = [0.25, 0.5, 0.75, 1].map(f => radarPoints(Array(8).fill(f), CX, CY, R))
+const rings = computed(() =>
+  [0.25, 0.5, 0.75, 1].map(f => radarPoints(Array(axes.value.length).fill(f), CX, CY, R))
+)
 
 const badgeMap = computed(() => computeBadges(judgePlayers.value))
 const selectedBadges = computed(() => badgeMap.value.get(effectiveSelected.value) ?? [])

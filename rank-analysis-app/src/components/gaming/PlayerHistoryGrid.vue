@@ -4,11 +4,11 @@
       v-for="(game, index) in games"
       :key="index"
       class="history-item"
-      :class="{ 'is-win': game.participants[0].stats.win }"
+      :class="{ 'is-win': game.participants[0]?.stats?.win }"
     >
       <div class="history-row">
-        <span class="win-status" :class="{ 'is-win': game.participants[0].stats.win }">
-          {{ game.participants[0].stats.win ? '胜' : '负' }}
+        <span class="win-status" :class="{ 'is-win': game.participants[0]?.stats?.win }">
+          {{ game.participants[0]?.stats?.win ? '胜' : '负' }}
         </span>
         <LazyImg
           :src="assetPrefix + '/champion/' + game.participants[0]?.championId"

@@ -462,8 +462,8 @@ Rust 端的 put_config 每次被调用都会执行完整的 YAML 序列化、创
 序号	类别	模块 / 文件	核心表现	修复策略
 1	协议	summoner.rs	本地 LCU 查人接口直接拼带 # 的名字，导致 LCU 返回 404	检查并分离 #Tag 或改走 Riot Client Alias 接口【已完成：get_summoner_by_name唯一入口分流：含#走alias查puuid再走v2 puuid端点（复用sgp.rs resolve_puuid_by_riot_id），无#走旧端点；调用方战绩/段位/标签共用入口一处修全生效。附split_name_tag单测。cargo fmt/clippy(GNU)/check --tests全过，cargo test以CI为权威】
 2	云端	cloud_sync.rs	updated_at 以纯字符串 "now()" 传给 PostgREST，触发 SQL 语法错误	发送标准 ISO 时间戳或由 DB 列默认值填充
-3	崩溃	PlayerHistoryGrid.vue	战绩列表中遇到空参与者数组时缺少可选链，触发未捕获 TypeError	增加可选链保护 game.participants[0]?.stats?.win
-4	UI	MatchDetailReviewTab.vue	雷达图刻度底图固定为 8 边形，与 7 维数据多边形角度错位	将 rings 顶点数量绑定为 axes.value.length
+3	崩溃	PlayerHistoryGrid.vue	战绩列表中遇到空参与者数组时缺少可选链，触发未捕获 TypeError	增加可选链保护 game.participants[0]?.stats?.win【已完成：外层class+内层文案3处补?.（与同文件championId/kills?.同口径）；prettier/eslint/tsc全过】
+4	UI	MatchDetailReviewTab.vue	雷达图刻度底图固定为 8 边形，与 7 维数据多边形角度错位	将 rings 顶点数量绑定为 axes.value.length【已完成：rings改computed绑定axes.value.length；prettier/eslint/tsc全过】
 5	数据	score.rs	评分数据构造时未读取 game_name，玩家昵称全部退化为空白	优先取 game_name，为空再回退 summoner_name【已完成：input_from_lcu_participant优先取game_name、空再回退summoner_name（与sgp.rs map_identity同口径）；审阅live/mod.rs系liveclientdata无game_name字段无同患。附1回归（game_name优先/双空不编造/旧名照用）。cargo fmt/clippy(GNU)/check --tests全过，cargo test以CI为权威】
 6	性能	useZoom.ts	滚轮缩放无防抖，在毫秒级并发发起数十次 config.yaml 写盘	对 putConfigByIpc 增加防抖延迟落盘
 Model 17:15
