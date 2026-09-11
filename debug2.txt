@@ -19,9 +19,9 @@ debug2.txt 修复进度（按 debug2 报告逐项，一项一 commit）
 - [ ] #16 champion_select my_bans/their_bans 去重
 - [x] #17 UnifiedTagRow \r\n 换行比对 —— 7afe29c 去重前归一 CRLF/CR，+1 单测
 - [ ] #18 PlayerProfileCard requestSeq 跨实例
-- [ ] #19 observability 转义引号 \" 脱敏
-- [ ] #20 listener.rs WebSocket 重试无退避
-- [ ] #21 phase.rs auth_fingerprint 前缀 8 位幽灵缓存
+- [x] #19 observability 转义引号 \" 脱敏 —— 0902983 PII_PARAM/AUTH 正则兼容 \\" 转义引号嵌套字符串
+- [x] #20 listener.rs WebSocket 重试无退避 —— 33d71c5 认证失败/连接失败路径 1s→15s 指数退避，成功连接复位
+- [x] #21 phase.rs auth_fingerprint 前缀 8 位幽灵缓存 —— 6bf379a 全量 token+port 确定性哈希指纹（DefaultHasher 固定种子可复现），消除重登同前缀误命中
 - [ ] #22 match_history 缓存全量 enrich 内存暴涨
 - [x] #23 sampler.ts mulberry32 种子污染 —— 677bd78 NaN/Infinity/小数 seed 归一化，+1 单测
 - [ ] #24 sgp_league_servers config_is_newer 字符串比较
