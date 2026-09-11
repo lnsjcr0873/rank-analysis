@@ -678,11 +678,24 @@ pub fn map_sgp_to_match_history(raw: &Value, platform_id: &str, my_puuid: &str) 
                 .position(|p| p.get("puuid").and_then(Value::as_str) == Some(my_puuid))
                 .unwrap_or(0);
 
-            let iso = epoch_ms_to_iso(
-                json.get("gameCreation")
-                    .and_then(Value::as_i64)
-                    .unwrap_or(0),
-            );
+            // 对局时间：优先 gameCreation，其次 gameStartTimestamp（部分镜像源），
+            // 再退 ISO 串 gameCreationDate。三处皆缺时**跳过该局**——落成 1970 会把
+            // 它沉到合并列表末尾、并在时间趋势坐标系上拉出 50 年断层。
+            let created_ms = ["gameCreation", "gameStartTimestamp"]
+                .iter()
+                .find_map(|k| json.get(k).and_then(Value::as_i64))
+                .filter(|&ms| ms > 0)
+                .or_else(|| {
+                    json.get("gameCreationDate")
+                        .and_then(Value::as_str)
+                        .and_then(crate::command::backtest::parse_game_time_to_epoch_ms)
+                })
+                .unwrap_or(0);
+            if created_ms <= 0 {
+                log::warn!("[sgp] 跳过缺时间戳的对局（无法排序/时段展示）");
+                continue;
+            }
+            let iso = epoch_ms_to_iso(created_ms);
             let game_duration = i32_at(json, "gameDuration");
             let game_mode = json
                 .get("gameMode")
@@ -907,6 +920,40 @@ mod tests {
         assert_eq!(g.queue_name, "单双排");
         // calculate 跑过：占比被算出（我 gold 13200 / 队伍 21200 ≈ 62%）
         assert!(g.participants[0].stats.gold_earned_rate > 0);
+    }
+
+    #[test]
+    fn missing_game_creation_skips_or_falls_back() {
+        // 缺 gameCreation 但给了 gameStartTimestamp → 采用，不落 1970
+        let mut raw: Value = sample_raw();
+        {
+            let g = raw["games"][0]["json"].as_object_mut().unwrap();
+            g.remove("gameCreation");
+            g.insert(
+                "gameStartTimestamp".into(),
+                serde_json::json!(1609459300000i64),
+            );
+        }
+        let mh = map_sgp_to_match_history(&raw, "TJ100", "me-puuid");
+        assert_eq!(mh.games.games.len(), 1);
+        assert_eq!(
+            mh.games.games[0].game_creation_date,
+            "2021-01-01T00:01:40.000Z"
+        );
+
+        // 三处全缺 → 跳过该局，绝不出 1970 沉底局拖垮趋势轴
+        let mut raw2: Value = sample_raw();
+        {
+            let g = raw2["games"][0]["json"].as_object_mut().unwrap();
+            g.remove("gameCreation");
+            g.remove("gameStartTimestamp");
+            g.remove("gameCreationDate");
+        }
+        let mh2 = map_sgp_to_match_history(&raw2, "TJ100", "me-puuid");
+        assert!(
+            mh2.games.games.is_empty(),
+            "缺时间戳的对局应被跳过而非落成 1970"
+        );
     }
 
     #[test]

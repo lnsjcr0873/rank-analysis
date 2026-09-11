@@ -52,7 +52,7 @@ pub struct DecisionBacktest {
 }
 
 /// 解析对局时间为 epoch 毫秒：支持 ISO8601 字符串与纯数字时间戳字符串（毫秒/秒）。
-fn parse_game_time_to_epoch_ms(s: &str) -> Option<i64> {
+pub(crate) fn parse_game_time_to_epoch_ms(s: &str) -> Option<i64> {
     let trimmed = s.trim();
     if trimmed.is_empty() {
         return None;
