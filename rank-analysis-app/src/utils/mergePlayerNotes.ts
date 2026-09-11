@@ -82,6 +82,43 @@ function isValidNote(v: unknown, now: number): v is PlayerNote {
 }
 
 /**
+ * 解包 Rust `config::Value` 外部标签（旧备份兼容，debug3-C6）。
+ *
+ * 历史 bug：`config::Value` 曾未标记 `#[serde(untagged)]`，`build_backup_json`
+ * 导出的备份里备注是 `{"Map": {…}}`、`{"String": "…"}` 形态，且标签是**嵌套**
+ * 的（note 字段本身又是 `{"String": …}`，encounters 数组又是 `{"List": […]}`）。
+ * 新备份已是扁平 JSON，此函数只为兼容用户手里的旧备份文件。
+ *
+ * 递归解包：单键且键名命中 7 种变体时解开继续；数组逐元素解；其他原样返回。
+ * 误伤分析：合法 PlayerNote 顶层有 5+ 键，encounters 元素有多键，不会被当成
+ * 标签；即便极端单键对象命中标签名，解包结果仍要过 `isValidNote` 全套校验。
+ */
+const TAGGED_VARIANTS: ReadonlySet<string> = new Set([
+  'Null',
+  'String',
+  'Integer',
+  'Float',
+  'Boolean',
+  'List',
+  'Map'
+])
+
+export function unwrapTaggedValue(v: unknown): unknown {
+  if (Array.isArray(v)) return v.map(unwrapTaggedValue)
+  if (!v || typeof v !== 'object') return v
+  const entries = Object.entries(v as Record<string, unknown>)
+  if (entries.length !== 1) {
+    const out: Record<string, unknown> = {}
+    for (const [k, inner] of entries) out[k] = unwrapTaggedValue(inner)
+    return out
+  }
+  const [tag, inner] = entries[0]
+  if (!TAGGED_VARIANTS.has(tag)) return { [tag]: unwrapTaggedValue(inner) }
+  if (tag === 'Null') return null
+  return unwrapTaggedValue(inner)
+}
+
+/**
  * 合并两张备注表,不修改入参。
  * @param base - 本地表(冲突时的"守方")
  * @param incoming - 传入表(导入文件 / 云端拉取)
@@ -112,13 +149,17 @@ export function mergeNotesMaps(
       stats.invalid++
       continue
     }
-    if (!isValidNote(note, now)) {
+    // 旧备份兼容：带 {"Map"/"String"/…} 外部标签的备注先解包再校验
+    //（新备份已扁平，此分支对新数据是无操作旁路）。
+    const rawNote = unwrapTaggedValue(note)
+    if (!isValidNote(rawNote, now)) {
       stats.invalid++
       continue
     }
+    const clean = rawNote
     // 过期墓碑不参与合并:它的"删除传播"使命早已完成,并入只会让加载时
     // 的 GC 白做(复活→落盘→推回云端的循环)。跳过即保持本地现状。
-    if (note.deleted && note.updatedAt < expireBefore) {
+    if (clean.deleted && clean.updatedAt < expireBefore) {
       stats.expired++
       continue
     }
@@ -133,11 +174,11 @@ export function mergeNotesMaps(
         stats.invalid++
         continue
       }
-      merged[puuid] = note
+      merged[puuid] = clean
       mergedSize++
       stats.added++
-    } else if (note.updatedAt > existing.updatedAt) {
-      merged[puuid] = note
+    } else if (clean.updatedAt > existing.updatedAt) {
+      merged[puuid] = clean
       stats.replaced++
     } else {
       stats.kept++

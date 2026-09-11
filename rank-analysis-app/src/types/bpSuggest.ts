@@ -32,6 +32,8 @@ export interface BpSuggestResult {
   opgg_ok: boolean
   /** OP.GG 快照是否为过期缓存（刷新失败降级使用旧数据）；快照缺失时恒为 false */
   opgg_stale: boolean
+  /** OP.GG 快照完全缺失时的失败原因（有快照时缺席）；前端据此解释"暂不可用" */
+  opgg_error?: string
   frequent: BpSuggestItem[]
   nemesis: BpSuggestItem[]
   hot_t0: BpSuggestItem[]

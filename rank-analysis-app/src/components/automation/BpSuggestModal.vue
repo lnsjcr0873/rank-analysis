@@ -118,7 +118,9 @@ const sections = computed(() => {
       key: 'hot_t0',
       title: '版本 T0（按熟练度分流）',
       items: result.value.hot_t0,
-      emptyText: result.value.opgg_ok ? '所选分路没有 T0 候选' : 'OP.GG 数据暂不可用'
+      emptyText: result.value.opgg_ok
+        ? '所选分路没有 T0 候选'
+        : (result.value.opgg_error ?? 'OP.GG 数据暂不可用')
     }
   ]
 })

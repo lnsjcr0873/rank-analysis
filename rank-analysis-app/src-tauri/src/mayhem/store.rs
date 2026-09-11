@@ -19,7 +19,6 @@
 //! 可测试性：所有磁盘操作都提供 `_in(root, …)` 注入根目录的变体，公开函数委托到
 //! 全局根目录版本——单测在独立临时目录里跑真实文件系统，不碰全局状态。
 
-use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -77,17 +76,10 @@ pub fn write_pointer_atomic_in(root: &Path, pointer: &ActivePointer) -> Result<(
     // root 本身是目录：确保其存在（ensure_parent_dir 只建父级，不建 root）
     std::fs::create_dir_all(root).map_err(|e| e.to_string())?;
     let path = root.join("pointer.json");
-    let tmp = root.join("pointer.json.tmp");
     let json = serde_json::to_string(pointer).map_err(|e| e.to_string())?;
-    // File::create + write_all + rename：rename 在同一卷内是原子的
-    let mut f = std::fs::File::create(&tmp).map_err(|e| e.to_string())?;
-    f.write_all(json.as_bytes()).map_err(|e| e.to_string())?;
-    drop(f);
-    // Windows 下若目标已存在，直接 rename 易抛 AccessDenied/AlreadyExists；先移除旧文件
-    if path.exists() {
-        let _ = std::fs::remove_file(&path);
-    }
-    std::fs::rename(&tmp, &path).map_err(|e| e.to_string())
+    // 统一走 paths::write_file_atomic：fsync + Windows 占用退避重试。
+    // 此前这里"remove 旧文件再 rename"，remove 与 rename 之间崩溃会丢指针文件。
+    crate::paths::write_file_atomic(&path, json.as_bytes()).map_err(|e| e.to_string())
 }
 
 /// 读取全局激活指针。
@@ -375,10 +367,9 @@ fn save_changes_in(root: &Path, entry: VersionChange) -> Result<(), String> {
     list.insert(0, entry);
     list.truncate(CHANGE_LOG_KEEP);
     let path = root.join(CHANGE_LOG_FILE);
-    let tmp = root.join("changes.json.tmp");
     let json = serde_json::to_string(&list).map_err(|e| format!("serialize changes: {}", e))?;
-    std::fs::write(&tmp, json).map_err(|e| format!("write {}: {}", tmp.display(), e))?;
-    std::fs::rename(&tmp, &path).map_err(|e| format!("rename {}: {}", path.display(), e))
+    crate::paths::write_file_atomic(&path, json.as_bytes())
+        .map_err(|e| format!("write {}: {}", path.display(), e))
 }
 
 /// 同步成功后记录 from → to 的变动（同版本或旧目录缺失时静默跳过）。

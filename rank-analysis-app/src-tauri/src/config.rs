@@ -43,7 +43,7 @@ use moka::future::Cache;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::{BufReader, BufWriter, Write};
+use std::io::BufReader;
 use std::sync::{Arc, LazyLock, Mutex};
 use tokio::sync::OnceCell;
 
@@ -312,19 +312,10 @@ fn write_config_to(
     // 用户全部设置等于丢失；序列化失败时旧文件保持原样。
     let mut body = Vec::new();
     serde_yaml::to_writer(&mut body, config)?;
-    // 原子替换：先写同目录临时文件并 fsync，再 rename 覆盖目标。进程在写入中途
-    // 被杀/断电时，最坏情况是留下一个 .tmp 残骸，config.yaml 本身始终完整。
-    let mut tmp_os = path.as_os_str().to_os_string();
-    tmp_os.push(".tmp");
-    let tmp_path = std::path::PathBuf::from(tmp_os);
-    {
-        let mut tmp = BufWriter::new(File::create(&tmp_path)?);
-        tmp.write_all(&body)?;
-        tmp.flush()?;
-        let file = tmp.into_inner().map_err(|e| e.into_error())?;
-        file.sync_all()?;
-    }
-    std::fs::rename(&tmp_path, path)?;
+    // 原子替换（paths::write_file_atomic）：同目录 .tmp 写 + fsync + rename 覆盖，
+    // Windows 杀毒/索引占用下指数退避重试。进程在写入中途被杀/断电时，
+    // 最坏情况是留下一个 .tmp 残骸，config.yaml 本身始终完整。
+    crate::paths::write_file_atomic(path, &body)?;
     Ok(())
 }
 

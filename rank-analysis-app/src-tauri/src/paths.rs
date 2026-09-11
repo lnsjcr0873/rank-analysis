@@ -163,6 +163,44 @@ pub fn ensure_parent_dir(path: &Path) -> std::io::Result<()> {
     }
 }
 
+/// 原子写文件：同目录 `.tmp` 写 + fsync 落盘 + rename 覆盖 + 指数退避重试。
+///
+/// 三处调用方（config.yaml、mayhem pointer.json、changes.json）此前各写各的
+/// rename，且都是一次 rename 失败即报错。Windows 上杀毒软件/索引服务会在
+/// `.tmp` 落盘后数毫秒内打开它做实时扫描，此时 rename 会抛 `AccessDenied`
+///（code 5）或 `SharingViolation`（code 32），一次正常保存直接变"无权限"
+/// 错误并残留 `.tmp` 垃圾（debug3-C6）。
+///
+/// 重试 3 次（间隔 10ms → 20ms → 40ms）：扫描持有是毫秒级窗口，
+/// 退避后基本都能成功；3 次都失败才返回最后一次的错（调用方按原语义处理）。
+pub fn write_file_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    ensure_parent_dir(path)?;
+    let mut tmp_os = path.as_os_str().to_os_string();
+    tmp_os.push(".tmp");
+    let tmp_path = PathBuf::from(tmp_os);
+    {
+        let mut tmp = std::io::BufWriter::new(std::fs::File::create(&tmp_path)?);
+        tmp.write_all(bytes)?;
+        tmp.flush()?;
+        let file = tmp.into_inner().map_err(|e| e.into_error())?;
+        file.sync_all()?;
+    }
+    let mut last_err = None;
+    let mut wait_ms = 10u64;
+    for _ in 0..3 {
+        match std::fs::rename(&tmp_path, path) {
+            Ok(()) => return Ok(()),
+            Err(e) => {
+                last_err = Some(e);
+                std::thread::sleep(std::time::Duration::from_millis(wait_ms));
+                wait_ms *= 2;
+            }
+        }
+    }
+    Err(last_err.unwrap_or_else(|| std::io::Error::other("rename 重试耗尽")))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -269,5 +307,21 @@ mod tests {
 
         assert!(target.parent().unwrap().is_dir());
         let _ = std::fs::remove_dir_all(&created_root);
+    }
+
+    #[test]
+    fn write_file_atomic_should_write_and_overwrite() {
+        let dir = std::env::temp_dir().join(format!("ra-atomic-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = dir.join("nested").join("data.json");
+
+        write_file_atomic(&path, b"v1").expect("首次写入");
+        assert_eq!(std::fs::read(&path).unwrap(), b"v1");
+        // 覆盖写：无残留 .tmp，内容为新值
+        write_file_atomic(&path, b"v2-longer-content").expect("覆盖写入");
+        assert_eq!(std::fs::read(&path).unwrap(), b"v2-longer-content");
+        assert!(!dir.join("nested").join("data.json.tmp").exists());
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

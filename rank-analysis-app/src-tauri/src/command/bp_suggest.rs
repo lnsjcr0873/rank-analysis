@@ -46,6 +46,10 @@ pub struct BpSuggestResult {
     pub opgg_ok: bool,
     /// OP.GG 快照是否为过期缓存（刷新失败降级使用旧数据）；快照缺失时恒为 false。
     pub opgg_stale: bool,
+    /// OP.GG 快照完全缺失时的失败原因（内存/磁盘/网络四级全空）；前端据此解释
+    /// "暂不可用"（debug3-C6）。有快照（ok 或 stale）时为 None。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub opgg_error: Option<String>,
     /// 常用英雄 → pick 池候选。
     pub frequent: Vec<BpSuggestItem>,
     /// 常输给的敌方英雄 → ban 池候选。
@@ -350,6 +354,7 @@ fn build_suggestions(
         // 纯函数不知道快照是否 stale（命令层拿到 `(snap, stale)` 后才知道）；
         // 命令层用 struct update 覆盖此字段，这里先给非 stale 的默认值。
         opgg_stale: false,
+        opgg_error: None,
         frequent,
         nemesis,
         hot_t0,
@@ -413,17 +418,20 @@ pub async fn get_bp_suggest(
             sample_games: games.len() as i32,
             opgg_ok: false,
             opgg_stale: false,
+            opgg_error: None,
             frequent: vec![],
             nemesis: vec![],
             hot_t0: vec![],
         });
     }
 
-    // OP.GG 数据缺失不阻塞：hot_t0 降级为空；stale 透传给前端提示，快照缺失时恒 false
-    let (snapshot, opgg_stale) =
+    // OP.GG 数据缺失不阻塞：hot_t0 降级为空；stale 透传给前端提示。
+    // 四级全空（内存/磁盘/网络/过期）时把失败原因透给 opgg_error，
+    // 前端据此解释"暂不可用"而非让用户干猜（debug3-C6）。
+    let (snapshot, opgg_stale, opgg_error) =
         match crate::command::opgg::ensure_opgg_snapshot(&state, "ranked").await {
-            Ok((snap, stale)) => (Some(snap), stale),
-            Err(_) => (None, false),
+            Ok((snap, stale)) => (Some(snap), stale, None),
+            Err(e) => (None, false, Some(e)),
         };
 
     let pick_pool = load_pool("settings.auto.pickChampionSlice").await;
@@ -438,6 +446,7 @@ pub async fn get_bp_suggest(
         &ban_pool,
     );
     result.opgg_stale = opgg_stale;
+    result.opgg_error = opgg_error;
     Ok(result)
 }
 

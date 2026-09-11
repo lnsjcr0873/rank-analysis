@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   mergeNotesMaps,
+  unwrapTaggedValue,
   TOMBSTONE_TTL_MS,
   MAX_ENCOUNTERS_PER_NOTE,
   MAX_MERGED_NOTES,
@@ -200,5 +201,52 @@ describe('mergeNotesMaps', () => {
       expect(merged.p1.deleted).toBeUndefined()
       expect(stats.expired).toBe(1)
     })
+  })
+})
+
+describe('旧备份外部标签兼容（debug3-C6）', () => {
+  it('unwrapTaggedValue 递归解包 7 种变体', () => {
+    expect(unwrapTaggedValue({ String: '备注' })).toBe('备注')
+    expect(unwrapTaggedValue({ Integer: 42 })).toBe(42)
+    expect(unwrapTaggedValue({ Float: 1.5 })).toBe(1.5)
+    expect(unwrapTaggedValue({ Boolean: true })).toBe(true)
+    expect(unwrapTaggedValue({ List: [1, 2] })).toEqual([1, 2])
+    expect(unwrapTaggedValue({ Map: { a: 1 } })).toEqual({ a: 1 })
+    expect(unwrapTaggedValue({ Null: null })).toBeNull()
+    // 嵌套标签递归解
+    expect(unwrapTaggedValue({ Map: { note: { String: 'x' } } })).toEqual({ note: 'x' })
+  })
+
+  it('unwrapTaggedValue 非标签原样返回（键保留，值递归解）', () => {
+    expect(unwrapTaggedValue('plain')).toBe('plain')
+    expect(unwrapTaggedValue(42)).toBe(42)
+    expect(unwrapTaggedValue(null)).toBeNull()
+    expect(unwrapTaggedValue([1])).toEqual([1])
+    expect(unwrapTaggedValue({ a: 1, b: 2 })).toEqual({ a: 1, b: 2 })
+    expect(unwrapTaggedValue({ Unknown: 1 })).toEqual({ Unknown: 1 })
+    // 单键非标签：键保留、值递归解
+    expect(unwrapTaggedValue({ note: { String: 'x' } })).toEqual({ note: 'x' })
+  })
+
+  it('旧备份整条备注解包后正常并入（不再全判损坏）', () => {
+    const tagged = {
+      Map: {
+        note: { String: '老备注' },
+        label: { String: 'normal' },
+        gameName: { String: 'A' },
+        tagLine: { String: '1' },
+        updatedAt: { Integer: 100 }
+      }
+    }
+    const { merged, stats } = mergeNotesMaps({}, { p1: tagged as never })
+    expect(stats.invalid).toBe(0)
+    expect(stats.added).toBe(1)
+    expect(merged.p1.note).toBe('老备注')
+  })
+
+  it('解包后仍非法（缺字段）照样判 invalid，不降低门槛', () => {
+    const tagged = { Map: { note: { String: 'x' } } }
+    const { stats } = mergeNotesMaps({}, { p1: tagged as never })
+    expect(stats.invalid).toBe(1)
   })
 })
