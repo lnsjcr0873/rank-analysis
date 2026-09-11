@@ -110,14 +110,20 @@ async function generateJudges() {
   running.value = true
   try {
     const me = detailPlayers.value.find(p => p.isMe)?.displayName || effectiveSelected.value
-    const results = await runJudges(judgePlayers.value, me, async (userPrompt, systemPrompt) => {
-      const res = await requestAIContent(
-        userPrompt,
-        `judge:${injectedCtx?.game.value?.gameId ?? 0}:${Date.now()}`,
-        systemPrompt
-      )
-      return res.success && res.content ? res.content.trim() : null
-    })
+    const gameId = injectedCtx?.game.value?.gameId ?? 0
+    // debug6：缓存键必须带风格维度——三裁判同毫秒连调时缺 styleId 会串味。
+    const results = await runJudges(
+      judgePlayers.value,
+      me,
+      async (userPrompt, systemPrompt, styleId) => {
+        const res = await requestAIContent(
+          userPrompt,
+          `judge:${gameId}:${styleId}:${effectiveSelected.value}`,
+          systemPrompt
+        )
+        return res.success && res.content ? res.content.trim() : null
+      }
+    )
     if (results.length === 0) {
       message.warning('AI 裁判生成失败，请检查网络或 AI 接口配置')
     }

@@ -92,6 +92,17 @@ describe('三裁判', () => {
     expect(results.map(r => r.styleId)).toEqual(['sharp', 'data'])
     expect(callLLM).toHaveBeenCalledTimes(3)
   })
+
+  it('debug6：回调透传 styleId（调用方可拼风格维度缓存键防串味）', async () => {
+    const seen: string[] = []
+    const callLLM = vi.fn(async (_u: string, _s: string, styleId: string) => {
+      seen.push(styleId)
+      return `${styleId}文本`
+    })
+    const results = await runJudges(BASE, 'me', callLLM)
+    expect(seen.sort()).toEqual(['data', 'gentle', 'sharp'])
+    expect(results).toHaveLength(3)
+  })
 })
 
 describe('judgePlayersFromGame 适配器', () => {

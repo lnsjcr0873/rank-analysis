@@ -237,16 +237,17 @@ export interface JudgeResult {
 /**
  * 并行跑三风格裁判。
  *
- * `callLLM(userPrompt, systemPrompt)` 由调用方注入（接 stream.ts 的
+ * `callLLM(userPrompt, systemPrompt, styleId)` 由调用方注入（接 stream.ts 的
  * requestAIContent）；单个裁判失败不影响其他，失败的直接缺席结果列表。
+ * debug6：styleId 必须透给调用方拼缓存键——三裁判同毫秒连调时缺风格维度会串味。
  */
 export async function runJudges(
   players: JudgePlayer[],
   me: string,
-  callLLM: (userPrompt: string, systemPrompt: string) => Promise<string | null>
+  callLLM: (userPrompt: string, systemPrompt: string, styleId: string) => Promise<string | null>
 ): Promise<JudgeResult[]> {
   const tasks = JUDGE_STYLES.map(async style => {
-    const text = await callLLM(buildJudgeUserPrompt(style, players, me), style.system)
+    const text = await callLLM(buildJudgeUserPrompt(style, players, me), style.system, style.id)
     return text ? { styleId: style.id, label: style.label, text } : null
   })
   const settled = await Promise.allSettled(tasks)

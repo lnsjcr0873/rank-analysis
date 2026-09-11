@@ -492,6 +492,9 @@ const activeTabComponent = computed(() => {
   return tab.component
 })
 
+/** 依赖 SGP DETAILS 的 tab：切局时若停留其中需立即重拉（debug6 KeepAlive 保活不重挂载） */
+const SGP_TABS = new Set(['events', 'builds', 'timeline'])
+
 onMounted(async () => {
   try {
     currentSummoner.value = await invoke<Summoner>('get_my_summoner')
@@ -510,6 +513,12 @@ watch(
     loadAssetsIfNeeded()
     sgpDetail.value = null
     sgpDetailStatus.value = 'idle'
+    // debug6：KeepAlive 保活的 SGP tab（事件/出装/时间线）只在 onMounted 拉一次，
+    // 切局时若正停留在这些 tab，idle 会永久转圈。切局即重拉（loadSgpDetail 幂等，
+    // 非 SGP tab 停留时拉了也只是预加载，无副作用）。
+    if (SGP_TABS.has(activeTab.value)) {
+      void loadSgpDetail()
+    }
   },
   { immediate: true }
 )
