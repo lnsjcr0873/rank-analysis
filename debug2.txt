@@ -18,7 +18,7 @@ debug2.txt 修复进度（按 debug2 报告逐项，一项一 commit）
 - [x] #15 detect_override current_hover=0 用户取消被弹回 —— 1a234ff 已 hover 后清成 0 视为接管（防按键争夺）
 - [x] #16 champion_select my_bans/their_bans 去重 —— 9c8210c 保序去重（轮换/自定义模式重复 ban 图标膨胀），+1 单测
 - [x] #17 UnifiedTagRow \r\n 换行比对 —— 7afe29c 去重前归一 CRLF/CR，+1 单测
-- [ ] #18 PlayerProfileCard requestSeq 跨实例
+- [x] #18 PlayerProfileCard requestSeq 跨实例 —— 【已验证无需修改】requestSeq 在 setup 内声明为组件实例级 let，新实例不共享旧闭包
 - [x] #19 observability 转义引号 \" 脱敏 —— 0902983 PII_PARAM/AUTH 正则兼容 \\" 转义引号嵌套字符串
 - [x] #20 listener.rs WebSocket 重试无退避 —— 33d71c5 认证失败/连接失败路径 1s→15s 指数退避，成功连接复位
 - [x] #21 phase.rs auth_fingerprint 前缀 8 位幽灵缓存 —— 6bf379a 全量 token+port 确定性哈希指纹（DefaultHasher 固定种子可复现），消除重登同前缀误命中
@@ -43,7 +43,7 @@ debug2.txt 修复进度（按 debug2 报告逐项，一项一 commit）
 - [x] #40 SummaryTab badge.icon、LazyImg 重试 —— 7452a32 LazyImg 有界延迟重试（LCU 启动 404 自愈）+ badge.icon v-if 守卫
 - [x] #41 score/events frame_increments 负数、format.ts 微秒 —— 【events.rs 已验证】inc>=0 跳过复位 + avg>0 门禁；【format.ts 已修复】8a98b65 微秒归毫秒 + >2100 年拒收
 - [x] #42 cloudSync markConfigDirty 竞态、UserSidePanel activeChampion 复位 —— beec6e0（activeChampion 随英雄池换源复位）+ b8a386a（apply 后 500ms 抑制 config-changed 回声，防再推送空转）
-- [ ] #43 system relaunch_as_admin 相对路径
+- [x] #43 system relaunch_as_admin 相对路径 —— 【已验证无需修改】std::env::current_exe() 返回绝对路径
 =====================================================================error
 Failed to generate content: user has exceeded quota. Please try again later.
 Skip to main content
