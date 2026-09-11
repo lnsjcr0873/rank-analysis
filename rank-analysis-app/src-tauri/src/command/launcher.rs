@@ -11,7 +11,7 @@
 //! 1. **config 记忆**（主来源）：客户端在线时由 [`remember_install_root`]（在
 //!    `game_state_monitor` 检测到「已连接」时调用）从运行进程反推根目录并持久化。
 //! 2. **进程反推**：极少数「已连着还点启动」时，直接从运行进程取。
-//! 3. **扫盘兜底**：遍历盘符找默认安装位置 `<盘>:\WeGameApps\英雄联盟`。
+//! 3. **扫盘兜底**：遍历盘符找默认安装位置（WeGame 版与官方独立版 alike）。
 //!
 //! 三者皆失败时返回明确错误，引导用户先手动打开一次游戏（之后即被记忆）。
 
@@ -28,6 +28,17 @@ use crate::config::{self, Value};
 /// 游戏安装根目录的 config 键；与前端 `CONFIG_KEYS.gameInstallPath` 对应。
 #[cfg(target_os = "windows")]
 const GAME_INSTALL_PATH_KEY: &str = "gameInstallPath";
+
+/// 扫盘兜底的安装根候选尾缀（盘符 + 该尾缀 = 完整候选根）。
+///
+/// WeGame 版 `<盘>:\WeGameApps\英雄联盟`；官方独立客户端默认
+/// `<盘>:\腾讯游戏\英雄联盟` / `<盘>:\Program Files\腾讯游戏\英雄联盟`。
+#[cfg(target_os = "windows")]
+const SWEEP_TAILS: [&str; 3] = [
+    r"WeGameApps\英雄联盟",
+    r"腾讯游戏\英雄联盟",
+    r"Program Files\腾讯游戏\英雄联盟",
+];
 
 /// 安装根目录下的登录客户端候选路径，按优先级排列（Windows 国服）。
 ///
@@ -100,15 +111,20 @@ async fn discover_game_root() -> Option<PathBuf> {
             return Some(root);
         }
     }
-    // 3) 扫盘兜底：默认安装位置 <盘>:\WeGameApps\英雄联盟。
+    // 3) 扫盘兜底：默认安装位置。WeGame 版 `<盘>:\WeGameApps\英雄联盟`；
+    //    debug5：官方独立客户端默认装 `D:\Program Files\腾讯游戏\英雄联盟` /
+    //    `C:\腾讯游戏\英雄联盟`，此前只扫 WeGame 会误报未安装，一并纳入。
     //    以「能否定位到登录客户端 exe」为准，避免命中残留空目录。
     //    spawn_blocking：C:→Z: 逐盘 is_file() 是同步 IO，机械盘/网络映射盘上
     //    可能卡顿数百 ms～秒级，不该占住 tokio worker（更不该阻塞调用方上下文）。
     tauri::async_runtime::spawn_blocking(|| {
         for drive in b'C'..=b'Z' {
-            let candidate = PathBuf::from(format!(r"{}:\WeGameApps\英雄联盟", drive as char));
-            if resolve_launch_target(&candidate).is_some() {
-                return Some(candidate);
+            let drive = drive as char;
+            for tail in SWEEP_TAILS {
+                let candidate = PathBuf::from(format!(r"{drive}:\{tail}"));
+                if resolve_launch_target(&candidate).is_some() {
+                    return Some(candidate);
+                }
             }
         }
         None
@@ -437,6 +453,14 @@ mod tests {
         assert!(is_login_client_autostart(
             r#""D:\Games\LOL\launcher\Startup_Runner.EXE""#
         ));
+    }
+
+    #[test]
+    fn sweep_tails_cover_wegame_and_standalone() {
+        // debug5 回归：扫盘必须同时覆盖 WeGame 版与官方独立版默认路径。
+        assert!(SWEEP_TAILS.contains(&r"WeGameApps\英雄联盟"));
+        assert!(SWEEP_TAILS.contains(&r"腾讯游戏\英雄联盟"));
+        assert!(SWEEP_TAILS.contains(&r"Program Files\腾讯游戏\英雄联盟"));
     }
 
     #[cfg(target_os = "windows")]

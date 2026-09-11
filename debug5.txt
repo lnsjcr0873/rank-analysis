@@ -1158,6 +1158,6 @@ let Some(enemy_id) = find_enemy(participants, me, position) else {
 1	致命	ocr.rs	词库解析误将对象当成数组，导致提取结果恒为空，大乱斗 OCR 完全瘫痪	修正为提取 augments["data"] 数组
 2	异常	bridge.ts	局内事件去重 Set 满 500 条直接无脑 clear()，导致历史事件全部重复触发	改用滑动时间戳窗口替代全量清理
 3	失真	liveGameIntel.ts	实时对局将阵营固定为红蓝双方，斗魂竞技场（多队模式）经济差全场算错	增加多队模式下的全场非己方平均经济对比
-4	缺陷	launcher.rs	游戏根目录穷举仅支持 WeGame，官方独立客户端玩家一键启动报未安装	候选路径扩充腾讯独立安装路径
+4	缺陷	launcher.rs	游戏根目录穷举仅支持 WeGame，官方独立客户端玩家一键启动报未安装	候选路径扩充腾讯独立安装路径【已完成：扫盘兜底加腾讯游戏\英雄联盟与Program Files\腾讯游戏\英雄联盟两尾缀（SWEEP_TAILS常量，仍以Client.exe存在性为准）；config记忆/进程反推两上级链路不变。附1回归（WeGame+独立双覆盖）。cargo fmt/clippy(GNU)/check --tests全过，cargo test以CI为权威】
 5	算法	patch_notes.rs	技能前摇（cast time）、延迟（delay）等缩短未反转，正面增强被误标削弱	扩充机制反转词列表
 6	模式	backtest.rs	决策回测强依赖同分路对手，导致大乱斗与轮换模式全部被判为位置未知	增加无位置模式下的全队基准对照回退
