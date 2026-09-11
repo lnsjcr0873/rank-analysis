@@ -24,6 +24,7 @@ vi.mock('@renderer/composables/useGameState', async () => {
 
 import { getConfigByIpc, putConfigByIpc } from '@renderer/services/ipc'
 import { invoke } from '@tauri-apps/api/core'
+import { listen } from '@tauri-apps/api/event'
 import { lcuConnected } from '@renderer/composables/useGameState'
 import { useCloudSyncStore } from '../cloudSync'
 import { usePlayerNotesStore } from '../playerNotes'
@@ -31,6 +32,7 @@ import { usePlayerNotesStore } from '../playerNotes'
 const mockGet = vi.mocked(getConfigByIpc)
 const mockPut = vi.mocked(putConfigByIpc)
 const mockInvoke = vi.mocked(invoke)
+const mockListen = vi.mocked(listen)
 /** mock 后的 lcuConnected 实际是可写 ref，收窄类型便于测试赋值 */
 const mockConnected = lcuConnected as unknown as Ref<boolean>
 
@@ -456,6 +458,33 @@ describe('useCloudSyncStore', () => {
       expect(mockInvoke).not.toHaveBeenCalledWith('cloud_pull_config', expect.anything())
       expect(mockInvoke).not.toHaveBeenCalledWith('apply_config_snapshot', expect.anything())
       expect(mockInvoke).not.toHaveBeenCalledWith('cloud_push_config', expect.anything())
+    })
+  })
+
+  describe('config-changed 监听单例（debug3-C3）', () => {
+    it('重复 init 先卸后订：旧监听被注销，不累加', async () => {
+      mockGet.mockResolvedValue(undefined)
+      const unlisten1 = vi.fn()
+      const unlisten2 = vi.fn()
+      mockListen.mockResolvedValueOnce(unlisten1).mockResolvedValueOnce(unlisten2)
+      const store = useCloudSyncStore()
+      await store.init()
+      await store.init()
+
+      expect(mockListen).toHaveBeenCalledTimes(2)
+      expect(unlisten1).toHaveBeenCalledTimes(1)
+      expect(unlisten2).not.toHaveBeenCalled()
+    })
+
+    it('disposeConfigWatch 注销监听', async () => {
+      mockGet.mockResolvedValue(undefined)
+      const unlisten = vi.fn()
+      mockListen.mockResolvedValueOnce(unlisten)
+      const store = useCloudSyncStore()
+      await store.init()
+      store.disposeConfigWatch()
+
+      expect(unlisten).toHaveBeenCalledTimes(1)
     })
   })
 })

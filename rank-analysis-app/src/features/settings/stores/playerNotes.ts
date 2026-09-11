@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { emit, listen } from '@tauri-apps/api/event'
+import { emit, listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { getConfigByIpc, putConfigByIpc } from '@renderer/services/ipc'
 import type { NoteLabel, PlayerNote, PlayerNotesMap } from '@renderer/types/domain/playerNote'
 import type { OneGamePlayer } from '@renderer/types/domain/analysis'
@@ -120,8 +120,8 @@ export const usePlayerNotesStore = defineStore('playerNotes', () => {
     }
   }
 
-  /** 是否已注册跨窗口同步监听（每窗口一次） */
-  let syncRegistered = false
+  /** 监听注销句柄：重复 init 先卸后订，dispose 供测试/HMR 清理 */
+  let unlistenSync: UnlistenFn | null = null
 
   /**
    * 从持久化配置载入备注，并注册跨窗口同步监听。
@@ -130,16 +130,28 @@ export const usePlayerNotesStore = defineStore('playerNotes', () => {
    */
   async function init(): Promise<void> {
     await loadFromConfig()
-    if (!syncRegistered) {
-      syncRegistered = true
-      // 收到其他窗口的变更广播后重载；loadFromConfig 不再 emit，无回环。
-      // 用户来源的广播同时递增 userMutationSeq——详情窗口的编辑要靠主窗口
-      // 的防抖调度才能推送云端；sync 来源不递增（防同步自触发）。
-      listen<{ origin?: NotesMutationOrigin }>(NOTES_CHANGED_EVENT, event => {
+    // 先卸后订：单测/HMR/窗口热重启重复 init 时不累加监听（debug3-C3）
+    unlistenSync?.()
+    unlistenSync = null
+    // 收到其他窗口的变更广播后重载；loadFromConfig 不再 emit，无回环。
+    // 用户来源的广播同时递增 userMutationSeq——详情窗口的编辑要靠主窗口
+    // 的防抖调度才能推送云端；sync 来源不递增（防同步自触发）。
+    try {
+      unlistenSync = await listen<{ origin?: NotesMutationOrigin }>(NOTES_CHANGED_EVENT, event => {
         loadFromConfig()
         if (event.payload?.origin !== 'sync') userMutationSeq.value++
-      }).catch(error => console.error('Failed to listen player-notes-changed:', error))
+      })
+    } catch (error) {
+      console.error('Failed to listen player-notes-changed:', error)
     }
+  }
+
+  /**
+   * 注销跨窗口同步监听（测试隔离/HMR 用；生产窗口生命周期内常驻）。
+   */
+  function dispose(): void {
+    unlistenSync?.()
+    unlistenSync = null
   }
 
   /**
@@ -252,5 +264,16 @@ export const usePlayerNotesStore = defineStore('playerNotes', () => {
     emit(NOTES_CHANGED_EVENT, { origin }).catch(() => {})
   }
 
-  return { notes, count, list, userMutationSeq, init, getNote, setNote, removeNote, importNotes }
+  return {
+    notes,
+    count,
+    list,
+    userMutationSeq,
+    init,
+    dispose,
+    getNote,
+    setNote,
+    removeNote,
+    importNotes
+  }
 })

@@ -19,10 +19,12 @@ vi.mock('@tauri-apps/api/event', () => ({
 }))
 
 import { getConfigByIpc, putConfigByIpc } from '@renderer/services/ipc'
+import { listen } from '@tauri-apps/api/event'
 import { usePlayerNotesStore } from '../playerNotes'
 
 const mockGet = vi.mocked(getConfigByIpc)
 const mockPut = vi.mocked(putConfigByIpc)
+const mockListen = vi.mocked(listen)
 
 describe('usePlayerNotesStore', () => {
   beforeEach(() => {
@@ -57,6 +59,31 @@ describe('usePlayerNotesStore', () => {
       await store.init()
 
       expect(store.count).toBe(0)
+    })
+
+    it('重复 init 先卸后订：旧监听被注销，不累加（debug3-C3）', async () => {
+      mockGet.mockResolvedValue({})
+      const unlisten1 = vi.fn()
+      const unlisten2 = vi.fn()
+      mockListen.mockResolvedValueOnce(unlisten1).mockResolvedValueOnce(unlisten2)
+      const store = usePlayerNotesStore()
+      await store.init()
+      await store.init()
+
+      expect(mockListen).toHaveBeenCalledTimes(2)
+      expect(unlisten1).toHaveBeenCalledTimes(1)
+      expect(unlisten2).not.toHaveBeenCalled()
+    })
+
+    it('dispose 注销监听', async () => {
+      mockGet.mockResolvedValue({})
+      const unlisten = vi.fn()
+      mockListen.mockResolvedValueOnce(unlisten)
+      const store = usePlayerNotesStore()
+      await store.init()
+      store.dispose()
+
+      expect(unlisten).toHaveBeenCalledTimes(1)
     })
   })
 

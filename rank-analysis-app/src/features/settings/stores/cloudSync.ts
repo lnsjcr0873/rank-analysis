@@ -6,7 +6,7 @@
 import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
-import { listen } from '@tauri-apps/api/event'
+import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { getConfigByIpc, putConfigByIpc } from '@renderer/services/ipc'
 import { CONFIG_KEYS } from '@renderer/services/configKeys'
 import { lcuConnected } from '@renderer/composables/useGameState'
@@ -66,7 +66,8 @@ export const useCloudSyncStore = defineStore('cloudSync', () => {
    *  造成「拉取→写入→事件→再推送」的元数据空转。 */
   const APPLY_SUPPRESS_MS = 500
   let applySuppressTimer: ReturnType<typeof setTimeout> | undefined
-  let configWatchStarted = false
+  /** 监听注销句柄：重复进入先卸后订，保证单例（debug3-C3） */
+  let unlistenConfig: UnlistenFn | null = null
 
   /** 标记本地配置已变更（config-changed 监听与测试共用入口） */
   function markConfigDirty(): void {
@@ -80,12 +81,25 @@ export const useCloudSyncStore = defineStore('cloudSync', () => {
    * 同时同步备注与配置，无需第二套定时器。
    */
   function startConfigWatch(): void {
-    if (configWatchStarted) return
-    configWatchStarted = true
+    // 先卸后订：重复触发不挂载多个观察器，否则一次配置修改触发成倍防抖计时器
+    unlistenConfig?.()
+    unlistenConfig = null
     listen<string>('config-changed', () => {
       markConfigDirty()
       scheduleAutoPush()
-    }).catch(() => {})
+    })
+      .then(unlisten => {
+        unlistenConfig = unlisten
+      })
+      .catch(() => {})
+  }
+
+  /**
+   * 注销 config-changed 监听（测试隔离/HMR 用；生产常驻）。
+   */
+  function disposeConfigWatch(): void {
+    unlistenConfig?.()
+    unlistenConfig = null
   }
 
   /** 推送本机配置到云端并更新 LWW 基准 */
@@ -339,6 +353,7 @@ export const useCloudSyncStore = defineStore('cloudSync', () => {
     setEnabled,
     syncNow,
     resolveCloudConfig,
-    markConfigDirty
+    markConfigDirty,
+    disposeConfigWatch
   }
 })
