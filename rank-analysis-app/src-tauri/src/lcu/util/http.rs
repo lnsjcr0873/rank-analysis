@@ -119,19 +119,26 @@ fn hash_auth_fingerprint(token: &str, port: &str) -> String {
 
 fn refresh_auth() -> Result<(String, String), String> {
     let last_refresh = LAST_REFRESH_TIME.get_or_init(|| Mutex::new(Instant::now()));
-    let mut last_refresh_guard = lock_or_recover(last_refresh);
 
-    let now = Instant::now();
-    if now.duration_since(*last_refresh_guard) < Duration::from_secs(1) {
-        let auth = AUTH.get().expect("AUTH not initialized");
-        let auth_guard = lock_or_recover(auth);
-        return Ok(auth_guard.clone());
-    }
+    // 1s 内已刷新过：直接复用缓存，不重复做进程扫描
+    {
+        let last_refresh_guard = lock_or_recover(last_refresh);
+        let now = Instant::now();
+        if now.duration_since(*last_refresh_guard) < Duration::from_secs(1) {
+            let auth = AUTH.get().expect("AUTH not initialized");
+            let auth_guard = lock_or_recover(auth);
+            return Ok(auth_guard.clone());
+        }
+    } // ← 立即释放节流锁：get_auth() 的进程扫描（数十~上百 ms）不能再占着这把锁，
+      //   否则并发请求的 refresh_auth 会全部排队在这把 std Mutex 上干等一个扫描
 
     // 尝试获取最新凭证，若重新读取因反作弊/系统抖动失败但既有凭据有效，则继续沿用
     match get_auth() {
         Ok((token, port)) => {
-            *last_refresh_guard = now;
+            {
+                let mut last_refresh_guard = lock_or_recover(last_refresh);
+                *last_refresh_guard = Instant::now();
+            }
             let auth = AUTH.get_or_init(|| Mutex::new((String::new(), String::new())));
             let mut guard = lock_or_recover(auth);
             *guard = (token.clone(), port.clone());
