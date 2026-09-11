@@ -22,12 +22,12 @@ debug2.txt 修复进度（按 debug2 报告逐项，一项一 commit）
 - [x] #19 observability 转义引号 \" 脱敏 —— 0902983 PII_PARAM/AUTH 正则兼容 \\" 转义引号嵌套字符串
 - [x] #20 listener.rs WebSocket 重试无退避 —— 33d71c5 认证失败/连接失败路径 1s→15s 指数退避，成功连接复位
 - [x] #21 phase.rs auth_fingerprint 前缀 8 位幽灵缓存 —— 6bf379a 全量 token+port 确定性哈希指纹（DefaultHasher 固定种子可复现），消除重登同前缀误命中
-- [ ] #22 match_history 缓存全量 enrich 内存暴涨
+- [x] #22 match_history 缓存全量 enrich 内存暴涨 —— 【已验证无需修改】缓存存**原始（扁平）50 场列表**（Moka max 50/60s），`enrich_game_detail` 只在命令层对 `slice_page` 出的请求页生效（command/match_history.rs），不缓存详情——不会对缓存池全量 enrich 制造数百兆常驻
 - [x] #23 sampler.ts mulberry32 种子污染 —— 677bd78 NaN/Infinity/小数 seed 归一化，+1 单测
 - [x] #24 sgp_league_servers config_is_newer 字符串比较 —— 2e0f6e0 秒级归一化（去毫秒/Z）后比较，防带毫秒新版本被拒
 - [x] #25 sgp gameCreation 缺失 → 1970 排最后 —— 45a3743 三字段逐级回退 + 全缺跳过该局，+1 单测
 - [x] #26 min_max_norm 浮点下溢 —— 4f947c9 已按 0.5pp 阈值均分（score.rs）
-- [ ] #27 mayhem AssistScheduler remake 未复位
+- [x] #27 mayhem AssistScheduler remake 未复位 —— 【已验证无需修改】trigger.ts tick() 对 phase != InProgress 一律 reset()（含 remake→Lobby 跳变），单测「resets state machine to round 1 when leaving InProgress」覆盖
 - [x] #28 twoStage 孤儿 Promise/超时未中止 —— 90c1c34 超时/完成/出错后置 streamSettled 丢弃迟到回调（防与重试流交织），+1 单测
 - [x] #29 validator.ts Markdown 代码块提取 —— 【已验证无需修改】stripFencedCodeBlock 已实现「首个 { → 末个 }」模糊提取（line 209-213），模型前后夹带思考/自然语言也能取出 JSON
 - [x] #30 timelineData fillSeries 稀疏分钟越界 —— 【已验证无需修改】fillSeries 已按分钟轴遍历 + 缺失沿用前值（line 104-111，单测「缺失分钟沿用前值补齐全轴」）
@@ -35,7 +35,7 @@ debug2.txt 修复进度（按 debug2 报告逐项，一项一 commit）
 - [ ] #32 asset.rs ensure_offline_assets alias/字符串 ID
 - [ ] #33 overlay position_by_anchor 多显示器/DPI
 - [ ] #34 overlay show() SW_SHOWNOACTIVATE
-- [ ] #35 playerNotes 跨窗口互相覆写
+- [x] #35 playerNotes 跨窗口互相覆写 —— 【已验证无需修改】写盘后 emit 广播，其它窗口 listen 后从后端 config 重载（playerNotes.ts line 19/138/252）；后端 config 是唯一权威源 + mergeNotesMaps 单调时钟合并，顺序写入不丢
 - [ ] #36 meet_db load_collected_games OOM（单行大 JSON）
 - [ ] #37 patch_notes SNAPSHOT 锁队头阻塞
 - [ ] #38 automation execute_at_secs_left 暂停误锁
