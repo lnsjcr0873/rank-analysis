@@ -266,7 +266,7 @@ if decision.action_type == BpActionType::Pick && should_act(decision) {
 }
 后果：在最需要板凳席自动抢英雄的大乱斗与 Mayhem 模式中，该逻辑永远不会被执行，完全沦为死代码。
 修复方案：将板凳席换人评估从传统的 find_my_pending_action 流程中分离，允许在 actions 为空但存在 bench_champions 和 my_team 的随机英雄模式下独立求值并执行 swap。
-3. stage2-player.ts：单人复盘 Prompt 构建未判空，可能引发前端未捕获异常崩溃
+3. stage2-player.ts：单人复盘 Prompt 构建未判空，可能引发前端未捕获异常崩溃【已完成：验证已修复，无需修改——55 行已是防御式三元（未找到→占位文本），无 player! 强断言；opponent/verdict 同样兜底】
 文件路径：rank-analysis-app/src/services/ai/matchDetail/prompts/stage2-player.ts
 问题代码：
 code
