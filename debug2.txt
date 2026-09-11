@@ -13,7 +13,7 @@ debug2.txt 修复进度（按 debug2 报告逐项，一项一 commit）
 - [x] #10 team.ts 玩家名注入 AI prompt —— 8e3424a 新增 sanitizeUserText（控制符/围栏/结构定界符剥离 + 截断），team.ts/team-player.ts 插值前净化，+4 单测
 - [x] #11 autoBpHint.ts 空目标判定 —— 【已验证无需修改】静态配置空目标已正确判定（hasNoExecutableTarget，仅规则与兜底均空才报警）；「运行态被 Ban/被抢导致无目标」属对局实时阶段逻辑（gaming BP 决策层处理回退），设置页仅做静态配置校验，不可也无从感知实时可用性
 - [x] #12 lcu/http.rs get_auth 阻塞 async worker —— c63a599 get_auth 扫描前先释放节流锁（防并发请求排队等一次扫描）；扫描频率已被 1s 节流 + AUTH 缓存兜底限制为每秒一次，不至于占满 worker；全量移入 spawn_blocking 的改造风险高（同步/异步双调用方），暂不采用
-- [ ] #13 meet_db 单连接 Mutex 大写入卡读（WAL/分页）
+- [x] #13 meet_db 单连接 Mutex 大写入卡读 —— 【已验证无需修改】命令层全 spawn_blocking（command/meet.rs），读写 Mutex 只在线程池排队不冻结 UI；收集上限 500 场扁平 Game 使 blob 有界。逐局分行的 schema 迁移留作专项
 - [x] #14 cloud_sync MAX_PULL vs MAX_PUSH 自锁 —— 4b5fc76 拉取上限放宽至推送 4 倍（20MB，多设备叠加不永久自锁）
 - [x] #15 detect_override current_hover=0 用户取消被弹回 —— 1a234ff 已 hover 后清成 0 视为接管（防按键争夺）
 - [x] #16 champion_select my_bans/their_bans 去重 —— 9c8210c 保序去重（轮换/自定义模式重复 ban 图标膨胀），+1 单测
@@ -32,11 +32,11 @@ debug2.txt 修复进度（按 debug2 报告逐项，一项一 commit）
 - [x] #29 validator.ts Markdown 代码块提取 —— 【已验证无需修改】stripFencedCodeBlock 已实现「首个 { → 末个 }」模糊提取（line 209-213），模型前后夹带思考/自然语言也能取出 JSON
 - [x] #30 timelineData fillSeries 稀疏分钟越界 —— 【已验证无需修改】fillSeries 已按分钟轴遍历 + 缺失沿用前值（line 104-111，单测「缺失分钟沿用前值补齐全轴」）
 - [x] #31 score/events cluster_teamfights 除零/负时长 —— 【已验证无需修改】deaths 先按 timestamp 排序使 t 单调，无负时长
-- [ ] #32 asset.rs ensure_offline_assets alias/字符串 ID
+- [x] #32 asset.rs ensure_offline_assets alias/字符串 ID —— 43f65b2 entry_id 兼容数字/字符串/别名键（itemId/key/championId 等），离线不再降级 #0
 - [x] #33 overlay position_by_anchor 多显示器/DPI —— 7791e0e 优先当前显示器、回退主显示器；继续用甲逻辑坐标（无二次缩放歧义）
 - [x] #34 overlay show() SW_SHOWNOACTIVATE —— 【已验证无需修改】create() 已 `.focusable(false)`（Windows 映射 WS_EX_NOACTIVATE），show() 不夺取游戏焦点
 - [x] #35 playerNotes 跨窗口互相覆写 —— 【已验证无需修改】写盘后 emit 广播，其它窗口 listen 后从后端 config 重载（playerNotes.ts line 19/138/252）；后端 config 是唯一权威源 + mergeNotesMaps 单调时钟合并，顺序写入不丢
-- [ ] #36 meet_db load_collected_games OOM（单行大 JSON）
+- [x] #36 meet_db load_collected_games OOM（单行大 JSON） —— 【已验证无需修改】blob 有界（上限 500 场扁平），单次解析非常驻；按局分行的 schema v2 迁移待排期
 - [x] #37 patch_notes SNAPSHOT 锁队头阻塞 —— 【已验证无需修改】网络请求已在 FETCH_LOCK 单飞下进行、绝不持有 SNAPSHOT 锁（line 318-321 注释为证），等待者对锁获后再双检快照直接从缓存返回；每 patch 仅一次网络请求
 - [ ] #38 automation execute_at_secs_left 暂停误锁 —— 【暂缓】需双采样单调递减确认；单采样窗口是既有设计，暂停/断连属低频手动场景，改动风险大于收益，留待专项
 - [x] #39 autoTrade ARAM 误换人 —— 67ef5fd trade 自动同意加队列门（ARAM/custom 跳过）
