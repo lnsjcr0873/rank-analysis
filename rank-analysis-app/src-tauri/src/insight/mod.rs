@@ -63,6 +63,9 @@ fn game_deltas(game: &Game, my_puuid: &str) -> Option<([f64; 6], [f64; 6])> {
         .participants
         .iter()
         .filter(|p| p.participant_id != my.participant_id)
+        // debug5-6：只取对立方同位置选手做对位基准。同队队友（如己方辅助、
+        // 换线队友）若混入会把 peer 均值拉向自己人，污染对位差距。
+        .filter(|p| p.team_id != my.team_id)
         .filter(|p| {
             p.timeline
                 .as_ref()
@@ -184,7 +187,7 @@ mod tests {
         }
     }
 
-    /// 一局：蓝 5 人 vs 红 5 人，全部 MID；p1 = 本机，其余 peer。
+    /// 一局：蓝 5 人 vs 红 5 人，全部 MID；p1 = 本机，对位基准仅取敌方 5 人。
     fn mid_game(id: i64, stamp: &str, my_vision: i32) -> Game {
         let mut participants = Vec::new();
         for i in 1..=10 {
@@ -302,6 +305,21 @@ mod tests {
             });
         let tags = aggregate_habit_tags(&games, "me");
         assert!(tags.is_empty(), "4 有效局 < 5，且被跳过的局不产生样本");
+    }
+
+    #[test]
+    fn teammates_same_lane_excluded_from_peer_mean() {
+        // debug5-6 回归：同队同位置队友不得混入对位 peer 均值。
+        let mut game = mid_game(1, "2026-08-01T00:00:00Z", 20);
+        // 同队队友（p2-p5）视野与本机相同 20；敌方（p6-p10）40。
+        for p in game.game_detail.participants.iter_mut().skip(1).take(4) {
+            p.stats.vision_score = 20;
+        }
+        let Some((deltas, peer_means)) = game_deltas(&game, "me") else {
+            panic!("应有对位 peer");
+        };
+        assert_eq!(peer_means[0], 40.0, "peer 均值只取敌方 5 人");
+        assert_eq!(deltas[0], -20.0, "20 - 40 = -20（队友 20 不得稀释）");
     }
 
     #[test]
