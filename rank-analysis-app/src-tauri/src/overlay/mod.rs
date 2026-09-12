@@ -37,9 +37,38 @@ static APP_HANDLE: OnceLock<tauri::AppHandle> = OnceLock::new();
 static CURRENT_ANCHOR: LazyLock<Mutex<String>> =
     LazyLock::new(|| Mutex::new("top-right".to_string()));
 
-/// 缓存当前激活的面板信封（供 Overlay 窗口加载完毕时即时拉取）
+/// 缓存当前激活的面板信封（供 Overlay 窗口加载完毕时即时拉取）。
+///
+/// 信封外层统一带 `pushedAtMs`（`push_overlay_panel` 写入）：三选一面板
+/// 选卡后前端调度器进 `idle_sleep` 不再推新面板，旧面板靠 TTL 过期——
+/// `get_overlay_state` 超 30s 的 mayhem-augments 视为过期返回 null，
+/// Overlay 端 `hasContent` 归零后 300ms 自动 hide，不留僵尸推荐。
 static CURRENT_PANEL_ENVELOPE: LazyLock<Mutex<Option<serde_json::Value>>> =
     LazyLock::new(|| Mutex::new(None));
+
+/// 三选一面板过期时间：推送后 30s 未被新面板覆盖即视为过期。
+const PANEL_TTL_MS: i64 = 30_000;
+
+fn now_ms() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
+}
+
+/// 面板信封是否过期：仅 mayhem-augments 参与 TTL，其余面板常驻。
+fn panel_expired(envelope: &serde_json::Value) -> bool {
+    let panel = envelope.get("panel").and_then(|p| p.as_str());
+    if panel != Some("mayhem-augments") {
+        return false;
+    }
+    let pushed_at = envelope.get("pushedAtMs").and_then(|t| t.as_i64());
+    match pushed_at {
+        Some(t) => now_ms().saturating_sub(t) > PANEL_TTL_MS,
+        // 老版本无时间戳的信封：视为不过期，避免升级瞬间闪退
+        None => false,
+    }
+}
 
 /// 缓存当前的 NextAction 列表
 static CURRENT_ACTIONS: LazyLock<Mutex<Vec<crate::live::NextAction>>> =
@@ -55,11 +84,25 @@ const OVERLAY_HEIGHT: f64 = 200.0;
 /// 窗口与屏幕边缘的间距。
 const OVERLAY_MARGIN: f64 = 16.0;
 
-/// 设置当前激活的面板信封
-pub fn set_current_panel(envelope: serde_json::Value) {
+/// 设置当前激活的面板信封（自动打 `pushedAtMs` 时间戳，供 TTL 过期用）。
+///
+/// 返回最终落盘的信封：调用方用它做事件广播，保证“广播出去”与“缓存里”
+/// 的时间戳一致，Overlay 端本地 TTL 与后端快照 TTL 按同一时钟过期。
+pub fn set_current_panel(mut envelope: serde_json::Value) -> serde_json::Value {
+    if let Some(obj) = envelope.as_object_mut() {
+        obj.insert("pushedAtMs".to_string(), serde_json::json!(now_ms()));
+    }
     *CURRENT_PANEL_ENVELOPE
         .lock()
-        .unwrap_or_else(|e| e.into_inner()) = Some(envelope);
+        .unwrap_or_else(|e| e.into_inner()) = Some(envelope.clone());
+    envelope
+}
+
+/// 清空当前面板信封（选卡完成 / 离开对局时调用，立即隐藏残留面板）。
+pub fn clear_current_panel() {
+    *CURRENT_PANEL_ENVELOPE
+        .lock()
+        .unwrap_or_else(|e| e.into_inner()) = None;
 }
 
 /// 设置当前的 NextAction 建议数据
@@ -67,12 +110,13 @@ pub fn set_current_actions(actions: Vec<crate::live::NextAction>) {
     *CURRENT_ACTIONS.lock().unwrap_or_else(|e| e.into_inner()) = actions;
 }
 
-/// 获取当前所有激活的 Overlay 状态快照
+/// 获取当前所有激活的 Overlay 状态快照（过期面板按 null 返回）。
 pub fn get_overlay_state() -> serde_json::Value {
     let panel = CURRENT_PANEL_ENVELOPE
         .lock()
         .unwrap_or_else(|e| e.into_inner())
-        .clone();
+        .clone()
+        .filter(|env| !panel_expired(env));
     let actions = CURRENT_ACTIONS
         .lock()
         .unwrap_or_else(|e| e.into_inner())
@@ -130,7 +174,6 @@ fn get_window() -> Option<tauri::WebviewWindow> {
 /// 显示与定位，无实际影响。
 pub fn show(app: &tauri::AppHandle) {
     let width = *CURRENT_WIDTH.lock().unwrap_or_else(|e| e.into_inner());
-    let height = *CURRENT_HEIGHT.lock().unwrap_or_else(|e| e.into_inner());
     if get_window().is_none() {
         if OVERLAY_CREATED.load(Ordering::Relaxed) {
             log::info!("[overlay] 标志为已创建但窗口不存在，重建...");
@@ -141,7 +184,9 @@ pub fn show(app: &tauri::AppHandle) {
         }
     }
     if let Some(w) = get_window() {
-        let _ = w.set_size(tauri::LogicalSize::new(width, height));
+        // show 不再强制 set_size：三选一（560x240）与 NextAction（320x200）尺寸不同，
+        // show 在 layout 之后调用时会把刚设好的尺寸刷回旧值，导致浮窗内容被裁。
+        // 尺寸只由 layout() 负责，show 只负责显示 + 穿透。
         let _ = w.set_ignore_cursor_events(true);
         let _ = w.show();
         // 鼠标穿透：对局内悬浮建议不应拦截玩家对游戏窗口的操作

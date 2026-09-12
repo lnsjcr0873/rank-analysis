@@ -33,7 +33,7 @@ use tokio::task::JoinHandle;
 use tokio::time::interval;
 
 use crate::config::{extract_bool, get_config, register_on_change_callback, Value};
-use crate::constant::game::{CHAMPSELECT, LOBBY, MATCHMAKING, READYCHECK};
+use crate::constant::game::{CHAMPSELECT, GAMESTART, INPROGRESS, LOBBY, MATCHMAKING, READYCHECK};
 use crate::lcu::api::champion_select::{get_champion_select_session, post_accept_match};
 use crate::lcu::api::lobby::Lobby;
 use crate::lcu::api::phase::get_phase;
@@ -198,22 +198,31 @@ impl FailureBackoff {
     }
 }
 
+/// 对局中挂起通知：`game_state_monitor` 探测到离开对局时唤醒等待者。
+///
+/// `accept_match` 在 `InProgress` / `GameStart` 期间无任何可做的事——此前
+/// 100ms 轮询一次 `get_phase`，整局空转打 LCU。现进入对局即 `notified().await`
+/// 挂起（0 CPU、0 HTTP），`game_state_monitor` 在阶段跳变时 `notify_waiters`。
+static IN_GAME_NOTIFIER: std::sync::LazyLock<tokio::sync::Notify> =
+    std::sync::LazyLock::new(tokio::sync::Notify::new);
+
+/// 由 `game_state_monitor` 在阶段变化时调用，唤醒对局中挂起的自动化任务。
+pub fn notify_phase_changed() {
+    IN_GAME_NOTIFIER.notify_waiters();
+}
+
 /// 自动接受匹配任务。
 ///
-/// 每 100 毫秒检测一次游戏阶段，当检测到 "ReadyCheck" 阶段时自动接受匹配。
-///
-/// # 逻辑流程
-///
-/// 1. 每 100ms 轮询一次游戏阶段
-/// 2. 检测到 `READYCHECK` 阶段时调用 `post_accept_match()`
-/// 3. 记录错误日志但不中断任务
+/// 非对局期每 200ms 检测一次（ReadyCheck 秒级窗口足够覆盖）；
+/// 进入 `InProgress` / `GameStart` 即挂起，离开对局由 `notify_phase_changed`
+/// 毫秒级唤醒，不再轮询。
 ///
 /// # 注意
 ///
 /// 此任务会持续运行直到被显式停止或程序退出。
 async fn start_accept_match_automation() {
     log::info!("Starting accept match automation");
-    let mut ticker = interval(Duration::from_millis(100));
+    let mut ticker = interval(Duration::from_millis(200));
     let mut backoff = FailureBackoff::new();
 
     loop {
@@ -222,6 +231,13 @@ async fn start_accept_match_automation() {
         match get_phase().await {
             Ok(phase) => {
                 backoff.on_success();
+                // 对局中无事可做：挂起直到阶段变化，0 CPU、0 HTTP 轮询
+                if phase == INPROGRESS || phase == GAMESTART {
+                    log::info!("[automation] 进入对局，自动接受模块挂起...");
+                    IN_GAME_NOTIFIER.notified().await;
+                    log::info!("[automation] 阶段变化，自动接受模块被唤醒");
+                    continue;
+                }
                 if phase == READYCHECK {
                     log::info!("Ready check detected, accepting match");
                     if let Err(e) = post_accept_match().await {

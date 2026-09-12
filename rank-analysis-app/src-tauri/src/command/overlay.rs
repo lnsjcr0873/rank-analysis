@@ -69,9 +69,24 @@ pub fn push_overlay_panel(
     payload: serde_json::Value,
 ) -> Result<(), String> {
     let envelope = serde_json::json!({ "panel": panel, "payload": payload });
-    crate::overlay::set_current_panel(envelope.clone());
+    // 广播带时间戳的最终信封：与缓存落盘同一对象，Overlay 端本地 TTL
+    // 与后端快照 TTL 按同一时钟过期（此前广播的是无时间戳版本）。
+    let envelope = crate::overlay::set_current_panel(envelope);
     if let Err(e) = app.emit_to("overlay", "overlay:panel", &envelope) {
         log::warn!("overlay 面板推送通知: {e}");
+    }
+    Ok(())
+}
+
+/// 清空当前面板信封并通知 overlay 端移除残留面板。
+///
+/// 三选一选卡完成后前端调度器调用：旧推荐不再有效，立即清掉而不是等
+/// 30s TTL。overlay 窗口挂载时的快照同步也会拿到 null，不显示僵尸推荐。
+#[tauri::command]
+pub fn clear_overlay_panel(app: tauri::AppHandle) -> Result<(), String> {
+    crate::overlay::clear_current_panel();
+    if let Err(e) = app.emit_to("overlay", "overlay:panel", &serde_json::json!(null)) {
+        log::warn!("overlay 面板清空通知: {e}");
     }
     Ok(())
 }

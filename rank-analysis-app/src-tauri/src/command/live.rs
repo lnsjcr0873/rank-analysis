@@ -3,7 +3,9 @@
 //! `get_next_actions`：对局中实时下一动作建议。命令层负责取数据
 //! （liveclientdata 快照 + PUGG 出装 + 习惯标签），引擎层纯计算。
 //!
-//! 轮询由前端负责（Gaming.vue 按 2s 间隔 invoke），引擎保证 < 2ms。
+//! 轮询由前端负责（`useInGameServices` 2s 心跳 + 30s 节流），引擎保证 < 2ms。
+//! `allgamedata` 全量快照只在此处按需拉取；`activeplayer` 极简端点供
+//! mayhem 等级调度器 1s 轮询，两者频率隔离，避免 2999 被打满。
 
 use crate::insight::store::query_habit_tags;
 use crate::lcu::api::live_game::get_live_game_snapshot;

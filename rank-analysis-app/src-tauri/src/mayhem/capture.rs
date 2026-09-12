@@ -90,6 +90,53 @@ pub fn analyze_bands(
         .collect()
 }
 
+/// 三卡标题带的包围盒 + 各子矩形相对包围盒的偏移。
+///
+/// `assist_tick` 用一次 `BitBlt` 抓出整个包围盒（单次 DWM 同步），再纯内存
+/// 切片出三卡子带：3 次抓屏 → 1 次，DWM 锁争抢降为 1/3。
+/// rec-only 下每卡仍需独立送识别（整图即单个 crop），但抓屏只做一次。
+pub fn slot_band_union_rect(screen: (i32, i32)) -> (Rect, [Rect; 3]) {
+    let rects = slot_band_rects(screen);
+    let min_x = rects[0].x;
+    let max_x = rects[2].x + rects[2].w;
+    let min_y = rects.iter().map(|r| r.y).min().unwrap_or(0);
+    let max_y = rects.iter().map(|r| r.y + r.h).max().unwrap_or(0);
+    let union_rect = Rect {
+        x: min_x,
+        y: min_y,
+        w: (max_x - min_x).max(1),
+        h: (max_y - min_y).max(1),
+    };
+    (union_rect, rects)
+}
+
+/// 从包围盒 RGBA 缓冲中按行切片出单个子矩形（纯内存，无系统调用）。
+///
+/// `full` 为包围盒整块 RGBA（自上而下行序），`union_rect` 为其几何，
+/// `sub` 为目标子矩形。返回子矩形的 RGBA 拷贝；几何异常时返回空。
+pub fn slice_union_sub(full: &[u8], union_rect: Rect, sub: Rect) -> Vec<u8> {
+    let uw = union_rect.w.max(1) as usize;
+    let uh = union_rect.h.max(1) as usize;
+    let ox = (sub.x - union_rect.x).clamp(0, union_rect.w) as usize;
+    let oy = (sub.y - union_rect.y).clamp(0, union_rect.h) as usize;
+    let sw = (sub.w.max(1) as usize).min(uw.saturating_sub(ox));
+    let sh = (sub.h.max(1) as usize).min(uh.saturating_sub(oy));
+    if sw == 0 || sh == 0 {
+        return Vec::new();
+    }
+    let stride = uw * 4;
+    let mut out = Vec::with_capacity(sw * sh * 4);
+    for row in 0..sh {
+        let base = (oy + row) * stride + ox * 4;
+        let end = base + sw * 4;
+        if end > full.len() || oy + row >= uh {
+            break;
+        }
+        out.extend_from_slice(&full[base..end]);
+    }
+    out
+}
+
 /// 把基准坐标系的矩形缩放并钳制进目标屏幕范围。
 pub fn scale_rect(base: (i32, i32), base_rect: Rect, target: (i32, i32)) -> Rect {
     let fx = target.0 as f32 / base.0 as f32;
@@ -304,6 +351,70 @@ mod geometry_tests {
         assert!((mid_center - 960).abs() <= 4);
         // 高度一致（同一行）
         assert_eq!(bands[0].h, bands[1].h);
+    }
+
+    #[test]
+    fn union_rect_should_cover_all_three_bands() {
+        let (union_rect, rects) = slot_band_union_rect((1920, 1080));
+        for r in &rects {
+            assert!(r.x >= union_rect.x);
+            assert!(r.y >= union_rect.y);
+            assert!(r.x + r.w <= union_rect.x + union_rect.w);
+            assert!(r.y + r.h <= union_rect.y + union_rect.h);
+        }
+        // 包围盒宽度 = 左卡左缘到右卡右缘，高度 = 单带高度
+        assert_eq!(union_rect.w, rects[2].x + rects[2].w - rects[0].x);
+        assert_eq!(union_rect.h, rects[0].h);
+    }
+
+    #[test]
+    fn slice_union_sub_should_roundtrip_rows() {
+        // 4x2 包围盒：每像素 R=行号*10+列号，便于断言切片位置
+        let uw = 4;
+        let uh = 2;
+        let mut full = Vec::new();
+        for row in 0..uh {
+            for col in 0..uw {
+                let v = (row * 10 + col) as u8;
+                full.extend_from_slice(&[v, 0, 0, 255]);
+            }
+        }
+        let union_rect = Rect {
+            x: 100,
+            y: 50,
+            w: uw,
+            h: uh,
+        };
+        // 切中卡：x 偏移 1、宽 2
+        let sub = Rect {
+            x: 101,
+            y: 50,
+            w: 2,
+            h: 2,
+        };
+        let out = slice_union_sub(&full, union_rect, sub);
+        assert_eq!(out.len(), 2 * 2 * 4);
+        // 顶行两像素 R 应为 1,2；底行 R 应为 11,12
+        assert_eq!([out[0], out[4]], [1, 2]);
+        assert_eq!([out[8], out[12]], [11, 12]);
+    }
+
+    #[test]
+    fn slice_union_sub_should_return_empty_for_degenerate_geometry() {
+        let full = vec![0u8; 4 * 4];
+        let union_rect = Rect {
+            x: 0,
+            y: 0,
+            w: 1,
+            h: 1,
+        };
+        let sub = Rect {
+            x: 99,
+            y: 99,
+            w: 10,
+            h: 10,
+        };
+        assert!(slice_union_sub(&full, union_rect, sub).is_empty());
     }
 
     #[test]

@@ -135,6 +135,39 @@ describe('AssistScheduler - Smart Level-Driven Augment State Machine', () => {
     expect(tickEnd.note).toContain('非对局中')
   })
 
+  it('clears stale overlay panel when round completes', async () => {
+    const activeBandStats: BandStatsDto[] = [
+      { slot: 0, rect: { x: 0, y: 0, w: 100, h: 20 }, stddev: 25 },
+      { slot: 1, rect: { x: 100, y: 0, w: 100, h: 20 }, stddev: 30 },
+      { slot: 2, rect: { x: 200, y: 0, w: 100, h: 20 }, stddev: 22 }
+    ]
+    const emptyBandStats: BandStatsDto[] = [
+      { slot: 0, rect: { x: 0, y: 0, w: 100, h: 20 }, stddev: 2 },
+      { slot: 1, rect: { x: 100, y: 0, w: 100, h: 20 }, stddev: 1 },
+      { slot: 2, rect: { x: 200, y: 0, w: 100, h: 20 }, stddev: 3 }
+    ]
+    let currentStats = activeBandStats
+    const getBandStats = vi.fn().mockImplementation(() => Promise.resolve(currentStats))
+    const getPhase = vi.fn().mockResolvedValue('InProgress')
+    const getLivePlayer = vi
+      .fn()
+      .mockResolvedValue({ inGame: true, level: 3 } as LivePlayerStateDto)
+    const onRoundDone = vi.fn().mockResolvedValue(undefined)
+
+    const scheduler = createAssistScheduler({
+      getPhase,
+      getLivePlayer,
+      getBandStats,
+      onRoundDone
+    })
+
+    await scheduler.tick()
+    currentStats = emptyBandStats
+    await scheduler.tick()
+    // 选卡完成必须清空残留面板，不等 30s TTL
+    expect(onRoundDone).toHaveBeenCalledTimes(1)
+  })
+
   it('safely filters out NaN / non-finite stddev without crashing or false triggering', async () => {
     const bandStatsWithNaN: BandStatsDto[] = [
       { slot: 0, rect: { x: 0, y: 0, w: 100, h: 20 }, stddev: Number.NaN },

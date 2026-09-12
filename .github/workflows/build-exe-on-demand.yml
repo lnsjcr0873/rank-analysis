@@ -10,6 +10,12 @@ name: Build EXE (No Sign)
 
 on:
   workflow_dispatch:
+    inputs:
+      ocr:
+        description: 'Include ocr-rapid (self-contained RapidOCR model, needed on Win10 LTSC)'
+        required: false
+        default: true
+        type: boolean
 
 jobs:
   build-exe:
@@ -60,8 +66,21 @@ jobs:
             console.log("updater signing disabled for build (bundle.createUpdaterArtifacts=false)");
           '
 
+      # 自带模型 OCR（ocr-rapid）：Win10 LTSC 无 WinRT 中文包，
+      # 不带此特性打出来的包自动识别不可用（仅手动三选一）。
+      # 手动触发时 `ocr` 输入为 false 则打出无 OCR 的轻量包。
       - name: Build Tauri App (nsis, unsigned)
-        run: npm run tauri build -- --bundles nsis
+        shell: bash
+        env:
+          OCR_INPUT: ${{ inputs.ocr }}
+        run: |
+          if [ "$OCR_INPUT" = "false" ]; then
+            echo "Building WITHOUT ocr-rapid (manual override)"
+            npm run tauri build -- --bundles nsis
+          else
+            echo "Building WITH ocr-rapid (default)"
+            npm run tauri build -- --bundles nsis --features ocr-rapid
+          fi
 
       - name: Upload EXE artifact
         uses: actions/upload-artifact@v4

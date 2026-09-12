@@ -295,6 +295,14 @@ impl GameStateMonitor {
         let is_in_game = new_state.connected && new_state.phase.as_deref() == Some("InProgress");
         if was_in_game && !is_in_game {
             crate::overlay::hide();
+            // 同步清空面板信封：否则下局 overlay 挂载时快照同步会闪出上局旧推荐
+            crate::overlay::clear_current_panel();
+        }
+
+        // 阶段跳变时唤醒对局中挂起的自动化任务（accept_match 等）：
+        // 它们在 InProgress/GameStart 期间零轮询挂起，此处毫秒级唤醒。
+        if state_changed {
+            crate::automation::notify_phase_changed();
         }
 
         // 状态变化或超过 10 秒未推送时，发送事件

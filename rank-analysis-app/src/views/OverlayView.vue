@@ -78,7 +78,12 @@ let unlistenConfig: UnlistenFn | null = null
 let unlistenPanel: UnlistenFn | null = null
 
 function applyPanelEnvelope(env: OverlayPanelEnvelope | null | undefined) {
-  if (!env) return
+  // null = 后端 clear_overlay_panel（选卡完成/对局结束）：立即清空残留面板，
+  // hasContent 归零后 300ms 自动 hide，不等 TTL。
+  if (!env) {
+    mayhemAugments.value = null
+    return
+  }
   const { panel, payload } = env
   if (panel === 'mayhem-augments') {
     mayhemAugments.value = isMayhemAugmentsPayload(payload) ? payload : null
@@ -217,17 +222,14 @@ body {
 }
 
 .overlay-card {
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--bg-sunken, #0f1015) 90%, transparent),
-    color-mix(in srgb, var(--bg-raised, #161822) 94%, transparent)
-  );
+  /* 高性能纯色背景：backdrop-filter: blur 会强制 DWM 走显卡模糊通道，
+     对局中每帧多吃显存带宽；overlay 本就透明置顶，纯色不透明度足够可读。 */
+  background: rgba(15, 16, 21, 0.95);
   border: 1px solid var(--brand-border, rgba(200, 155, 60, 0.4));
   border-top: 2px solid var(--brand, #c89b3c);
   clip-path: var(--clip-corner-md);
   padding: 10px 12px;
-  backdrop-filter: blur(12px);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.7);
   pointer-events: auto;
 }
 

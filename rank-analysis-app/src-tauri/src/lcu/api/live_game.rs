@@ -25,6 +25,11 @@ fn live_client() -> &'static Client {
             // 本地服务，必须绕过代理（与 util/http.rs 同理，防加速器劫持）
             .no_proxy()
             .timeout(LIVE_CLIENT_TIMEOUT)
+            // 2999 是游戏内简易 HTTP 服务：小包高频，nodelay 降延迟；
+            // 池只留 1 条空闲、5s 回收，避免 TIME_WAIT 堆积。
+            .tcp_nodelay(true)
+            .pool_max_idle_per_host(1)
+            .pool_idle_timeout(Duration::from_secs(5))
             .build()
             .expect("failed to build live client http client")
     })

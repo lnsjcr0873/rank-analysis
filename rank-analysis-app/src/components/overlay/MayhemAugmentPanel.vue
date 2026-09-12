@@ -137,8 +137,14 @@ function scoreText(c: MayhemAugmentCandidate | null): string {
 }
 .m3c--best {
   border-color: color-mix(in srgb, var(--accent-gold) 60%, transparent);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-gold) 20%, transparent) inset;
-  animation: m3-best 1.6s ease-in-out infinite alternate;
+  box-shadow: 0 0 8px 1px color-mix(in srgb, var(--accent-gold) 27%, transparent) inset;
+}
+/* 对局机 GPU 降温：呼吸动画只在用户未要求减少动态时播放；
+   v-if 卸载后动画随 DOM 一起销毁，不会后台空转。 */
+@media (prefers-reduced-motion: no-preference) {
+  .m3c--best {
+    animation: m3-best 1.6s ease-in-out 3 alternate;
+  }
 }
 @keyframes m3-best {
   from {
@@ -146,11 +152,6 @@ function scoreText(c: MayhemAugmentCandidate | null): string {
   }
   to {
     box-shadow: 0 0 8px 1px color-mix(in srgb, var(--accent-gold) 27%, transparent) inset;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .m3c--best {
-    animation: none;
   }
 }
 .m3c--empty {
