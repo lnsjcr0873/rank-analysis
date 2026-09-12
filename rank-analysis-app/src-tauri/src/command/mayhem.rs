@@ -323,10 +323,29 @@ pub fn mayhem_slot_band_rects() -> Result<Vec<crate::mayhem::capture::Rect>, Str
 pub async fn mayhem_capture_band_stats() -> Result<Vec<crate::mayhem::capture::BandStat>, String> {
     #[cfg(windows)]
     {
+        // 单次 BitBlt 抓包围盒 + 纯内存切片：3 次 DWM 同步 → 1 次。
+        // 与 mayhem_assist_tick / mayhem_capture_band_dump 同口径。
+        use crate::mayhem::capture::{luma_stddev, slice_union_sub, slot_band_union_rect};
         let screen = crate::mayhem::capture::gdi::primary_screen_size();
-        crate::mayhem::capture::analyze_bands(screen, &|x, y, w, h| {
-            crate::mayhem::capture::gdi::capture_region_rgba(x, y, w, h).map(|rg| rg.rgba)
-        })
+        let (union_rect, rects) = slot_band_union_rect(screen);
+        let full = crate::mayhem::capture::gdi::capture_region_rgba(
+            union_rect.x,
+            union_rect.y,
+            union_rect.w,
+            union_rect.h,
+        )?;
+        Ok(rects
+            .iter()
+            .enumerate()
+            .map(|(i, r)| {
+                let sub = slice_union_sub(&full.rgba, union_rect, *r);
+                crate::mayhem::capture::BandStat {
+                    slot: i as u8,
+                    rect: *r,
+                    stddev: luma_stddev(&sub),
+                }
+            })
+            .collect())
     }
     #[cfg(not(windows))]
     Err("屏幕捕获仅支持 Windows".to_string())
@@ -559,7 +578,10 @@ pub async fn mayhem_assist_tick(
             union_rect.w,
             union_rect.h,
         )?;
-        let mut texts: [Option<String>; 3] = [None, None, None];
+        // 两阶段：先对三槽做低成本 luma 门控，无画面直接返回（0 OCR）；
+        // 确认有画面后，只对 active 的槽跑推理，inactive 槽保持 None。
+        let mut subs: [Option<Vec<u8>>; 3] = [None, None, None];
+        let mut slot_active = [false; 3];
         let mut active_slots = 0usize;
 
         for (i, r) in rects.iter().enumerate() {
@@ -570,8 +592,27 @@ pub async fn mayhem_assist_tick(
             }
             if luma_stddev(&sub_rgba) >= crate::mayhem::pipeline::BAND_ACTIVE_THRESHOLD {
                 active_slots += 1;
+                slot_active[i] = true;
             }
-            match crate::mayhem::engine_rapid::recognize_rgba(&sub_rgba, r.w, r.h).await {
+            subs[i] = Some(sub_rgba);
+        }
+
+        if active_slots < crate::mayhem::pipeline::ACTIVE_SLOTS_REQUIRED {
+            return Ok(serde_json::json!({
+                "phase": phase, "pushed": false,
+                "reason": "no-augment-ui", "activeSlots": active_slots
+            }));
+        }
+
+        let mut texts: [Option<String>; 3] = [None, None, None];
+        for (i, r) in rects.iter().enumerate() {
+            if !slot_active[i] {
+                continue;
+            }
+            let Some(sub_rgba) = subs[i].as_ref() else {
+                continue;
+            };
+            match crate::mayhem::engine_rapid::recognize_rgba(sub_rgba, r.w, r.h).await {
                 Ok(lines) => {
                     let joined = lines.join(" ");
                     if !joined.trim().is_empty() {
@@ -580,13 +621,6 @@ pub async fn mayhem_assist_tick(
                 }
                 Err(e) => log::warn!("[assist] 卡位 {i} OCR 失败: {e}"),
             }
-        }
-
-        if active_slots < crate::mayhem::pipeline::ACTIVE_SLOTS_REQUIRED {
-            return Ok(serde_json::json!({
-                "phase": phase, "pushed": false,
-                "reason": "no-augment-ui", "activeSlots": active_slots
-            }));
         }
 
         // 画面确认有卡但三槽全无文本（超时/乱码/全被词表拒掉）：不推空面板，
@@ -611,10 +645,30 @@ pub async fn mayhem_assist_tick(
     let out: Result<Value, String> = {
         // 参数仅在 ocr-rapid 全管线里消费；该降级臂显式吞掉避免 -Dwarnings
         let _ = (champion_id, rerolls_left);
+        // 同主臂：单次 BitBlt 抓包围盒 + 纯内存切片（3 次 → 1 次）。
+        use crate::mayhem::capture::{
+            luma_stddev, slice_union_sub, slot_band_union_rect, BandStat,
+        };
         let screen = crate::mayhem::capture::gdi::primary_screen_size();
-        let stats = crate::mayhem::capture::analyze_bands(screen, &|x, y, w, h| {
-            crate::mayhem::capture::gdi::capture_region_rgba(x, y, w, h).map(|rg| rg.rgba)
-        })?;
+        let (union_rect, rects) = slot_band_union_rect(screen);
+        let full = crate::mayhem::capture::gdi::capture_region_rgba(
+            union_rect.x,
+            union_rect.y,
+            union_rect.w,
+            union_rect.h,
+        )?;
+        let stats: Vec<BandStat> = rects
+            .iter()
+            .enumerate()
+            .map(|(i, r)| {
+                let sub = slice_union_sub(&full.rgba, union_rect, *r);
+                BandStat {
+                    slot: i as u8,
+                    rect: *r,
+                    stddev: luma_stddev(&sub),
+                }
+            })
+            .collect();
         let active_slots = stats
             .iter()
             .filter(|s| s.stddev >= crate::mayhem::pipeline::BAND_ACTIVE_THRESHOLD)

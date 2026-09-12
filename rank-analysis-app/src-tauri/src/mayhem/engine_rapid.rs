@@ -15,7 +15,7 @@
 //! ## 并发与线程模型
 //!
 //! `RapidOcr` 的推理方法取 `&mut self`（ONNX session 非并发），因此用全局
-//! `Mutex` 串行化；纯 CPU 推理无 COM 套间概念，可直接 `OnceLock` 共享。
+//! `Mutex` 串行化；纯 CPU 推理无 COM 套间概念，可全局共享。
 //! 推理在 `spawn_blocking` 里跑，不阻塞 Tokio worker。
 //!
 //! ## 体积拆解（回答“十几 MB 去哪了”）
@@ -35,7 +35,7 @@
 //! 不再下载。`assist_tick` 内只用 `ModelDownloadMode::Never` 打开引擎——
 //! 模型没下好时直接返回 `ocr-warming-up`，绝不在选卡瞬间下载阻塞。
 
-use std::sync::{Mutex, OnceLock};
+use std::sync::Mutex;
 
 use rapidocr_core::config::PipelineConfig;
 use rapidocr_core::model::{ModelCache, ModelDownloadMode, PPOCRV5_CH_MOBILE};
@@ -52,7 +52,18 @@ fn rec_only_pipeline() -> PipelineConfig {
 }
 
 /// 全局唯一的 OCR 管线（惰性初始化，失败可重试）。
-static ENGINE: OnceLock<Mutex<RapidOcr>> = OnceLock::new();
+///
+/// 说明：不用 `OnceLock<Mutex<RapidOcr>>` 的 `get_or_try_init`——那是不稳定
+/// API（`once_cell_try`），stable Rust 编不过。这里用 `Mutex<Option<_>>`
+/// 手写可重试惰性初始化：建引擎失败（如网络拉不下来模型）后下次调用会
+/// 重新尝试，而非永久卡在失败态。外层锁只保护初始化写入（推理持锁期间
+/// 状态查询走 [`ENGINE_READY`]，不会被卡住）。
+static ENGINE: Mutex<Option<Mutex<RapidOcr>>> = Mutex::new(None);
+
+/// 引擎就绪标志：写入 [`ENGINE`] 成功后置位。查询走无锁原子读，
+/// 避免在推理持锁期间被 `ENGINE` 外层锁挡住（`assist_tick` 快路径
+/// 每次 tick 都要查就绪态）。
+static ENGINE_READY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// 推理串行信号量：`RapidOcr::run_image` 取 `&mut self`，三卡串行推理即可，
 ///
@@ -62,50 +73,61 @@ static ENGINE: OnceLock<Mutex<RapidOcr>> = OnceLock::new();
 static INFER_PERMIT: std::sync::LazyLock<tokio::sync::Semaphore> =
     std::sync::LazyLock::new(|| tokio::sync::Semaphore::new(1));
 
-/// 引擎是否已就绪（模型已下载 + session 已建）。
+/// 引擎是否已就绪（模型已下载 + session 已建）。无锁原子读。
 pub fn is_ready() -> bool {
-    ENGINE.get().is_some()
+    use std::sync::atomic::Ordering;
+    ENGINE_READY.load(Ordering::Relaxed)
 }
 
 /// 在阻塞线程上建引擎。`allow_download` 为 false 时只开箱不下载，
 /// 用于 `assist_tick` 快路径；预热专用 [`prewarm_blocking`] 才允许下载。
-fn init_blocking(allow_download: bool) -> Result<&'static Mutex<RapidOcr>, String> {
-    ENGINE.get_or_try_init(|| {
-        let cache = ModelCache::new(model_dir());
-        let pipeline = rec_only_pipeline();
-        let mode = if allow_download {
-            ModelDownloadMode::Missing
-        } else {
-            ModelDownloadMode::Never
-        };
-        cache
-            .ensure_model_set_for_pipeline(&PPOCRV5_CH_MOBILE, pipeline, mode)
-            .map_err(|e| {
-                if allow_download {
-                    format!("OCR 模型准备失败（请检查网络后重试，手动三选一可用）: {e:#}")
-                } else {
-                    // tick 快路径：模型还没下好是正常中间态，前端据此显示“预热中”。
-                    format!("OCR 模型尚未就绪（预热中）: {e:#}")
-                }
-            })?;
-        let mut cfg = cache.config_for(&PPOCRV5_CH_MOBILE);
-        cfg = cfg.with_pipeline(pipeline);
-        // rec-only 下 det/cls 配置不再需要，置空避免歧义。
-        cfg.det = None;
-        cfg.cls = None;
-        // 对局机上只给 2 个算子线程，避免团战时抢游戏 CPU。
-        cfg.inference.intra_threads = 2;
-        cfg.inference.inter_threads = 1;
-        RapidOcr::new(cfg)
-            .map(Mutex::new)
-            .map_err(|e| format!("OCR 引擎初始化失败: {e:#}"))
-    })
+///
+/// 幂等且失败可重试：已就绪直接返回；model 下载 + session 构建在锁外进行
+/// （耗时操作不被外层锁拖住），完成后一次性写入，并发竞态下后来者覆盖。
+fn init_blocking(allow_download: bool) -> Result<(), String> {
+    {
+        let guard = ENGINE.lock().map_err(|e| format!("OCR 引擎锁异常: {e}"))?;
+        if guard.is_some() {
+            return Ok(());
+        }
+    }
+    let cache = ModelCache::new(model_dir());
+    let pipeline = rec_only_pipeline();
+    let mode = if allow_download {
+        ModelDownloadMode::Missing
+    } else {
+        ModelDownloadMode::Never
+    };
+    cache
+        .ensure_model_set_for_pipeline(&PPOCRV5_CH_MOBILE, pipeline, mode)
+        .map_err(|e| {
+            if allow_download {
+                format!("OCR 模型准备失败（请检查网络后重试，手动三选一可用）: {e:#}")
+            } else {
+                // tick 快路径：模型还没下好是正常中间态，前端据此显示“预热中”。
+                format!("OCR 模型尚未就绪（预热中）: {e:#}")
+            }
+        })?;
+    let mut cfg = cache.config_for(&PPOCRV5_CH_MOBILE);
+    cfg = cfg.with_pipeline(pipeline);
+    // rec-only 下 det/cls 配置不再需要，置空避免歧义。
+    cfg.det = None;
+    cfg.cls = None;
+    // 对局机上只给 2 个算子线程，避免团战时抢游戏 CPU。
+    cfg.inference.intra_threads = 2;
+    cfg.inference.inter_threads = 1;
+    let ocr = Mutex::new(RapidOcr::new(cfg).map_err(|e| format!("OCR 引擎初始化失败: {e:#}"))?);
+    let mut guard = ENGINE.lock().map_err(|e| format!("OCR 引擎锁异常: {e}"))?;
+    if guard.is_none() {
+        *guard = Some(ocr);
+        ENGINE_READY.store(true, std::sync::atomic::Ordering::Release);
+    }
+    Ok(())
 }
 
 /// 后台预热：在阻塞线程下载模型 + 建 session。幂等，已就绪直接返回。
 fn prewarm_blocking() -> Result<(), String> {
-    init_blocking(true)?;
-    Ok(())
+    init_blocking(true)
 }
 
 /// 后台预热（async 入口）：下载模型 + 建 session，阻塞部分走 `spawn_blocking`。
@@ -144,9 +166,13 @@ fn recognize_rgba_sync(rgba: &[u8], w: i32, h: i32) -> Result<Vec<String>, Strin
         .ok_or_else(|| "failed to build RGB image".to_string())?;
 
     // 快路径：Never 模式，模型没下好就快速失败，不下载。
-    let guard = init_blocking(false)?;
-    let mut ocr = guard.lock().map_err(|e| format!("OCR 引擎锁异常: {e}"))?;
-    let out = ocr
+    init_blocking(false)?;
+    let outer = ENGINE.lock().map_err(|e| format!("OCR 引擎锁异常: {e}"))?;
+    let ocr = outer
+        .as_ref()
+        .ok_or_else(|| "OCR 引擎未初始化".to_string())?;
+    let mut ocr_guard = ocr.lock().map_err(|e| format!("OCR 推理锁异常: {e}"))?;
+    let out = ocr_guard
         .run_image(&img)
         .map_err(|e| format!("OCR 推理失败: {e:#}"))?;
     Ok(out
