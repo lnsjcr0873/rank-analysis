@@ -628,10 +628,7 @@ async fn enrich_augment_descriptions() {
 
 /// 自愈用单飞器：仅当 `is_empty()` 为真时，拿锁后再次确认仍为空，才跑一次 `run_init`。
 /// 并发调用只触发一次 init，其余等锁后复查即返回。抽出来便于单测（不依赖 LCU）。
-///
-/// 运行时自愈由 [`ensure_caches_ready`] 内联实现（含 10s 冷却，逻辑更重），
-/// 此泛型助手当前仅被 `#[cfg(test)]` 复用，故允许 dead_code。
-#[allow(dead_code)]
+/// debug6：`ensure_caches_ready` 已收敛到此助手，运行时与单测同一条路径。
 async fn run_once_if_empty<E, I, F>(is_empty: E, lock: &tokio::sync::Mutex<()>, run_init: I)
 where
     E: Fn() -> bool,
@@ -659,44 +656,37 @@ static LAST_ASSET_INIT_ATTEMPT: LazyLock<std::sync::Mutex<Option<std::time::Inst
 /// 且因 no-store 不缓存失败、又无前端重试，会一直裂到手动刷新）。
 ///
 /// 当 LCU 客户端未运行时，通过 10s 冷却限制重试频率，杜绝每个资产请求排队重跑 LCU 并超时。
+///
+/// debug6：经 `run_once_if_empty` 统一单飞（双检 + 冷却），不再内联手写锁逻辑。
 async fn ensure_caches_ready() {
     static ASSET_INIT_LOCK: LazyLock<tokio::sync::Mutex<()>> =
         LazyLock::new(|| tokio::sync::Mutex::new(()));
 
-    if !champion_cache_is_empty() {
-        return;
-    }
-
-    // 快速路径：若最近刚尝试初始化过且依然为空（LCU 未运行），则在冷却期内直接跳过，避免引发多图串行风暴
-    {
+    // 冷却检查：LCU 未运行时 10s 内只试一次（纯同步检查，不持异步锁）
+    let cooled_down = {
         let guard = LAST_ASSET_INIT_ATTEMPT
             .lock()
             .unwrap_or_else(|e| e.into_inner());
-        if let Some(last) = *guard {
-            if last.elapsed() < ASSET_INIT_RETRY_COOLDOWN {
-                return;
-            }
+        match *guard {
+            Some(last) => last.elapsed() >= ASSET_INIT_RETRY_COOLDOWN,
+            None => true,
         }
-    }
-
-    let _guard = ASSET_INIT_LOCK.lock().await;
-    if !champion_cache_is_empty() {
+    };
+    if !cooled_down {
         return;
     }
 
-    {
-        let mut guard = LAST_ASSET_INIT_ATTEMPT
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        if let Some(last) = *guard {
-            if last.elapsed() < ASSET_INIT_RETRY_COOLDOWN {
-                return;
-            }
+    run_once_if_empty(champion_cache_is_empty, &ASSET_INIT_LOCK, || async {
+        // 拿锁后复查仍为空才记时间戳：成功/失败都记（失败靠冷却限频）
+        {
+            let mut guard = LAST_ASSET_INIT_ATTEMPT
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
+            *guard = Some(std::time::Instant::now());
         }
-        *guard = Some(std::time::Instant::now());
-    }
-
-    init_once().await;
+        init_once().await;
+    })
+    .await;
 }
 
 // 新增：返回二进制与 content-type，便于通过 HTTP 下发
@@ -1132,6 +1122,24 @@ mod tests {
         tokio::join!(call(), call(), call(), call(), call(), call());
         assert_eq!(init_count.load(Ordering::SeqCst), 1, "init 应只跑一次");
         assert!(!is_empty(), "init 后缓存应视为就绪");
+    }
+
+    #[tokio::test]
+    async fn run_once_if_empty_reruns_after_cache_emptied() {
+        // debug6：init 后缓存又被清空（如 LCU 重启）时，下一次调用应重新触发，
+        // 而非被旧状态锁死——冷却由 ensure_caches_ready 层负责，此处只看空/非空。
+        let ready = AtomicUsize::new(0);
+        let lock = tokio::sync::Mutex::new(());
+        let is_empty = || ready.load(Ordering::SeqCst) == 0;
+        let run_init = || async {
+            ready.fetch_add(1, Ordering::SeqCst);
+        };
+        let call = || run_once_if_empty(is_empty, &lock, run_init);
+        call().await;
+        assert_eq!(ready.load(Ordering::SeqCst), 1);
+        ready.store(0, Ordering::SeqCst); // 模拟缓存被清空
+        call().await;
+        assert_eq!(ready.load(Ordering::SeqCst), 2, "清空后应重新触发 init");
     }
 
     #[test]
