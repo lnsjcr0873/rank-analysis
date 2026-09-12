@@ -19,8 +19,8 @@
 pub mod capture;
 pub mod client;
 pub mod db;
-#[cfg(all(feature = "ocr-win", windows))]
-pub mod engine_win;
+#[cfg(feature = "ocr-rapid")]
+pub mod engine_rapid;
 pub mod ocr;
 pub mod pipeline;
 pub mod probe;

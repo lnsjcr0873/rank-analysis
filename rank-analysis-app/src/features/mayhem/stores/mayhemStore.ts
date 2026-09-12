@@ -181,12 +181,42 @@ export const useMayhemStore = defineStore('mayhem', () => {
   const assistRunning = ref(false)
   const lastAssistTick = ref<AssistTick | null>(null)
 
+  /** OCR 模型预热中（下载 rec 模型 + 建 session）。assist_tick 快路径永不下载，预热必须提前。 */
+  const ocrWarmingUp = ref(false)
+
   function startAssist(): void {
     const s = getSharedAssistScheduler()
     if (!s.running) {
       void setOverlayClickThrough(true).catch(() => {})
       s.start()
       assistRunning.value = true
+      // OCR 预热提前到监听启动时：后台下载，不阻塞首轮 tick。
+      // fire-and-forget：失败由 tick 的 ocr-warming-up 兜底展示。
+      void prewarmOcr()
+    }
+  }
+
+  /**
+   * OCR 模型预热（幂等）。后端引擎就绪后直接返回，未编译 OCR 的构建直接跳过。
+   */
+  async function prewarmOcr(): Promise<void> {
+    if (ocrWarmingUp.value) return
+    try {
+      const { invoke } = await import('@tauri-apps/api/core')
+      const status = (await invoke('mayhem_ocr_status')) as { ready?: boolean }
+      if (status.ready) return
+    } catch {
+      // 未编译 OCR 的构建无此命令：直接跳过，不影响手动三选一
+      return
+    }
+    ocrWarmingUp.value = true
+    try {
+      const { invoke } = await import('@tauri-apps/api/core')
+      await invoke('mayhem_ocr_prewarm')
+    } catch (e) {
+      console.warn('[mayhemStore] OCR 预热失败（tick 会报 ocr-warming-up，可重试）:', e)
+    } finally {
+      ocrWarmingUp.value = false
     }
   }
 
@@ -222,6 +252,8 @@ export const useMayhemStore = defineStore('mayhem', () => {
     selectedChampionId,
     isDataReady,
     assistRunning,
+    ocrWarmingUp,
+    prewarmOcr,
     lastAssistTick,
     init,
     loadChampions,

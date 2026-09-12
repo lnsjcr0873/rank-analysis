@@ -737,6 +737,8 @@ onMounted(async () => {
     const caps = (await invoke('mayhem_capabilities')) as { autoAssistSupported?: boolean }
     autoAssistSupported.value = caps.autoAssistSupported !== false
     if (autoAssistSupported.value === false) manualOpen.value = true
+    // OCR 模型预热提前到进页时：后台下载 rec 模型，首轮三选一不再等下载
+    if (autoAssistSupported.value) void mayhemStore.prewarmOcr()
   } catch {
     autoAssistSupported.value = null
   }

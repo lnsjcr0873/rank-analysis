@@ -234,6 +234,37 @@ pub fn mayhem_ocr_match_sample(
     ))
 }
 
+/// OCR 模型预热状态（前端据此显示“模型准备中”）。
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MayhemOcrStatus {
+    pub ready: bool,
+}
+
+/// 查询 OCR 引擎是否就绪（模型已下载 + session 已建）。
+#[tauri::command]
+pub fn mayhem_ocr_status() -> MayhemOcrStatus {
+    #[cfg(all(windows, feature = "ocr-rapid"))]
+    return MayhemOcrStatus {
+        ready: crate::mayhem::engine_rapid::is_ready(),
+    };
+    #[cfg(not(all(windows, feature = "ocr-rapid")))]
+    return MayhemOcrStatus { ready: false };
+}
+
+/// 后台预热 OCR 模型（下载 rec 模型 + 字典 + 建 session）。幂等，已就绪直接返回。
+///
+/// 必须在三选一弹出之前调用（大乱斗页挂载 / 监听启动时由前端触发），
+/// 绝不在 `assist_tick` 里调——`assist_tick` 快路径永不下载，
+/// 模型没下好时直接返回 `ocr-warming-up`。
+#[tauri::command]
+pub async fn mayhem_ocr_prewarm() -> Result<(), String> {
+    #[cfg(all(windows, feature = "ocr-rapid"))]
+    return crate::mayhem::engine_rapid::prewarm().await;
+    #[cfg(not(all(windows, feature = "ocr-rapid")))]
+    return Err("当前构建未包含 OCR 引擎".to_string());
+}
+
 /// 读取对局中本方实时等级与数据（Live Client API 极简端点，单次 < 1ms）。
 #[tauri::command]
 pub async fn mayhem_get_live_player(
@@ -428,17 +459,20 @@ pub fn mayhem_capture_band_dump() -> Result<Vec<BandDump>, String> {
         use base64::Engine as _;
 
         let screen = crate::mayhem::capture::gdi::primary_screen_size();
-        let rects = crate::mayhem::capture::slot_band_rects(screen);
+        let (union_rect, rects) = crate::mayhem::capture::slot_band_union_rect(screen);
+        let full = crate::mayhem::capture::gdi::capture_region_rgba(
+            union_rect.x,
+            union_rect.y,
+            union_rect.w,
+            union_rect.h,
+        )?;
         let mut out = Vec::with_capacity(3);
-        for r in &rects {
-            let region = crate::mayhem::capture::gdi::capture_region_rgba(r.x, r.y, r.w, r.h)?;
+        for (i, r) in rects.iter().enumerate() {
+            let sub_rgba = crate::mayhem::capture::slice_union_sub(&full.rgba, union_rect, *r);
             out.push(BandDump {
-                slot: out.len() as u8,
-                bmp_base64: STANDARD.encode(crate::mayhem::capture::encode_bmp_rgba(
-                    &region.rgba,
-                    r.w,
-                    r.h,
-                )),
+                slot: i as u8,
+                bmp_base64: STANDARD
+                    .encode(crate::mayhem::capture::encode_bmp_rgba(&sub_rgba, r.w, r.h)),
             });
         }
         Ok(out)
@@ -460,7 +494,7 @@ pub async fn mayhem_gameflow_phase() -> Result<String, String> {
 pub struct MayhemCapabilities {
     /// 操作系统（windows/macos/linux 等）
     pub platform: String,
-    /// 是否编译了 OCR 引擎（ocr-win feature）
+    /// 是否编译了 OCR 引擎（ocr-rapid feature，自带模型，LTSC 可用）
     pub ocr_built_in: bool,
     /// 屏幕捕获是否可用（当前仅 Windows）
     pub capture_supported: bool,
@@ -470,7 +504,7 @@ pub struct MayhemCapabilities {
 
 #[tauri::command]
 pub fn mayhem_capabilities() -> MayhemCapabilities {
-    let ocr_built_in = cfg!(all(windows, feature = "ocr-win"));
+    let ocr_built_in = cfg!(all(windows, feature = "ocr-rapid"));
     let capture_supported = cfg!(windows);
     MayhemCapabilities {
         platform: std::env::consts::OS.to_string(),
@@ -482,8 +516,8 @@ pub fn mayhem_capabilities() -> MayhemCapabilities {
 
 /// 大乱斗助手单次 tick（A3 触发→识别→打分→推送 的编排入口）。
 ///
-/// 流程：阶段过滤 → 抓三卡标题带活跃度 → 检测判定 → 识别文本（`ocr-win`
-/// feature 启用时走 Windows.Media.Ocr，否则如实返回 `ocr-not-configured`）
+/// 流程：阶段过滤 → 抓三卡标题带活跃度 → 检测判定 → 识别文本（`ocr-rapid`
+/// feature 启用时走自带模型 RapidOCR，否则如实返回 `ocr-not-configured`）
 /// → 词表匹配打分 → 组装面板负载。
 #[tauri::command]
 pub async fn mayhem_assist_tick(
@@ -502,21 +536,42 @@ pub async fn mayhem_assist_tick(
     // 三路 cfg 臂各自产出 Result 后统一返回（避免 cfg 组合下的 needless_return）
     // 三路 cfg 臂各自产出 Result 绑定到 `out`，函数尾部统一返回——
     // 避免 cfg 剥离后块尾值被丢弃或触发 needless_return
-    #[cfg(all(windows, feature = "ocr-win"))]
+    #[cfg(all(windows, feature = "ocr-rapid"))]
     let out: Result<Value, String> = {
-        use crate::mayhem::capture::{luma_stddev, slot_band_rects};
+        use crate::mayhem::capture::{luma_stddev, slice_union_sub, slot_band_union_rect};
 
+        // 快路径永不下载：模型没下好直接报预热中，不抓屏不推理，
+        // 前端调度器 350ms 后重试，预热由 mayhem_ocr_prewarm 在后台完成。
+        if !crate::mayhem::engine_rapid::is_ready() {
+            return Ok(serde_json::json!({
+                "phase": phase, "pushed": false,
+                "reason": "ocr-warming-up", "activeSlots": 0
+            }));
+        }
+
+        // 单次 BitBlt 抓包围盒（1 次 DWM 同步），再纯内存切片出三卡：
+        // 3 次抓屏 → 1 次，DWM 锁争抢降为 1/3。
         let screen = crate::mayhem::capture::gdi::primary_screen_size();
-        let rects = slot_band_rects(screen);
+        let (union_rect, rects) = slot_band_union_rect(screen);
+        let full = crate::mayhem::capture::gdi::capture_region_rgba(
+            union_rect.x,
+            union_rect.y,
+            union_rect.w,
+            union_rect.h,
+        )?;
         let mut texts: [Option<String>; 3] = [None, None, None];
         let mut active_slots = 0usize;
 
         for (i, r) in rects.iter().enumerate() {
-            let region = crate::mayhem::capture::gdi::capture_region_rgba(r.x, r.y, r.w, r.h)?;
-            if luma_stddev(&region.rgba) >= crate::mayhem::pipeline::BAND_ACTIVE_THRESHOLD {
+            let sub_rgba = slice_union_sub(&full.rgba, union_rect, *r);
+            if sub_rgba.is_empty() {
+                log::warn!("[assist] 卡位 {i} 切片为空，跳过");
+                continue;
+            }
+            if luma_stddev(&sub_rgba) >= crate::mayhem::pipeline::BAND_ACTIVE_THRESHOLD {
                 active_slots += 1;
             }
-            match crate::mayhem::engine_win::recognize_rgba(&region.rgba, r.w, r.h).await {
+            match crate::mayhem::engine_rapid::recognize_rgba(&sub_rgba, r.w, r.h).await {
                 Ok(lines) => {
                     let joined = lines.join(" ");
                     if !joined.trim().is_empty() {
@@ -534,6 +589,16 @@ pub async fn mayhem_assist_tick(
             }));
         }
 
+        // 画面确认有卡但三槽全无文本（超时/乱码/全被词表拒掉）：不推空面板，
+        // 报 ocr-empty 让前端提示手动三选一，比一张全空的浮窗有用。
+        if texts.iter().all(|t| t.is_none()) {
+            log::warn!("[assist] 三卡均无识别文本，不推送空面板");
+            return Ok(serde_json::json!({
+                "phase": phase, "pushed": false,
+                "reason": "ocr-empty", "activeSlots": active_slots
+            }));
+        }
+
         // R09:优先用调用方传入的真实英雄；未传时以后端实时反查代替样例回落
         let champion_id = resolve_assist_champion_id(champion_id).await;
         let payload = crate::mayhem::pipeline::run_augment_round(texts, champion_id, rerolls_left)?;
@@ -542,9 +607,9 @@ pub async fn mayhem_assist_tick(
         }))
     };
 
-    #[cfg(all(windows, not(feature = "ocr-win")))]
+    #[cfg(all(windows, not(feature = "ocr-rapid")))]
     let out: Result<Value, String> = {
-        // 参数仅在 ocr-win 全管线里消费；该降级臂显式吞掉避免 -Dwarnings
+        // 参数仅在 ocr-rapid 全管线里消费；该降级臂显式吞掉避免 -Dwarnings
         let _ = (champion_id, rerolls_left);
         let screen = crate::mayhem::capture::gdi::primary_screen_size();
         let stats = crate::mayhem::capture::analyze_bands(screen, &|x, y, w, h| {
@@ -560,7 +625,7 @@ pub async fn mayhem_assist_tick(
                 "reason": "no-augment-ui", "activeSlots": active_slots
             }));
         }
-        // OCR 引擎未编译（--features ocr-win）：检测已通过但拿不到卡位文本，
+        // OCR 引擎未编译（--features ocr-rapid）：检测已通过但拿不到卡位文本，
         // 如实告知前端而非伪造空面板；手动三选一不受影响。
         Ok(serde_json::json!({
             "phase": phase, "pushed": false, "reason": "ocr-not-configured",

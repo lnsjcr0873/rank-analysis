@@ -46,6 +46,8 @@ export interface AssistDeps {
   getPhase(): Promise<string>
   getLivePlayer?(): Promise<LivePlayerStateDto | null>
   getBandStats(): Promise<BandStatsDto[] | null>
+  /** 选卡完成 / 轮次推进时调用：清空 overlay 残留面板，不等 30s TTL */
+  onRoundDone?(): Promise<void>
   /** 每轮 tick 完成后的回调（UI 状态展示用；异常不影响调度） */
   onTick?(tick: AssistTick): void
   /**
@@ -258,6 +260,14 @@ export function createAssistScheduler(deps: AssistDeps, idleIntervalMs = 1_000):
         if (active.length < ACTIVE_SLOTS_REQUIRED || Date.now() - burstStartTime >= burstTimeout) {
           currentRound += 1
           mode = currentRound > 4 ? 'all_completed' : 'idle_sleep'
+          // 立即清空残留面板：旧推荐已失效，不等 30s TTL（失败仅告警，不阻塞状态机）
+          if (deps.onRoundDone) {
+            try {
+              await deps.onRoundDone()
+            } catch (e) {
+              console.warn('[assist] 清空残留面板失败:', e)
+            }
+          }
           last = {
             phase,
             activeSlots: 0,
@@ -354,7 +364,11 @@ export function getSharedAssistScheduler(): AssistScheduler {
         const { invoke } = await import('@tauri-apps/api/core')
         return (await invoke('mayhem_capture_band_stats')) as BandStatsDto[]
       },
-      onDetected: async () => {
+      onRoundDone: async () => {
+        const { invoke } = await import('@tauri-apps/api/core')
+        await invoke('clear_overlay_panel')
+      },
+      onDetected: async tick => {
         const { invoke } = await import('@tauri-apps/api/core')
         const { setOverlayLayout, pushOverlayPanel } =
           await import('@renderer/features/overlay/panels')
@@ -364,6 +378,13 @@ export function getSharedAssistScheduler(): AssistScheduler {
         const outcome = (await invoke('mayhem_assist_tick', { championId: null })) as {
           pushed?: boolean
           payload?: unknown
+          reason?: string
+        }
+        // 模型预热中：tick 快路径直接返回 ocr-warming-up，不抓屏不推理。
+        // 保持 burst 态等待，后台预热完成后下一轮自然命中。
+        if (!outcome.pushed && outcome.reason === 'ocr-warming-up') {
+          tick.note = '⏳ OCR 模型准备中（后台下载 rec 模型，完成后自动识别）'
+          return
         }
         if (!outcome.pushed || !outcome.payload) return
         await pushOverlayPanel('mayhem-augments', outcome.payload)

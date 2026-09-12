@@ -8,9 +8,11 @@ name = "rank_analysis_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [features]
-# 可选 Windows.Media.Ocr 引擎（A3.2）：`cargo build --features ocr-win`
+# 自带模型 RapidOCR 引擎（PP-OCRv5 中文 mobile，ONNX Runtime CPU）：
+# `cargo build --features ocr-rapid`。Win10 LTSC 精简了 WinRT OCR 语言包，
+# 故改走自带模型路线；模型首次使用时下载到系统临时目录缓存。
 # 默认关闭——未启用时大乱斗助手返回 ocr-not-configured，手动三选一不受影响。
-ocr-win = ["dep:windows"]
+ocr-rapid = ["dep:rapidocr-core", "dep:image"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -77,6 +79,12 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 sha2 = "0.10"
 hex = "0.4"
 
+# 自带模型 OCR 引擎（可选，见 [features].ocr-rapid）：RapidOCR PP-OCRv5 中文
+# mobile，ONNX Runtime CPU 推理，不依赖系统 WinRT 语言包（Win10 LTSC 可用）。
+# 模型首次使用时下载到系统临时目录缓存（见 mayhem::engine_rapid）。
+rapidocr-core = { version = "0.2.2", optional = true }
+image = { version = "0.25", optional = true }
+
 # ---- Windows 专属依赖 ----
 # 这些 crate 只在 Windows 编译，避免 macOS/Linux 上因目标平台不支持而编译失败。
 [target.'cfg(windows)'.dependencies]
@@ -96,13 +104,4 @@ winapi = { version = "0.3.9", features = [
     "winuser",
     "wingdi", # mayhem/capture.rs：BitBlt 屏幕区域抓取（A3.1 v1）
   ] } # Windows api，用于获取 lol 进程信息 / 提权重启 / 拉起登录客户端
-# A3.2 OCR 引擎（可选，见 [features].ocr-win）：Windows.Media.Ocr 直连
-windows = { version = "0.62", optional = true, features = [
-    "Foundation",
-    "Globalization",
-    "Graphics_Imaging",
-    "Media_Ocr",
-    "Storage_Streams",
-    "Win32_System_Com",
-] }
 winreg = "0.55" # 清理腾讯登录客户端注册的 LOL 开机自启项（command/launcher.rs）
