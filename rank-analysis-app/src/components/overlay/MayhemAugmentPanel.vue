@@ -136,16 +136,16 @@ function scoreText(c: MayhemAugmentCandidate | null): string {
   min-height: 74px;
 }
 .m3c--best {
-  border-color: #ffd76a99;
-  box-shadow: 0 0 0 1px #ffd76a33 inset;
+  border-color: color-mix(in srgb, var(--accent-gold) 60%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-gold) 20%, transparent) inset;
   animation: m3-best 1.6s ease-in-out infinite alternate;
 }
 @keyframes m3-best {
   from {
-    box-shadow: 0 0 0 1px #ffd76a22 inset;
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-gold) 13%, transparent) inset;
   }
   to {
-    box-shadow: 0 0 8px 1px #ffd76a44 inset;
+    box-shadow: 0 0 8px 1px color-mix(in srgb, var(--accent-gold) 27%, transparent) inset;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -176,7 +176,7 @@ function scoreText(c: MayhemAugmentCandidate | null): string {
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 10px;
+  font-size: var(--font-size-2xs);
   color: var(--text-secondary);
 }
 .m3c__rar {
@@ -184,28 +184,29 @@ function scoreText(c: MayhemAugmentCandidate | null): string {
   padding: 0 4px;
   border: 1px solid var(--border-strong);
 }
+/* 稀有度配色复用全局语义 token（棱彩=品牌金/黄金=深金/白银=次级文本），不用 hex 直写 */
 .rr-prismatic {
-  color: #ffd76a;
-  border-color: #ffd76a88;
+  color: var(--accent-gold);
+  border-color: color-mix(in srgb, var(--accent-gold) 53%, transparent);
 }
 .rr-gold {
-  color: #e8b563;
-  border-color: #e8b56366;
+  color: var(--accent-gold-deep);
+  border-color: color-mix(in srgb, var(--accent-gold-deep) 40%, transparent);
 }
 .rr-silver {
-  color: #b9c4d0;
-  border-color: #b9c4d066;
+  color: var(--text-secondary);
+  border-color: var(--border-strong);
 }
 .m3c__score {
   margin-left: auto;
-  color: #7fe08f;
+  color: var(--semantic-win-bright, var(--semantic-win));
 }
 .m3c__grade {
   font-style: normal;
-  color: #c9a2ff;
+  color: var(--info);
 }
 .m3c__reason {
-  font-size: 10px;
+  font-size: var(--font-size-2xs);
   line-height: 1.35;
   color: var(--text-tertiary);
   overflow: hidden;

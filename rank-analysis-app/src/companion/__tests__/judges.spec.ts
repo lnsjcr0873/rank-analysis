@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import {
   buildJudgeUserPrompt,
+  buildRosterText,
   computeBadges,
   judgePlayersFromGame,
   runJudges,
@@ -91,6 +92,24 @@ describe('三裁判', () => {
     const results = await runJudges(BASE, 'me', callLLM)
     expect(results.map(r => r.styleId)).toEqual(['sharp', 'data'])
     expect(callLLM).toHaveBeenCalledTimes(3)
+  })
+
+  it('R35-2：带强化名的 roster 进 prompt；无强化时不带强化段', () => {
+    const withAug = [player({ name: 'me', augmentNames: ['进化核心', '火力压制'] })]
+    expect(buildRosterText(withAug, 'me')).toContain('强化[进化核心 / 火力压制]')
+    expect(buildRosterText(BASE, 'me')).not.toContain('强化[')
+  })
+
+  it('R35-2：强化名只进文本展示，不影响徽章归属', () => {
+    const aug = [
+      player({ name: 'tank', damageDealt: 5_000, augmentNames: ['进化核心'] }),
+      player({ name: 'carry', damageDealt: 32_000 })
+    ]
+    const map = computeBadges(aug)
+    expect((map.get('carry') ?? []).map(b => b.key)).toContain('damage-king')
+    expect(map.get('tank') ?? []).not.toContainEqual(
+      expect.objectContaining({ key: 'damage-king' })
+    )
   })
 
   it('debug6：回调透传 styleId（调用方可拼风格维度缓存键防串味）', async () => {

@@ -195,12 +195,18 @@ export async function buildIntelContext(input: IntelContextInput): Promise<Intel
   }
 
   // 模式知识：按 modeKind + queueId 映射，最多 4 条。
-  // debug6：首行声明知识适用版本（模式规则随版本变，AI 引用时知晓版本边界）。
+  // 首行声明知识适用版本（模式规则随版本变）；源 md 首部的「适用版本」引用行
+  // 经构建脚本抽取为产物首条目 `[适用版本] ...`，此处再强调版本边界与过期禁用。
   const modeKey = input.modeKind ? modeKnowledgeKey(input.modeKind, input.queueId ?? 0) : null
   if (modeKey && knowledge) {
     const lines = (knowledge.modeKnowledge[modeKey] ?? []).slice(0, 4)
     ctx.modeKnowledgeLines =
-      lines.length > 0 ? [`（以下为知识库 ${knowledge.patch} 版本的模式规则）`, ...lines] : []
+      lines.length > 0
+        ? [
+            `（以下为知识库 ${knowledge.patch} 版本的模式规则，仅适用于该版本，过期规则不得作为建议依据）`,
+            ...lines
+          ]
+        : []
   }
 
   return ctx

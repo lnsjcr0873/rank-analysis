@@ -13,9 +13,12 @@ import type { MatchHistory } from './match'
 import type { OneGamePlayer, UserTag } from './analysis'
 import type { Rank, Summoner } from './player'
 
+/** 预组队标记：后端 marker_type 仅 success/warning/error/info 四档（见 command/session.rs）。 */
+export type PreGroupMarkerType = 'success' | 'warning' | 'error' | 'info' | ''
+
 export interface PreGroupMarkers {
   name: string
-  type: string
+  type: PreGroupMarkerType
 }
 
 export interface SessionSummoner {

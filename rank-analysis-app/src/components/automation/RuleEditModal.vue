@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { NModal, NCard, NInput, NSwitch, NButton, NSelect } from 'naive-ui'
+import { NModal, NCard, NInput, NSwitch, NButton, NSelect, type SelectOption } from 'naive-ui'
 import RuleConditionRow from './RuleConditionRow.vue'
 import type { PickRule, BanRule, RuleCondition, PickAction, BanAction } from '@renderer/types/rules'
 import type { championOption } from '@renderer/types/domain/champion'
@@ -33,6 +33,11 @@ const enabled = ref(true)
 const conditions = ref<RuleCondition[]>([])
 const targetChampion = ref<number | null>(null)
 const lock = ref(true) // pick mode only
+
+/** championOption → Naive SelectOption 显式适配（与 RuleConditionRow 同款，不做 as any 逃逸） */
+const championSelectOptions = computed<SelectOption[]>(() =>
+  props.championOptions.map(o => ({ ...o }))
+)
 
 watch(
   () => props.show,
@@ -159,7 +164,7 @@ function save() {
           :filter="filterChampionFunc"
           :render-label="renderLabel"
           :render-tag="renderSingleSelectTag"
-          :options="props.championOptions as any"
+          :options="championSelectOptions"
           placeholder="选择英雄"
         />
       </div>

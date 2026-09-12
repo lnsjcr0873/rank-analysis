@@ -31,6 +31,11 @@ export interface JudgePlayer {
   turretDamage: number
   heal: number
   goldEarned: number
+  /**
+   * 大乱斗强化名（R35-2：queueId 2400 / CHERRY 才有；其余模式 undefined）。
+   * 只进 prompt 文本展示，不参与徽章/雷达数值计算（防阵容方差污染评分）。
+   */
+  augmentNames?: string[]
 }
 
 export interface Badge {
@@ -206,13 +211,15 @@ export const JUDGE_STYLES: JudgeStyle[] = [
 
 /** 把参与者压成紧凑表格文本（控制 token）。 */
 export function buildRosterText(players: JudgePlayer[], me: string): string {
-  const rows = players.map(
-    p =>
+  const rows = players.map(p => {
+    const base =
       `- ${p.name === me ? '★' : ''}${p.name}（${p.championName ?? '?'}，${p.win ? '胜' : '负'}）` +
       ` KDA ${p.kills}/${p.deaths}/${p.assists}` +
       `，英雄伤害 ${p.damageDealt}，承伤 ${p.damageTaken}` +
       `，塔伤 ${p.turretDamage}，治疗 ${p.heal}，经济 ${p.goldEarned}`
-  )
+    // R35-2：大乱斗强化进 prompt——三裁判点评不再对"谁拿了什么"一无所知。
+    return p.augmentNames?.length ? `${base}，强化[${p.augmentNames.join(' / ')}]` : base
+  })
   return rows.join('\n')
 }
 

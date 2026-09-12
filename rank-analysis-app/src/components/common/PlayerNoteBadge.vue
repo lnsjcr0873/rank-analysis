@@ -206,8 +206,8 @@ async function onDelete() {
 
 .note-dot {
   display: block;
-  width: 9px;
-  height: 9px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   box-shadow: 0 0 0 2px var(--bg-base, transparent);
 }
@@ -325,8 +325,8 @@ async function onDelete() {
   font-weight: 600;
 }
 .note-swatch-dot {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   flex-shrink: 0;
 }

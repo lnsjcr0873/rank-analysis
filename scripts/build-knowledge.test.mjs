@@ -39,8 +39,11 @@ test('信号规则解析：字段齐备且合法', () => {
 
 test('markdown 条目按节抽取并带节名前缀', () => {
   const ranked = buildKnowledge().modeKnowledge.ranked
-  assert.ok(ranked.every(e => e.startsWith('[对局节奏]') || e.startsWith('[分路要点]') || e.startsWith('[心态与沟通]') || e.startsWith('[常见误区]')))
-  assert.ok(ranked.some(e => e.includes('小龙')), '排位知识应含小龙节奏条目')
+  // 首条目为版本声明（[适用版本]），其余为节条目
+  assert.ok(ranked[0].startsWith('[适用版本]'), '首条目应为版本声明')
+  const rest = ranked.slice(1)
+  assert.ok(rest.every(e => e.startsWith('[对局节奏]') || e.startsWith('[分路要点]') || e.startsWith('[心态与沟通]') || e.startsWith('[常见误区]')))
+  assert.ok(rest.some(e => e.includes('小龙')), '排位知识应含小龙节奏条目')
 })
 
 test('畸形规则应抛错（未知指标）', () => {

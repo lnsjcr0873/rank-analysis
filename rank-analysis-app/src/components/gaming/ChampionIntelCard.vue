@@ -529,8 +529,8 @@ watch(
 }
 .intel-build-spinner {
   display: inline-block;
-  width: 9px;
-  height: 9px;
+  width: 10px;
+  height: 10px;
   margin-left: 6px;
   border: 1.5px solid currentColor;
   border-top-color: transparent;

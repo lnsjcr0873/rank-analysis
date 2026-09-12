@@ -109,8 +109,8 @@
   --semantic-win-bright: #5ecfa4;
   --semantic-loss-bright: #e57878;
 
-  /* === 字阶补全（展示用大字与极小字） === */
-  --font-size-3xs: 9px;
+  /* === 字阶补全（展示用大字与极小字；3xs 已废除，统一用 2xs 起步） === */
+  --font-size-3xs: var(--font-size-2xs);
   --font-size-2xl: 24px;
   --font-size-3xl: 28px;
 

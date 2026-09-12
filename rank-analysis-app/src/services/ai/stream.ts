@@ -39,6 +39,53 @@ export interface AiProviderConfig {
   model: string
 }
 
+/**
+ * 规范化用户填写的 AI 端点（R35-1：防误填导致请求失败）。
+ *
+ * 规则（幂等，可反复调用）：
+ * - 空白输入 → 空串（= 用后端默认端点，不动）。
+ * - 缺 scheme 时自动补：回环/局域网/单标签主机名补 `http://`（Ollama 本地场景），
+ *   其余补 `https://`。
+ * - scheme/host 小写化，path 保持原大小写；去掉多余尾斜杠（保留 `/v1` 这类路径）。
+ * - 非 http(s) scheme（如误填 `ftp://`）原样透传，由后端 SSRF 端点策略拒绝，
+ *   前端不越权拦截。
+ * - 无 host（如只输了 `http://`）→ 空串，避免存垃圾。
+ */
+export function normalizeAiBaseUrl(raw: string): string {
+  const trimmed = raw.trim()
+  if (!trimmed) return ''
+  if (/\s/.test(trimmed)) return trimmed
+  const withScheme = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(trimmed)
+    ? trimmed
+    : `${looksLocalHost(trimmed) ? 'http' : 'https'}://${trimmed}`
+  let url: URL
+  try {
+    url = new URL(withScheme)
+  } catch {
+    return trimmed
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return trimmed
+  if (!url.hostname) return ''
+  const path = url.pathname.replace(/\/+$/, '')
+  const normalized = `${url.protocol}//${url.host}${path}${url.search}${url.hash}`
+  // URL 会把裸 host 补成 `https://host/`，尾斜杠已由 path 去掉；端口默认化
+  //（如 :443）由 URL 自行处理，保持即可。
+  return normalized
+}
+
+/** 粗判本地地址：回环 / RFC1918 / .local / 无点单标签主机名 → 默认 http。 */
+function looksLocalHost(raw: string): boolean {
+  const host = raw.split('/')[0].replace(/^\[/, '').split(']')[0].split(':')[0].toLowerCase()
+  if (!host || host === 'localhost' || host === '::1') return true
+  if (/^127\./.test(host)) return true
+  if (/^10\./.test(host) || /^192\.168\./.test(host)) return true
+  const m172 = /^172\.(\d+)\./.exec(host)
+  if (m172 && Number(m172[1]) >= 16 && Number(m172[1]) <= 31) return true
+  if (host.endsWith('.local')) return true
+  if (!host.includes('.')) return true
+  return false
+}
+
 /** 从持久化配置读取 AI 服务商参数（键缺失一律空值，不抛错）。 */
 export async function getAiProviderConfig(): Promise<AiProviderConfig> {
   const [provider, baseUrl, model, aiKey, dashscopeKey] = await Promise.all([
@@ -52,7 +99,8 @@ export async function getAiProviderConfig(): Promise<AiProviderConfig> {
     provider === 'openai' || provider === 'ollama' ? provider : 'dashscope'
   return {
     provider: kind,
-    baseUrl: baseUrl || '',
+    // 读侧也规范一次：兼容规范化上线前已落盘的脏值（写侧见 General.vue）。
+    baseUrl: normalizeAiBaseUrl(baseUrl || ''),
     apiKey: kind === 'dashscope' ? dashscopeKey || '' : aiKey || '',
     model: model || ''
   }

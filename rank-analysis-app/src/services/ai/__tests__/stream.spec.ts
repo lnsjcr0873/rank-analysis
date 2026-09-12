@@ -4,6 +4,7 @@ import {
   DEFAULT_SYSTEM_PROMPT,
   getAiProviderConfig,
   mapStreamEvent,
+  normalizeAiBaseUrl,
   requestAIContent,
   requestAIContentStream
 } from '../stream'
@@ -216,6 +217,42 @@ describe('getAiProviderConfig（D-P4 服务商配置归一）', () => {
       apiKey: '',
       model: ''
     })
+  })
+})
+
+describe('normalizeAiBaseUrl（R35-1 端点规范化）', () => {
+  it('空白输入回空串（= 用后端默认端点）', () => {
+    expect(normalizeAiBaseUrl('')).toBe('')
+    expect(normalizeAiBaseUrl('   ')).toBe('')
+  })
+
+  it('裸域名自动补 https', () => {
+    expect(normalizeAiBaseUrl('api.deepseek.com/v1')).toBe('https://api.deepseek.com/v1')
+  })
+
+  it('本地地址自动补 http（含回环/RFC1918/localhost/单标签）', () => {
+    expect(normalizeAiBaseUrl('127.0.0.1:11434')).toBe('http://127.0.0.1:11434')
+    expect(normalizeAiBaseUrl('192.168.1.5:11434')).toBe('http://192.168.1.5:11434')
+    expect(normalizeAiBaseUrl('localhost:11434')).toBe('http://localhost:11434')
+    expect(normalizeAiBaseUrl('ollama:11434')).toBe('http://ollama:11434')
+  })
+
+  it('多余尾斜杠去掉，路径保留', () => {
+    expect(normalizeAiBaseUrl('https://api.deepseek.com/v1/')).toBe('https://api.deepseek.com/v1')
+    expect(normalizeAiBaseUrl('https://x.dev///')).toBe('https://x.dev')
+  })
+
+  it('非 http(s) scheme 原样透传（由后端 SSRF 策略拒绝，前端不越权）', () => {
+    expect(normalizeAiBaseUrl('ftp://x.dev/v1')).toBe('ftp://x.dev/v1')
+  })
+
+  it('含空白的非法输入原样返回（不制造看似合法的 URL）', () => {
+    expect(normalizeAiBaseUrl('not a url')).toBe('not a url')
+  })
+
+  it('幂等：规范后输入不再变化', () => {
+    const once = normalizeAiBaseUrl('api.deepseek.com/v1/')
+    expect(normalizeAiBaseUrl(once)).toBe(once)
   })
 })
 

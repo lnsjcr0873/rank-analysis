@@ -308,7 +308,11 @@ import {
   sumAiUsage,
   type AiUsageEntry
 } from '@renderer/services/ai/shared/usage'
-import { getAiProviderConfig, type AiProviderKind } from '@renderer/services/ai/stream'
+import {
+  getAiProviderConfig,
+  normalizeAiBaseUrl,
+  type AiProviderKind
+} from '@renderer/services/ai/stream'
 import {
   getKnowledgeStatus,
   forceUpdateKnowledge,
@@ -668,7 +672,8 @@ const handleProviderUpdate = async (value: AiProviderKind) => {
     await putConfigByIpc(CONFIG_KEYS.aiProvider, value)
     // 服务商切换时一并持久化当前可见配置，避免 v-if 隐藏未 blur 的输入被丢弃。
     // debug6：掩码态跳过 Key 持久化（否则掩码串覆盖真实 Key）。
-    await putConfigByIpc(CONFIG_KEYS.aiBaseUrl, aiBaseUrl.value.trim())
+    // R35-1：落盘前规范化（补 scheme/去尾斜杠），与读侧 getAiProviderConfig 同口径。
+    await putConfigByIpc(CONFIG_KEYS.aiBaseUrl, normalizeAiBaseUrl(aiBaseUrl.value))
     await putConfigByIpc(CONFIG_KEYS.aiModel, aiModel.value.trim())
     if (!isMaskedKey(aiApiKey.value)) {
       await putConfigByIpc(CONFIG_KEYS.aiApiKey, aiApiKey.value.trim())
@@ -681,7 +686,10 @@ const handleProviderUpdate = async (value: AiProviderKind) => {
 
 const handleBaseUrlUpdate = async () => {
   try {
-    await putConfigByIpc(CONFIG_KEYS.aiBaseUrl, aiBaseUrl.value.trim())
+    // R35-1：落盘前规范化；规范后若与输入不一致，回写输入框让用户看见最终值。
+    const normalized = normalizeAiBaseUrl(aiBaseUrl.value)
+    aiBaseUrl.value = normalized
+    await putConfigByIpc(CONFIG_KEYS.aiBaseUrl, normalized)
     message.success('设置已保存')
   } catch (e) {
     message.error('保存失败')

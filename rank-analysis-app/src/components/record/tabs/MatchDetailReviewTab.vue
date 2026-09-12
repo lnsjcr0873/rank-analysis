@@ -26,6 +26,9 @@ const message = useMessage()
 const injectedCtx = inject(matchDetailContextKey)
 if (!injectedCtx) throw new Error('ReviewTab 必须在 MatchDetailInline 内使用')
 const { players } = injectedCtx
+/** 海克斯强化 id → 展示名（R35-2：与 BuildsTab 同口径，PERK_CACHE 含 cherry-augments） */
+const augmentNameOf = (id: number): string =>
+  id > 0 ? (injectedCtx.assets.detailOf('perk', id)?.name ?? `强化 #${id}`) : ''
 
 const SIZE = 260
 const CX = 130
@@ -35,20 +38,25 @@ const R = 96
 /** DetailPlayer → JudgePlayer（评审专用最小映射） */
 const detailPlayers = computed(() => players.detailPlayers.value)
 const judgePlayers = computed<JudgePlayer[]>(() =>
-  detailPlayers.value.map(p => ({
-    name: p.displayName,
-    championName: getChampionName(p.championId) || String(p.championId),
-    team: p.teamId,
-    win: p.win,
-    kills: p.stats.kills,
-    deaths: p.stats.deaths,
-    assists: p.stats.assists,
-    damageDealt: p.stats.totalDamageDealtToChampions,
-    damageTaken: p.stats.totalDamageTaken,
-    turretDamage: p.stats.damageDealtToTurrets ?? 0,
-    heal: p.stats.totalHeal,
-    goldEarned: p.stats.goldEarned
-  }))
+  detailPlayers.value.map(p => {
+    // R35-2：大乱斗强化名进评审输入——非 augment 模式时为空，不污染峡谷点评。
+    const augmentIds = injectedCtx.usesAugments.value ? injectedCtx.playerAugmentIds(p.stats) : []
+    return {
+      name: p.displayName,
+      championName: getChampionName(p.championId) || String(p.championId),
+      team: p.teamId,
+      win: p.win,
+      kills: p.stats.kills,
+      deaths: p.stats.deaths,
+      assists: p.stats.assists,
+      damageDealt: p.stats.totalDamageDealtToChampions,
+      damageTaken: p.stats.totalDamageTaken,
+      turretDamage: p.stats.damageDealtToTurrets ?? 0,
+      heal: p.stats.totalHeal,
+      goldEarned: p.stats.goldEarned,
+      augmentNames: augmentIds.length ? augmentIds.map(augmentNameOf).filter(Boolean) : undefined
+    }
+  })
 )
 
 /** 当前查看的玩家（默认我；点击头像/名字切换） */

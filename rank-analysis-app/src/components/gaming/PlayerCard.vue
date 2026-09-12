@@ -165,7 +165,7 @@
             <div class="profile-tags">
               <n-tooltip v-if="sessionSummoner.preGroupMarkers?.name" trigger="hover">
                 <template #trigger>
-                  <n-tag size="small" :type="sessionSummoner.preGroupMarkers.type as any">
+                  <n-tag size="small" :type="preGroupTagType">
                     {{ sessionSummoner.preGroupMarkers.name }}
                   </n-tag>
                 </template>
@@ -245,7 +245,8 @@ import {
   NEllipsis,
   NPopover,
   NTag,
-  NTooltip
+  NTooltip,
+  type TagProps
 } from 'naive-ui'
 import { CircleHelp, Copy } from 'lucide-vue-next'
 import MettingPlayersCard from './MettingPlayersCard.vue'
@@ -328,6 +329,12 @@ const meetCount = computed(() => {
 const hasInfoOverflow = computed(
   () => meetCount.value > 0 || (isAramMode.value && balanceTags.value.length > 0)
 )
+
+/** 预组队 n-tag type：后端仅 success/warning/error/info 四档，空串回退 info（不做 as any 逃逸） */
+const preGroupTagType = computed<NonNullable<TagProps['type']>>(() => {
+  const t = props.sessionSummoner.preGroupMarkers?.type
+  return t === 'success' || t === 'warning' || t === 'error' || t === 'info' ? t : 'info'
+})
 
 /** n-card content-style：用 token 控制内边距（P0 收紧为 --space-4 让 4 场 1 屏装下） */
 const cardContentStyle = 'padding: var(--space-4);'

@@ -13,6 +13,18 @@ export interface EmberFieldOptions {
   cold?: Ref<boolean>
 }
 
+/**
+ * 粒子目标数（R35-3：纯函数抽出便于单测；语义与旧闭包 targetCount 一致）。
+ *
+ * @param width - 画布宽 px
+ * @param height - 画布高 px
+ * @param cold - 冷却态（离线减量 45%，下限 10；常态下限 18）
+ */
+export function emberCount(width: number, height: number, cold: boolean): number {
+  const base = Math.round((width * height) / 16000)
+  return cold ? Math.max(10, Math.round(base * 0.45)) : Math.max(18, base)
+}
+
 interface Particle {
   x: number
   y: number
@@ -63,8 +75,7 @@ export function useEmberField(
   }
 
   function targetCount() {
-    const base = Math.round((width * height) / 16000)
-    return cold?.value ? Math.max(10, Math.round(base * 0.45)) : Math.max(18, base)
+    return emberCount(width, height, cold?.value ?? false)
   }
 
   function seed() {

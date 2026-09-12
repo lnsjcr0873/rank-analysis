@@ -29,12 +29,19 @@ const KNOWN_OPS = new Set(['lt', 'lte', 'gt', 'gte', 'eq'])
 const KNOWN_SCOPES = new Set(['teammate', 'enemy', 'self'])
 const KNOWN_SEVERITIES = new Set(['info', 'warn', 'danger'])
 
-/** 解析 modes/*.md / champions/*.md：`- ` 开头的条目归属上一个 `## 节` */
+/** 解析 modes/*.md / champions/*.md：`- ` 开头的条目归属上一个 `## 节`。
+ * 首部的 `> 适用版本：` 引用行会被抽取为 `[适用版本] ...` 首条目，
+ * 让编译产物携带版本区间（AI 引用时知晓版本边界）。 */
 function parseMarkdown(content) {
   const entries = []
   let currentSection = ''
   for (const raw of content.split('\n')) {
     const line = raw.trimEnd()
+    const versionMatch = line.match(/^>\s*适用版本：(.+)$/)
+    if (versionMatch) {
+      entries.unshift(`[适用版本] ${versionMatch[1].trim()}`)
+      continue
+    }
     const sectionMatch = line.match(/^##\s+(.+)$/)
     if (sectionMatch) {
       currentSection = sectionMatch[1].trim()
@@ -50,8 +57,11 @@ function parseMarkdown(content) {
 
 function parseModeKnowledge() {
   const result = {}
+  // mayhem-spike-lcu.md 是探测记录（非 AI 消费的模式知识），跳过不进产物。
+  const SKIP = new Set(['mayhem-spike-lcu'])
   for (const file of fs.readdirSync(path.join(SRC_DIR, 'modes')).filter(f => f.endsWith('.md'))) {
     const key = path.basename(file, '.md')
+    if (SKIP.has(key)) continue
     const content = fs.readFileSync(path.join(SRC_DIR, 'modes', file), 'utf8')
     result[key] = parseMarkdown(content)
   }

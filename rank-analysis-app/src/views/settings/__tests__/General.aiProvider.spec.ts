@@ -144,6 +144,22 @@ describe('General.vue AI 服务商设置区', () => {
     expect(mockPut).toHaveBeenCalledWith(CONFIG_KEYS.aiBaseUrl, 'http://192.168.1.5:11434')
   })
 
+  it('R35-1：裸域名 blur 时规范化落盘并回写输入框', async () => {
+    const w = await mountGeneral()
+
+    await findProviderSelect(w).setValue('openai')
+    await new Promise(r => setTimeout(r, 0))
+    await w.vm.$nextTick()
+
+    const addr = w.find('input[placeholder*="https://api.deepseek.com/v1"]')
+    await addr.setValue('api.deepseek.com/v1/')
+    await addr.trigger('blur')
+    await new Promise(r => setTimeout(r, 0))
+
+    expect(mockPut).toHaveBeenCalledWith(CONFIG_KEYS.aiBaseUrl, 'https://api.deepseek.com/v1')
+    expect((addr.element as HTMLInputElement).value).toBe('https://api.deepseek.com/v1')
+  })
+
   it('测试连接：dashscope 默认态提交表单所见配置（含未保存的 key）', async () => {
     mockInvoke.mockResolvedValue({ model: 'qwen-flash', totalTokens: 8 })
     const w = await mountGeneral()

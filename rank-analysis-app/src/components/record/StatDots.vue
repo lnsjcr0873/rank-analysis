@@ -84,7 +84,7 @@ const iconStyle = computed<CSSProperties>(() => ({
 }
 
 .stat-dots-short-label {
-  font-size: var(--font-size-3xs);
+  font-size: var(--font-size-2xs);
   line-height: 1;
   font-weight: 700;
 }
