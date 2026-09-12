@@ -1086,7 +1086,7 @@ fn normalize_asset_text(raw: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
     fn parse(raw: &str) -> CherryAugment {
         serde_json::from_str(raw).expect("valid CherryAugment JSON")
@@ -1128,18 +1128,26 @@ mod tests {
     async fn run_once_if_empty_reruns_after_cache_emptied() {
         // debug6：init 后缓存又被清空（如 LCU 重启）时，下一次调用应重新触发，
         // 而非被旧状态锁死——冷却由 ensure_caches_ready 层负责，此处只看空/非空。
-        let ready = AtomicUsize::new(0);
+        // 注：is_empty 必须在 run_init 里翻转为“非空”，因为助手自身不维护状态；
+        // 生产侧由 init_once 填充缓存承担此职责，单测里用 AtomicBool 如实模拟。
+        let empty = AtomicBool::new(true);
+        let init_count = AtomicUsize::new(0);
         let lock = tokio::sync::Mutex::new(());
-        let is_empty = || ready.load(Ordering::SeqCst) == 0;
+        let is_empty = || empty.load(Ordering::SeqCst);
         let run_init = || async {
-            ready.fetch_add(1, Ordering::SeqCst);
+            init_count.fetch_add(1, Ordering::SeqCst);
+            empty.store(false, Ordering::SeqCst); // 模拟 init 填好缓存
         };
         let call = || run_once_if_empty(is_empty, &lock, run_init);
         call().await;
-        assert_eq!(ready.load(Ordering::SeqCst), 1);
-        ready.store(0, Ordering::SeqCst); // 模拟缓存被清空
+        assert_eq!(init_count.load(Ordering::SeqCst), 1);
+        empty.store(true, Ordering::SeqCst); // 模拟缓存被清空
         call().await;
-        assert_eq!(ready.load(Ordering::SeqCst), 2, "清空后应重新触发 init");
+        assert_eq!(
+            init_count.load(Ordering::SeqCst),
+            2,
+            "清空后应重新触发 init"
+        );
     }
 
     #[test]
