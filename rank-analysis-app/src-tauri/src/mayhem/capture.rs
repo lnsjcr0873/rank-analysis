@@ -189,6 +189,55 @@ pub fn slot_band_rects(screen: (i32, i32)) -> [Rect; 3] {
     out
 }
 
+/// 标题行 TextROI 在 band 内的内收比例（实测截图口径）。
+///
+/// 三选一卡是「图标顶部居中 → 标题居中单行 → 标签 → 描述」纵向排布，
+/// 标题行只占 band 顶部约 2/3 高度、左右发光边框各占约 15% 宽度。
+/// 检测继续用全 band（`luma_stddev`），OCR 只吃此 ROI 再 2x 放大。
+/// band 1080p 下约 326×59 → TextROI 约 228×38 → 2x 后约 456×76。
+pub fn slot_text_roi(band: Rect) -> Rect {
+    let ix = (band.w as f32 * 0.15).round() as i32;
+    let iw = (band.w as f32 * 0.70).round() as i32;
+    let ih = (band.h as f32 * 0.65).round() as i32;
+    let x = band.x.saturating_add(ix);
+    Rect {
+        x,
+        y: band.y,
+        w: iw.clamp(1, band.w.saturating_sub(ix).max(1)),
+        h: ih.clamp(1, band.h.max(1)),
+    }
+}
+
+/// RGBA 最近邻整数倍放大（纯函数，OCR 前置）。
+///
+/// PP-OCRv5 rec 希望行高 ≥ 48px；TextROI 高约 38px 时 2x 刚好。
+/// 最近邻无滤波开销，比双线性快且不模糊笔画边缘。
+pub fn upscale_rgba_nearest(rgba: &[u8], w: i32, h: i32, factor: u32) -> Vec<u8> {
+    let factor = factor.max(1) as usize;
+    let (w, h) = (w.max(0) as usize, h.max(0) as usize);
+    if w == 0 || h == 0 || rgba.len() < w * h * 4 {
+        return Vec::new();
+    }
+    if factor == 1 {
+        return rgba[..w * h * 4].to_vec();
+    }
+    let (ow, oh) = (w * factor, h * factor);
+    let mut out = vec![0u8; ow * oh * 4];
+    for y in 0..h {
+        for x in 0..w {
+            let src = &rgba[(y * w + x) * 4..(y * w + x) * 4 + 4];
+            for dy in 0..factor {
+                let dst_row = (y * factor + dy) * ow + x * factor;
+                for dx in 0..factor {
+                    let dst = (dst_row + dx) * 4;
+                    out[dst..dst + 4].copy_from_slice(src);
+                }
+            }
+        }
+    }
+    out
+}
+
 /// 把 RGBA 缓冲编码为 32 位无压缩 BMP（自上而下视觉、文件内自下而上存储）。
 ///
 /// 用途：A3 校准——把三张卡的标题带实际截取内容导出给前端预览，
@@ -415,6 +464,49 @@ mod geometry_tests {
             h: 10,
         };
         assert!(slice_union_sub(&full, union_rect, sub).is_empty());
+    }
+
+    #[test]
+    fn text_roi_should_inset_band_top_and_clamp() {
+        // 1080p band 约 326×59：收边后约 228×38，位于顶部
+        let band = Rect {
+            x: 100,
+            y: 367,
+            w: 326,
+            h: 59,
+        };
+        let t = slot_text_roi(band);
+        assert_eq!(t.y, band.y);
+        assert!((t.w as f32 / band.w as f32 - 0.70).abs() < 0.02);
+        assert!((t.h as f32 / band.h as f32 - 0.65).abs() < 0.02);
+        assert!(t.x >= band.x && t.x + t.w <= band.x + band.w);
+        // 退化几何不 panic 不越界
+        let tiny = slot_text_roi(Rect {
+            x: 0,
+            y: 0,
+            w: 1,
+            h: 1,
+        });
+        assert!(tiny.w >= 1 && tiny.h >= 1);
+    }
+
+    #[test]
+    fn upscale_nearest_should_replicate_pixels() {
+        // 2×1 图：红，绿 → 2x 后 4×2，每源像素占 2×2 块
+        let rgba: Vec<u8> = vec![255, 0, 0, 255, 0, 255, 0, 255];
+        let out = upscale_rgba_nearest(&rgba, 2, 1, 2);
+        assert_eq!(out.len(), 4 * 2 * 4);
+        // 顶行：红红绿绿
+        assert_eq!(&out[0..4], &[255, 0, 0, 255]);
+        assert_eq!(&out[4..8], &[255, 0, 0, 255]);
+        assert_eq!(&out[8..12], &[0, 255, 0, 255]);
+        assert_eq!(&out[12..16], &[0, 255, 0, 255]);
+        // 底行与顶行相同
+        assert_eq!(&out[16..32], &out[0..16]);
+        // 退化输入返回空而非 panic
+        assert!(upscale_rgba_nearest(&[], 0, 0, 2).is_empty());
+        // factor=1 原样返回
+        assert_eq!(upscale_rgba_nearest(&rgba, 2, 1, 1), rgba);
     }
 
     #[test]

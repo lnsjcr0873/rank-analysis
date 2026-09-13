@@ -604,6 +604,8 @@ pub async fn mayhem_assist_tick(
             }));
         }
 
+        // OCR 只吃 TextROI（标题行）2x 放大图：排除发光边框/描述小字，
+        // 行高 38px → 76px 喂 PP-OCRv5 rec。检测仍用全 band（上文 luma）。
         let mut texts: [Option<String>; 3] = [None, None, None];
         for (i, r) in rects.iter().enumerate() {
             if !slot_active[i] {
@@ -612,7 +614,30 @@ pub async fn mayhem_assist_tick(
             let Some(sub_rgba) = subs[i].as_ref() else {
                 continue;
             };
-            match crate::mayhem::engine_rapid::recognize_rgba(sub_rgba, r.w, r.h).await {
+            let text_rect = crate::mayhem::capture::slot_text_roi(*r);
+            let ox = (text_rect.x - r.x).clamp(0, r.w) as usize;
+            let sw = (text_rect.w.max(1) as usize).min((r.w as usize).saturating_sub(ox));
+            let sh = (text_rect.h.max(1) as usize).min(r.h as usize);
+            if sw == 0 || sh == 0 {
+                log::warn!("[assist] 卡位 {i} TextROI 为空，跳过");
+                continue;
+            }
+            let stride = r.w.max(1) as usize * 4;
+            let mut roi = Vec::with_capacity(sw * sh * 4);
+            for row in 0..sh {
+                let base = row * stride + ox * 4;
+                if base + sw * 4 > sub_rgba.len() {
+                    break;
+                }
+                roi.extend_from_slice(&sub_rgba[base..base + sw * 4]);
+            }
+            let big = crate::mayhem::capture::upscale_rgba_nearest(&roi, sw as i32, sh as i32, 2);
+            if big.is_empty() {
+                log::warn!("[assist] 卡位 {i} TextROI 放大失败，跳过");
+                continue;
+            }
+            let (ow, oh) = (sw as i32 * 2, sh as i32 * 2);
+            match crate::mayhem::engine_rapid::recognize_rgba(&big, ow, oh).await {
                 Ok(lines) => {
                     let joined = lines.join(" ");
                     if !joined.trim().is_empty() {
