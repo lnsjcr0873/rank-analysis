@@ -217,6 +217,21 @@ static CURRENT_SESSION_TASK: std::sync::LazyLock<
 /// 4. `session-complete`: 完整数据（最终事件）
 /// 5. `session-error`: 错误事件（发生错误时）
 #[tauri::command]
+async fn run_session_task(app_handle: AppHandle, seq: u64) {
+    match process_session_data(app_handle.clone(), seq).await {
+        Ok(_) => {
+            log::info!("Session data processing completed (seq {})", seq);
+        }
+        Err(e) => {
+            log::error!("Failed to process session data: {}", e);
+            // 发送错误事件（旧任务的错误同样不打扰前端）
+            if is_latest_task(&SESSION_TASK_SEQ, seq) {
+                let _ = app_handle.emit("session-error", e);
+            }
+        }
+    }
+}
+
 pub async fn get_session_data(app_handle: AppHandle) -> Result<(), String> {
     log::info!("get_session_data called");
 
@@ -231,20 +246,7 @@ pub async fn get_session_data(app_handle: AppHandle) -> Result<(), String> {
     }
 
     // 在后台线程处理，避免阻塞（tokio::spawn 非异步等待，锁只持有极短同步窗口）
-    let handle = tokio::spawn(async move {
-        match process_session_data(app_handle.clone(), seq).await {
-            Ok(_) => {
-                log::info!("Session data processing completed (seq {})", seq);
-            }
-            Err(e) => {
-                log::error!("Failed to process session data: {}", e);
-                // 发送错误事件（旧任务的错误同样不打扰前端）
-                if is_latest_task(&SESSION_TASK_SEQ, seq) {
-                    let _ = app_handle.emit("session-error", e);
-                }
-            }
-        }
-    });
+    let handle = tokio::spawn(Box::pin(run_session_task(app_handle, seq)));
 
     *lock = Some(handle.abort_handle());
 
