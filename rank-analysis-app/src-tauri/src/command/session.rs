@@ -963,7 +963,7 @@ async fn process_subteam_parallel(
             }
 
             let user_tag = match
-                crate::command::user_tag::get_user_tag_by_puuid(&puuid, mode, champion_id).await
+                crate::command::user_tag::get_user_tag_by_puuid(puuid.clone(), mode, champion_id).await
             {
                 Ok(tag) => tag,
                 Err(e) => {

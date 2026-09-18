@@ -571,16 +571,22 @@ pub async fn apply_config_snapshot_map(
 ///     Err(e) => eprintln!("Error: {}", e),
 /// }
 /// ```
-pub async fn get_config(key: &str) -> Result<Value, String> {
-    match get_cache().await.get(key).await {
-        Some(v) => {
-            log::debug!("Config get: {} = {:?}", key, v);
-            Ok(v)
-        }
-        None => {
-            let zero_val = zero_value_for_key(key);
-            log::debug!("Config get (default): {} = {:?}", key, zero_val);
-            Ok(zero_val)
+pub fn get_config(
+    key: &str,
+) -> impl std::future::Future<Output = Result<Value, String>> + Send + 'static {
+    let key = key.to_string();
+    async move {
+        let cache = get_cache().await.clone();
+        match cache.get(&key).await {
+            Some(v) => {
+                log::debug!("Config get: {} = {:?}", key, v);
+                Ok(v)
+            }
+            None => {
+                let zero_val = zero_value_for_key(&key);
+                log::debug!("Config get (default): {} = {:?}", key, zero_val);
+                Ok(zero_val)
+            }
         }
     }
 }

@@ -248,7 +248,7 @@ pub struct UserTag {
 pub async fn get_user_tag_by_name(name: &str, mode: i32) -> Result<UserTag, String> {
     let summoner = Summoner::get_summoner_by_name(name).await?;
     // 按名称查询没有选人上下文，当前英雄未知，传 None
-    get_user_tag_by_puuid(&summoner.puuid, mode, None).await
+    get_user_tag_by_puuid(summoner.puuid, mode, None).await
 }
 
 /// 根据 PUUID 获取用户标签（核心函数）。
@@ -274,12 +274,12 @@ pub async fn get_user_tag_by_name(name: &str, mode: i32) -> Result<UserTag, Stri
 /// 6. 计算好友/纠纷统计
 #[tauri::command]
 pub async fn get_user_tag_by_puuid(
-    puuid: &str,
+    puuid: String,
     mode: i32,
     champion_id: Option<i32>,
 ) -> Result<UserTag, String> {
     log::info!("get_user_tag_by_puuid: {}, mode: {}", puuid, mode);
-    let mut match_history = MatchHistory::get_match_history_by_puuid(puuid, 0, 19).await?;
+    let mut match_history = MatchHistory::get_match_history_by_puuid(&puuid, 0, 19).await?;
     match_history.enrich_game_detail().await?;
     match_history.calculate()?; // damageShare 依赖预计算的伤害占比
 
@@ -292,32 +292,6 @@ pub async fn get_user_tag_by_puuid(
             tags.push(tag);
         }
     }
-
-    // The following old hardcoded tag logic is replaced by the config system above.
-    // Keeping this comment for reference.
-    /*
-    // 判断是否是连胜
-    let streak_tag = is_streak_tag(&match_history);
-    if !streak_tag.tag_name.is_empty() {
-        tags.push(streak_tag);
-    }
-
-    // 判断是否连败
-    let losing_tag = is_losing_tag(&match_history);
-    if !losing_tag.tag_name.is_empty() {
-        tags.push(losing_tag);
-    }
-
-    // 判断是否是娱乐玩家
-    let casual_tag = is_casual_tag(&match_history);
-    if !casual_tag.tag_name.is_empty() {
-        tags.push(casual_tag);
-    }
-
-    // 判断是否是特殊玩家
-    let special_player_tags = is_special_player_tag(&match_history);
-    tags.extend(special_player_tags);
-    */
 
     // 获取该玩家局内的所有玩家
     let one_game_player_map = get_one_game_players(&match_history);
@@ -349,7 +323,10 @@ pub async fn get_user_tag_by_puuid(
 
     let select_mode_cn = crate::lcu::api::game_queue::mode_display_name(mode);
 
-    let mut user_tag = UserTag {
+    let (friends, disputes) = partition_friends_and_disputes(&one_game_player_map, &puuid);
+    let friend_and_dispute = calculate_friend_and_dispute(friends, disputes).await;
+
+    let user_tag = UserTag {
         recent_data: RecentData {
             kda,
             kills,
@@ -367,14 +344,11 @@ pub async fn get_user_tag_by_puuid(
             samples,
             average_cs_per_min,
             average_vision_score,
-            friend_and_dispute: FriendAndDispute::default(),
-            one_game_players_map: Some(one_game_player_map.clone()),
+            friend_and_dispute,
+            one_game_players_map: Some(one_game_player_map),
         },
         tag: tags,
     };
-
-    // 计算朋友组队胜率和冤家组队胜率
-    count_friend_and_dispute(&one_game_player_map, &mut user_tag.recent_data, puuid).await;
 
     Ok(user_tag)
 }
@@ -458,17 +432,11 @@ fn get_one_game_players(match_history: &MatchHistory) -> HashMap<String, Vec<One
 ///
 /// - `one_game_players_map`: 同场玩家映射
 /// - `recent_data`: 输出数据结构
-/// - `my_puuid`: 当前用户的 PUUID（用于排除自己）
-///
-/// # 判定逻辑
-///
-/// - 好友：同场次数 >= 3 且所有场次都是同队
-/// - 冤家：同场次数 >= 3 且所有场次都是对战
-async fn count_friend_and_dispute(
+/// 划分同场玩家中的好友（全同队）与冤家（含敌对）。
+fn partition_friends_and_disputes(
     one_game_players_map: &HashMap<String, Vec<OneGamePlayer>>,
-    recent_data: &mut RecentData,
     my_puuid: &str,
-) {
+) -> (Vec<Vec<OneGamePlayer>>, Vec<Vec<OneGamePlayer>>) {
     let mut friends_arr = Vec::new();
     let mut dispute_arr = Vec::new();
     let friend_or_dispute_limit = 3;
@@ -481,13 +449,19 @@ async fn count_friend_and_dispute(
         let is_my_friend = games.iter().all(|game| game.is_my_team);
 
         if is_my_friend {
-            friends_arr.push(games);
+            friends_arr.push(games.clone());
         } else {
-            dispute_arr.push(games);
+            dispute_arr.push(games.clone());
         }
     }
+    (friends_arr, dispute_arr)
+}
 
-    // 计算朋友组队胜率
+/// 计算好友和纠纷统计数据。
+async fn calculate_friend_and_dispute(
+    friends_arr: Vec<Vec<OneGamePlayer>>,
+    dispute_arr: Vec<Vec<OneGamePlayer>>,
+) -> FriendAndDispute {
     let mut friends_summoner = Vec::new();
     let mut friends_wins = 0;
     let mut friends_loss = 0;
@@ -497,7 +471,7 @@ async fn count_friend_and_dispute(
             let mut wins = 0;
             let mut losses = 0;
 
-            for game in games {
+            for game in &games {
                 if game.win {
                     wins += 1;
                     friends_wins += 1;
@@ -518,7 +492,7 @@ async fn count_friend_and_dispute(
                 wins,
                 losses,
                 summoner,
-                one_game_player: games.clone(),
+                one_game_player: games,
             });
         }
     }
@@ -529,7 +503,6 @@ async fn count_friend_and_dispute(
         0
     };
 
-    // 计算冤家组队胜率
     let mut dispute_summoner = Vec::new();
     let mut dispute_wins = 0;
     let mut dispute_loss = 0;
@@ -539,7 +512,7 @@ async fn count_friend_and_dispute(
             let mut wins = 0;
             let mut losses = 0;
 
-            for game in games {
+            for game in &games {
                 if game.is_my_team {
                     continue; // 跳过是队友的对局
                 }
@@ -564,7 +537,7 @@ async fn count_friend_and_dispute(
                 wins,
                 losses,
                 summoner,
-                one_game_player: games.clone(),
+                one_game_player: games,
             });
         }
     }
@@ -575,14 +548,12 @@ async fn count_friend_and_dispute(
         0
     };
 
-    recent_data.friend_and_dispute.friends_rate = friends_rate;
-    recent_data.friend_and_dispute.dispute_rate = dispute_rate;
-
-    // 只取前5个，前端无法展示太多
-    recent_data.friend_and_dispute.friends_summoner =
-        friends_summoner.into_iter().take(5).collect();
-    recent_data.friend_and_dispute.dispute_summoner =
-        dispute_summoner.into_iter().take(5).collect();
+    FriendAndDispute {
+        friends_rate,
+        dispute_rate,
+        friends_summoner: friends_summoner.into_iter().take(5).collect(),
+        dispute_summoner: dispute_summoner.into_iter().take(5).collect(),
+    }
 }
 
 /// 计算经济、参团率和伤害数据。
