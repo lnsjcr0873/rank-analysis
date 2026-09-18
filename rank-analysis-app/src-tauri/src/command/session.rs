@@ -487,7 +487,7 @@ async fn process_session_data(app_handle: AppHandle, seq: u64) -> Result<(), Str
 
     let mode = session.game_data.queue.id;
 
-    push_basic_info(&mut session_data, &app_handle, seq).await?;
+    push_basic_info(&mut session_data, app_handle.clone(), seq).await?;
 
     for subteam_idx in 0..session_data.subteams.len() {
         // 已有更新任务在跑：本任务是旧局/旧快照，放弃剩余重活（每人战绩/段位拉取）。
@@ -765,7 +765,7 @@ fn build_cherry_subteams(
 
 async fn push_basic_info(
     session_data: &mut SessionData,
-    app_handle: &AppHandle,
+    app_handle: AppHandle,
     seq: u64,
 ) -> Result<(), String> {
     async fn fill_team(team: &mut Vec<SessionSummoner>) {
