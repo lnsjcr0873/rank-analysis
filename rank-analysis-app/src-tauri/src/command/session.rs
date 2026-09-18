@@ -842,7 +842,9 @@ async fn process_subteam_parallel(
     let futures = players
         .into_iter()
         .enumerate()
-        .map(|(index, player)| async move {
+        .map(|(index, player)| {
+            let app = app_handle.clone();
+            async move {
             if player.puuid.is_empty() {
                 return SessionSummoner {
                     champion_id: player.champion_id,
@@ -950,7 +952,7 @@ async fn process_subteam_parallel(
                     total,
                     player: basic,
                 };
-                if let Err(e) = app_handle.emit("session-player-update", &update) {
+                if let Err(e) = app.emit("session-player-update", &update) {
                     log::error!("Failed to emit player update event: {}", e);
                 }
             }
@@ -1005,7 +1007,7 @@ async fn process_subteam_parallel(
                 pick_state: player.pick_state.clone(),
                 assigned_position: player.assigned_position.clone(),
             }
-        });
+        }});
 
     let fetched_players = futures::future::join_all(futures).await;
 
