@@ -195,6 +195,21 @@ static CURRENT_SESSION_TASK: std::sync::LazyLock<
     tokio::sync::Mutex<Option<tokio::task::AbortHandle>>,
 > = std::sync::LazyLock::new(|| tokio::sync::Mutex::new(None));
 
+async fn run_session_task(app_handle: AppHandle, seq: u64) {
+    match process_session_data(app_handle.clone(), seq).await {
+        Ok(_) => {
+            log::info!("Session data processing completed (seq {})", seq);
+        }
+        Err(e) => {
+            log::error!("Failed to process session data: {}", e);
+            // 发送错误事件（旧任务的错误同样不打扰前端）
+            if is_latest_task(&SESSION_TASK_SEQ, seq) {
+                let _ = app_handle.emit("session-error", e);
+            }
+        }
+    }
+}
+
 /// 获取当前对局会话数据（事件推送模式）。
 ///
 /// 这是前端调用的主入口命令。函数立即返回，实际数据处理在后台任务中执行，
@@ -216,21 +231,7 @@ static CURRENT_SESSION_TASK: std::sync::LazyLock<
 /// 3. `session-pre-group`: 预组队标记信息
 /// 4. `session-complete`: 完整数据（最终事件）
 /// 5. `session-error`: 错误事件（发生错误时）
-async fn run_session_task(app_handle: AppHandle, seq: u64) {
-    match process_session_data(app_handle.clone(), seq).await {
-        Ok(_) => {
-            log::info!("Session data processing completed (seq {})", seq);
-        }
-        Err(e) => {
-            log::error!("Failed to process session data: {}", e);
-            // 发送错误事件（旧任务的错误同样不打扰前端）
-            if is_latest_task(&SESSION_TASK_SEQ, seq) {
-                let _ = app_handle.emit("session-error", e);
-            }
-        }
-    }
-}
-
+#[tauri::command]
 pub async fn get_session_data(app_handle: AppHandle) -> Result<(), String> {
     log::info!("get_session_data called");
 
