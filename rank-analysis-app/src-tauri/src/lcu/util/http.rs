@@ -209,39 +209,44 @@ async fn err_with_status(verb: &str, resp: reqwest::Response) -> String {
 /// 内部：发起真实 HTTP GET 请求，返回原始 JSON 字符串。
 ///
 /// 注意：URL 内嵌 `riot:{token}` 凭据，**绝不写入日志**（含 debug 级）。
-async fn lcu_get_raw(uri: &str) -> Result<String, String> {
-    let mut last_err = "请求失败或认证失效".to_string();
-    for _ in 0..2 {
-        let (token, port) = get_auth_pair().map_err(|e| format!("LCU认证失败: {}", e))?;
-        let url = build_url(&token, uri, &port);
-        let resp = get_client().get(&url).send().await;
-        match resp {
-            Ok(r) if r.status() == StatusCode::OK => {
-                return r.text().await.map_err(|e| format!("读取响应失败: {}", e));
-            }
-            Ok(r) => {
-                let auth_failure = is_auth_failure(r.status());
-                last_err = err_with_status("GET", r).await;
-                // 业务/服务端错误原样上抛，不当认证失效盲目重试
-                if !auth_failure {
-                    return Err(last_err);
+fn lcu_get_raw(
+    uri: &str,
+) -> impl std::future::Future<Output = Result<String, String>> + Send + 'static {
+    let uri = uri.to_string();
+    async move {
+        let mut last_err = "请求失败或认证失效".to_string();
+        for _ in 0..2 {
+            let (token, port) = get_auth_pair().map_err(|e| format!("LCU认证失败: {}", e))?;
+            let url = build_url(&token, &uri, &port);
+            let resp = get_client().get(&url).send().await;
+            match resp {
+                Ok(r) if r.status() == StatusCode::OK => {
+                    return r.text().await.map_err(|e| format!("读取响应失败: {}", e));
                 }
-                if let Err(e) = refresh_auth() {
-                    log::info!("刷新LCU认证失败（可先打开游戏再重试）: {}", e);
-                    break;
+                Ok(r) => {
+                    let auth_failure = is_auth_failure(r.status());
+                    last_err = err_with_status("GET", r).await;
+                    // 业务/服务端错误原样上抛，不当认证失效盲目重试
+                    if !auth_failure {
+                        return Err(last_err);
+                    }
+                    if let Err(e) = refresh_auth() {
+                        log::info!("刷新LCU认证失败（可先打开游戏再重试）: {}", e);
+                        break;
+                    }
                 }
-            }
-            Err(e) => {
-                // 连接层错误：客户端未启动 / 端口失效，换新认证后重试一次
-                last_err = format!("连接LCU失败: {}", e);
-                if let Err(e) = refresh_auth() {
-                    log::info!("刷新LCU认证失败（可先打开游戏再重试）: {}", e);
-                    break;
+                Err(e) => {
+                    // 连接层错误：客户端未启动 / 端口失效，换新认证后重试一次
+                    last_err = format!("连接LCU失败: {}", e);
+                    if let Err(e) = refresh_auth() {
+                        log::info!("刷新LCU认证失败（可先打开游戏再重试）: {}", e);
+                        break;
+                    }
                 }
             }
         }
+        Err(last_err)
     }
-    Err(last_err)
 }
 
 /// 发起 LCU GET 请求，**保留 HTTP 状态码**，不做重试也不刷新认证。
@@ -308,31 +313,40 @@ fn deserialize_lcu_body<T: DeserializeOwned>(body: &str) -> Result<T, String> {
 
 /// 向 LCU 发起 GET 请求，将响应 JSON 反序列化为 `T`。
 /// 内置 singleflight（相同 URI 并发请求合并）和并发限制（最多 10 个同时请求）。
-pub async fn lcu_get<T: DeserializeOwned + 'static>(uri: &str) -> Result<T, String> {
+pub fn lcu_get<T: DeserializeOwned + 'static>(
+    uri: &str,
+) -> impl std::future::Future<Output = Result<T, String>> + Send + 'static {
     let uri_owned = uri.to_string();
+    let init_uri = uri_owned.clone();
+    async move {
+        // singleflight：相同 URI 的并发请求只发一次
+        let raw_json = SINGLEFLIGHT
+            .try_get_with(uri_owned, async move {
+                // 获取 semaphore permit（限制并发数）
+                let _permit = LCU_SEMAPHORE
+                    .acquire()
+                    .await
+                    .map_err(|e| format!("Semaphore error: {}", e))?;
 
-    // singleflight：相同 URI 的并发请求只发一次
-    let raw_json = SINGLEFLIGHT
-        .try_get_with(uri_owned.clone(), async {
-            // 获取 semaphore permit（限制并发数）
-            let _permit = LCU_SEMAPHORE
-                .acquire()
-                .await
-                .map_err(|e| format!("Semaphore error: {}", e))?;
+                lcu_get_raw(&init_uri).await
+            })
+            .await
+            .map_err(|e| format!("{}", e))?;
 
-            lcu_get_raw(&uri_owned).await
-        })
-        .await
-        .map_err(|e| format!("{}", e))?;
-
-    // 从 JSON 字符串反序列化为目标类型（空 body 归一成 null，见 deserialize_lcu_body）
-    deserialize_lcu_body::<T>(&raw_json)
+        // 从 JSON 字符串反序列化为目标类型（空 body 归一成 null，见 deserialize_lcu_body）
+        deserialize_lcu_body::<T>(&raw_json)
+    }
 }
 
 /// 发起 LCU GET 请求，反序列化为 `T`，不经过并发限流信号量（供健康检测、阶段查询等探针直达，防止被批量请求阻塞）。
-pub async fn lcu_get_unthrottled<T: DeserializeOwned + 'static>(uri: &str) -> Result<T, String> {
-    let raw_json = lcu_get_raw(uri).await?;
-    deserialize_lcu_body::<T>(&raw_json)
+pub fn lcu_get_unthrottled<T: DeserializeOwned + 'static>(
+    uri: &str,
+) -> impl std::future::Future<Output = Result<T, String>> + Send + 'static {
+    let uri_owned = uri.to_string();
+    async move {
+        let raw_json = lcu_get_raw(&uri_owned).await?;
+        deserialize_lcu_body::<T>(&raw_json)
+    }
 }
 
 /// 向 LCU 发起 POST 请求，请求体为 JSON。

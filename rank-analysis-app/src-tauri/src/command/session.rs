@@ -216,7 +216,6 @@ static CURRENT_SESSION_TASK: std::sync::LazyLock<
 /// 3. `session-pre-group`: 预组队标记信息
 /// 4. `session-complete`: 完整数据（最终事件）
 /// 5. `session-error`: 错误事件（发生错误时）
-#[tauri::command]
 async fn run_session_task(app_handle: AppHandle, seq: u64) {
     match process_session_data(app_handle.clone(), seq).await {
         Ok(_) => {
@@ -246,7 +245,7 @@ pub async fn get_session_data(app_handle: AppHandle) -> Result<(), String> {
     }
 
     // 在后台线程处理，避免阻塞（tokio::spawn 非异步等待，锁只持有极短同步窗口）
-    let handle = tokio::spawn(Box::pin(run_session_task(app_handle, seq)));
+    let handle = tokio::spawn(run_session_task(app_handle, seq));
 
     *lock = Some(handle.abort_handle());
 
@@ -764,11 +763,12 @@ async fn push_basic_info(
     seq: u64,
 ) -> Result<(), String> {
     async fn fill_team(team: &mut Vec<SessionSummoner>) {
-        let futures = team.iter().map(|placeholder| {
-            let puuid = placeholder.summoner.puuid.clone();
+        let placeholders = std::mem::take(team);
+        let futures = placeholders.into_iter().map(|placeholder| {
+            let puuid = placeholder.summoner.puuid;
             let champion_id = placeholder.champion_id;
-            let pick_state = placeholder.pick_state.clone();
-            let assigned_position = placeholder.assigned_position.clone();
+            let pick_state = placeholder.pick_state;
+            let assigned_position = placeholder.assigned_position;
             async move {
                 if puuid.is_empty() {
                     return SessionSummoner {
