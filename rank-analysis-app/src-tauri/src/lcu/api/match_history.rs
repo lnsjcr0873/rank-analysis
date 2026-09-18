@@ -199,7 +199,7 @@ impl MatchHistory {
         use futures::stream::{self, StreamExt};
 
         let game_ids: Vec<i64> = self.games.games.iter().map(|g| g.game_id).collect();
-        let details = stream::iter(game_ids.into_iter())
+        let details = stream::iter(game_ids)
             .map(|game_id| async move {
                 let res = GameDetail::get_game_detail_by_id(&game_id).await;
                 (game_id, res)

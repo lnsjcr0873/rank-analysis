@@ -159,6 +159,7 @@ fn recognize_rgba_sync(rgba: &[u8], w: i32, h: i32) -> Result<Vec<String>, Strin
 
     // RGBA → RGB（去 alpha 通道）。
     let mut rgb = Vec::with_capacity((w as usize) * (h as usize) * 3);
+    #[allow(clippy::chunks_exact_to_as_chunks)]
     for px in rgba.chunks_exact(4) {
         rgb.extend_from_slice(&px[..3]);
     }

@@ -435,6 +435,7 @@ pub async fn start_game_state_monitor(app_handle: AppHandle, stop: Arc<AtomicBoo
                 };
                 if is_in_game {
                     in_game_ticks = in_game_ticks.saturating_add(1);
+                    #[allow(clippy::manual_is_multiple_of)]
                     if in_game_ticks % 15 != 0 {
                         continue;
                     }

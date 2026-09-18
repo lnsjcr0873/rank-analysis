@@ -424,14 +424,6 @@ fn get_one_game_players(match_history: &MatchHistory) -> HashMap<String, Vec<One
     one_game_player_map
 }
 
-/// 计算好友和纠纷统计。
-///
-/// 分析同场玩家数据，找出经常同队（好友）或经常对战（冤家）的玩家。
-///
-/// # 参数
-///
-/// - `one_game_players_map`: 同场玩家映射
-/// - `recent_data`: 输出数据结构
 /// 划分同场玩家中的好友（全同队）与冤家（含敌对）。
 fn partition_friends_and_disputes(
     one_game_players_map: &HashMap<String, Vec<OneGamePlayer>>,
