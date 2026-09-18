@@ -337,12 +337,7 @@ pub async fn mayhem_capture_band_stats() -> Result<Vec<crate::mayhem::capture::B
         };
         let screen = crate::mayhem::capture::gdi::primary_screen_size();
         let (union_rect, rects) = slot_band_union_rect(screen);
-        let full = capture_screen_region(
-            union_rect.x,
-            union_rect.y,
-            union_rect.w,
-            union_rect.h,
-        )?;
+        let full = capture_screen_region(union_rect.x, union_rect.y, union_rect.w, union_rect.h)?;
         Ok(rects
             .iter()
             .enumerate()
@@ -606,12 +601,7 @@ pub async fn mayhem_assist_tick(
         // 优先走 DXGI 硬件直通 + 500ms 时间阀门抓包围盒（GPU 纹理拷贝），再纯内存切片出三卡
         let screen = crate::mayhem::capture::gdi::primary_screen_size();
         let (union_rect, rects) = slot_band_union_rect(screen);
-        let full = capture_screen_region(
-            union_rect.x,
-            union_rect.y,
-            union_rect.w,
-            union_rect.h,
-        )?;
+        let full = capture_screen_region(union_rect.x, union_rect.y, union_rect.w, union_rect.h)?;
         // 两阶段：先对三槽做低成本 luma 门控，无画面直接返回（0 OCR）；
         // 确认有画面后，只对 active 的槽跑推理，inactive 槽保持 None。
         let mut subs: [Option<Vec<u8>>; 3] = [None, None, None];

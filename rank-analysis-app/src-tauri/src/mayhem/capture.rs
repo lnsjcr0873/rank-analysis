@@ -537,19 +537,20 @@ pub mod dxgi {
     use std::sync::Mutex;
     use std::time::{Duration, Instant};
 
-    use winapi::Interface;
     use winapi::shared::dxgiformat::DXGI_FORMAT_B8G8R8A8_UNORM;
     use winapi::shared::dxgitype::DXGI_SAMPLE_DESC;
     use winapi::shared::minwindef::UINT;
     use winapi::shared::winerror::{DXGI_ERROR_ACCESS_LOST, DXGI_ERROR_WAIT_TIMEOUT, S_OK};
     use winapi::um::d3d11::{
         D3D11CreateDevice, ID3D11Device, ID3D11DeviceContext, ID3D11Resource, ID3D11Texture2D,
-        D3D11_BOX, D3D11_CPU_ACCESS_READ, D3D11_CREATE_DEVICE_BGRA_SUPPORT, D3D11_MAP_READ,
-        D3D11_MAPPED_SUBRESOURCE, D3D11_SDK_VERSION, D3D11_TEXTURE2D_DESC, D3D11_USAGE_STAGING,
+        D3D11_BOX, D3D11_CPU_ACCESS_READ, D3D11_CREATE_DEVICE_BGRA_SUPPORT,
+        D3D11_MAPPED_SUBRESOURCE, D3D11_MAP_READ, D3D11_SDK_VERSION, D3D11_TEXTURE2D_DESC,
+        D3D11_USAGE_STAGING,
     };
     use winapi::um::d3dcommon::{D3D_DRIVER_TYPE_HARDWARE, D3D_FEATURE_LEVEL_11_0};
     use winapi::um::dxgi::{IDXGIAdapter, IDXGIDevice, IDXGIOutput, IDXGIResource};
-    use winapi::um::dxgi1_2::{DXGI_OUTDUPL_FRAME_INFO, IDXGIOutput1, IDXGIOutputDuplication};
+    use winapi::um::dxgi1_2::{IDXGIOutput1, IDXGIOutputDuplication, DXGI_OUTDUPL_FRAME_INFO};
+    use winapi::Interface;
 
     use super::gdi::RegionRgba;
 
@@ -606,7 +607,8 @@ pub mod dxgi {
         }
 
         let mut dxgi_device: *mut IDXGIDevice = null_mut();
-        let hr = (*device).QueryInterface(&IDXGIDevice::uuidof(), &mut dxgi_device as *mut _ as *mut _);
+        let hr =
+            (*device).QueryInterface(&IDXGIDevice::uuidof(), &mut dxgi_device as *mut _ as *mut _);
         if hr != S_OK || dxgi_device.is_null() {
             (*device).Release();
             (*context).Release();
@@ -632,7 +634,8 @@ pub mod dxgi {
         }
 
         let mut output1: *mut IDXGIOutput1 = null_mut();
-        let hr = (*output).QueryInterface(&IDXGIOutput1::uuidof(), &mut output1 as *mut _ as *mut _);
+        let hr =
+            (*output).QueryInterface(&IDXGIOutput1::uuidof(), &mut output1 as *mut _ as *mut _);
         (*output).Release();
         if hr != S_OK || output1.is_null() {
             (*device).Release();
@@ -769,7 +772,8 @@ pub mod dxgi {
             let src_pitch = mapped.RowPitch as usize;
             let mut buf = vec![0u8; (w * h * 4) as usize];
             let dst_pitch = (w * 4) as usize;
-            let src_slice = std::slice::from_raw_parts(mapped.pData as *const u8, src_pitch * h as usize);
+            let src_slice =
+                std::slice::from_raw_parts(mapped.pData as *const u8, src_pitch * h as usize);
 
             for row in 0..h as usize {
                 let src_start = row * src_pitch;
