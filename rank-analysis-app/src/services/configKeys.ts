@@ -51,5 +51,13 @@ export const CONFIG_KEYS = {
   /** 战绩列表每页条数模式：auto=按窗口高度动态计算 / fixed=手动固定（见 components/record/pageSize） */
   matchPageMode: 'record.pageMode',
   /** 战绩列表 fixed 模式的固定条数（默认 10） */
-  matchPageSize: 'record.pageSize'
+  matchPageSize: 'record.pageSize',
+  /** 禁用对局悬浮窗（Overlay）（默认 false，即不禁用） */
+  disableOverlay: 'settings.overlay.disabled',
+  /** 禁用游戏对局中 1-2s 频率轮询 allgamedata（默认 false，即不禁用） */
+  disableLiveGamePoll: 'settings.liveGamePoll.disabled',
+  /** 大乱斗 3 选 1 推荐功能开关（默认 false，即关闭） */
+  mayhemAssistEnabled: 'settings.mayhem.assistEnabled',
+  /** 大乱斗轮询截图功能开关（默认 false，即关闭） */
+  mayhemCaptureEnabled: 'settings.mayhem.captureEnabled'
 } as const

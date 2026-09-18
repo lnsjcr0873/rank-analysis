@@ -6,6 +6,8 @@
  * （后端不发射此事件；overlay 尚未创建时的广播会丢失，由 localStorage 兜底）。
  */
 export interface OverlayPrefs {
+  /** 是否禁用 overlay 浮窗（默认 false，即不禁用） */
+  disabled: boolean
   /** 建议条最大条数 */
   maxItems: number
   /** 卡片不透明度 0.5~1 */
@@ -22,6 +24,7 @@ const KEY = 'ra.overlay.prefs'
 const ANCHORS = ['top-left', 'top-center', 'top-right'] as const
 
 const DEFAULTS: OverlayPrefs = {
+  disabled: false,
   maxItems: 3,
   opacity: 0.9,
   hotkeyEnabled: true,
@@ -39,6 +42,7 @@ export function loadOverlayPrefs(): OverlayPrefs {
     if (!raw) return { ...DEFAULTS }
     const p = JSON.parse(raw) as Partial<OverlayPrefs>
     return {
+      disabled: typeof p.disabled === 'boolean' ? p.disabled : DEFAULTS.disabled,
       maxItems: clamp(Number(p.maxItems ?? DEFAULTS.maxItems), 1, 6),
       opacity: clamp(Number(p.opacity ?? DEFAULTS.opacity), 0.5, 1),
       hotkeyEnabled:
@@ -61,6 +65,7 @@ export function saveOverlayPrefs(prefs: OverlayPrefs): void {
     localStorage.setItem(
       KEY,
       JSON.stringify({
+        disabled: Boolean(prefs.disabled),
         maxItems: clamp(Math.round(prefs.maxItems), 1, 6),
         opacity: clamp(prefs.opacity, 0.5, 1),
         hotkeyEnabled: prefs.hotkeyEnabled,

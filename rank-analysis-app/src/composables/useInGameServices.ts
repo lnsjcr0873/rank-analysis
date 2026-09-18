@@ -18,6 +18,9 @@ import { gameSummoner } from './useGameState'
 import { getSharedAssistScheduler } from '@renderer/features/mayhem/trigger'
 import { getNextActions, type NextAction } from '@renderer/services/nextAction'
 import type { SessionData } from '@renderer/types/domain/gaming'
+import { getConfigByIpc } from '@renderer/services/ipc'
+import { CONFIG_KEYS } from '@renderer/services/configKeys'
+import { loadOverlayPrefs } from '@renderer/utils/overlayPrefs'
 
 /** 局内下一动作建议：全局单例，Gaming 只读展示，服务负责轮询更新 */
 export const inGameNextActions = ref<NextAction[]>([])
@@ -28,9 +31,39 @@ const NEXT_ACTION_POLL_MS = 2_000
 let nextActionTimer: ReturnType<typeof setInterval> | null = null
 let lastNextActionAt = 0
 let serviceStarted = false
+let currentSessionData: SessionData | null = null
+
+async function isOverlayDisabled(): Promise<boolean> {
+  if (loadOverlayPrefs().disabled) return true
+  try {
+    return (await getConfigByIpc<boolean>(CONFIG_KEYS.disableOverlay)) === true
+  } catch {
+    return false
+  }
+}
+
+async function isLiveGamePollDisabled(): Promise<boolean> {
+  try {
+    return (await getConfigByIpc<boolean>(CONFIG_KEYS.disableLiveGamePoll)) === true
+  } catch {
+    return false
+  }
+}
+
+async function isMayhemAssistEnabled(): Promise<boolean> {
+  try {
+    return (await getConfigByIpc<boolean>(CONFIG_KEYS.mayhemAssistEnabled)) === true
+  } catch {
+    return false
+  }
+}
 
 async function pollNextActions(sessionData: SessionData): Promise<void> {
   if (sessionData.phase !== 'InProgress') return
+  if (await isLiveGamePollDisabled()) {
+    inGameNextActions.value = []
+    return
+  }
   const now = Date.now()
   if (now - lastNextActionAt < NEXT_ACTION_THROTTLE_MS) return
   lastNextActionAt = now
@@ -46,20 +79,26 @@ async function pollNextActions(sessionData: SessionData): Promise<void> {
     )
     // 后端/测试桩可能返回 undefined：归一为数组，避免模板读 length 崩溃
     inGameNextActions.value = Array.isArray(actions) ? actions : []
-    // 推送数据到 overlay 窗口（4b overlay POC）
-    invoke('push_overlay_data', { actions: inGameNextActions.value }).catch(e => {
-      console.warn('push_overlay_data failed:', e)
-    })
+    // 推送数据到 overlay 窗口（4b overlay POC，仅在未禁用浮窗时推送）
+    if (!(await isOverlayDisabled())) {
+      invoke('push_overlay_data', { actions: inGameNextActions.value }).catch(e => {
+        console.warn('push_overlay_data failed:', e)
+      })
+    }
   } catch {
     inGameNextActions.value = []
   }
 }
 
-function startMayhemAssistIfNeeded(queueId: number): void {
+async function startMayhemAssistIfNeeded(queueId: number): Promise<void> {
   if (queueId === 2400) {
-    const s = getSharedAssistScheduler()
-    if (!s.running) {
-      s.start()
+    if (await isMayhemAssistEnabled()) {
+      const s = getSharedAssistScheduler()
+      if (!s.running) {
+        s.start()
+      }
+    } else {
+      stopMayhemAssist()
     }
   }
 }
@@ -71,22 +110,76 @@ function stopMayhemAssist(): void {
   }
 }
 
+/** 动态响应设置变更：禁用/启用浮窗 */
+export async function setOverlayDisabled(disabled: boolean): Promise<void> {
+  if (disabled) {
+    void invoke('hide_overlay_window').catch(() => {})
+  } else if (currentSessionData?.phase === 'InProgress') {
+    void invoke('show_overlay_window').catch(() => {})
+  }
+}
+
+/** 动态响应设置变更：禁用/启用对局实时轮询 */
+export function setLiveGamePollDisabled(disabled: boolean): void {
+  if (disabled) {
+    if (nextActionTimer) {
+      clearInterval(nextActionTimer)
+      nextActionTimer = null
+    }
+    inGameNextActions.value = []
+  } else if (currentSessionData?.phase === 'InProgress') {
+    lastNextActionAt = 0
+    void pollNextActions(currentSessionData)
+    if (!nextActionTimer) {
+      nextActionTimer = setInterval(
+        () => void pollNextActions(currentSessionData!),
+        NEXT_ACTION_POLL_MS
+      )
+    }
+  }
+}
+
+/** 动态响应设置变更：禁用/启用大乱斗 3 选 1 推荐 */
+export function setMayhemAssistEnabled(enabled: boolean): void {
+  if (enabled) {
+    if (currentSessionData?.phase === 'InProgress' && currentSessionData.queueId === 2400) {
+      const s = getSharedAssistScheduler()
+      if (!s.running) {
+        s.start()
+      }
+    }
+  } else {
+    stopMayhemAssist()
+  }
+}
+
 /** 启动全局局内循环（幂等）：phase/queueId 驱动轮询 + 浮窗 + mayhem 调度。 */
 function ensureInGameLoop(sessionData: SessionData): void {
   if (serviceStarted) return
   serviceStarted = true
-  watch([() => sessionData.phase, () => sessionData.queueId], ([phase, queueId]) => {
+  currentSessionData = sessionData
+  watch([() => sessionData.phase, () => sessionData.queueId], async ([phase, queueId]) => {
     if (phase === 'InProgress') {
       // 先建/显示窗口再首推：overlay 懒创建，若先 poll 后 show，
       // 首条 overlay:update 会落在窗口 mount+listen 就绪之前而丢失。
-      void invoke('show_overlay_window').catch(() => {})
-      lastNextActionAt = 0
-      void pollNextActions(sessionData)
-      if (!nextActionTimer) {
-        nextActionTimer = setInterval(() => void pollNextActions(sessionData), NEXT_ACTION_POLL_MS)
+      // 仅在未禁用浮窗时呼出
+      if (!(await isOverlayDisabled())) {
+        void invoke('show_overlay_window').catch(() => {})
       }
+      // 仅在未禁用局内轮询时启动定时器
+      if (!(await isLiveGamePollDisabled())) {
+        lastNextActionAt = 0
+        void pollNextActions(sessionData)
+        if (!nextActionTimer) {
+          nextActionTimer = setInterval(
+            () => void pollNextActions(sessionData),
+            NEXT_ACTION_POLL_MS
+          )
+        }
+      }
+      // 仅在已开启大乱斗 3 选 1 推荐时启动调度器
       if (queueId === 2400) {
-        startMayhemAssistIfNeeded(queueId)
+        await startMayhemAssistIfNeeded(queueId)
       } else {
         stopMayhemAssist()
       }

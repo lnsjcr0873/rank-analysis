@@ -46,6 +46,8 @@ export interface AssistDeps {
   getPhase(): Promise<string>
   getLivePlayer?(): Promise<LivePlayerStateDto | null>
   getBandStats(): Promise<BandStatsDto[] | null>
+  /** 是否允许截图轮询识别（默认 true 以保持向后兼容；缺省或返回 false 时不截屏） */
+  isCaptureEnabled?(): Promise<boolean> | boolean
   /** 选卡完成 / 轮次推进时调用：清空 overlay 残留面板，不等 30s TTL */
   onRoundDone?(): Promise<void>
   /** 每轮 tick 完成后的回调（UI 状态展示用；异常不影响调度） */
@@ -182,6 +184,38 @@ export function createAssistScheduler(deps: AssistDeps, idleIntervalMs = 1_000):
 
       // 3. 突发探测态（Burst Detecting）
       if (mode === 'burst_detecting') {
+        const captureAllowed = deps.isCaptureEnabled ? await deps.isCaptureEnabled() : true
+        if (!captureAllowed) {
+          if (Date.now() - burstStartTime >= burstTimeout) {
+            currentRound += 1
+            mode = currentRound > 4 ? 'all_completed' : 'idle_sleep'
+            last = {
+              phase,
+              activeSlots: 0,
+              maxStddev: null,
+              note: `第 ${currentRound - 1} 轮突发窗口结束，进入下一轮休眠`,
+              detected: false,
+              mode: 'idle_sleep',
+              currentRound,
+              level
+            }
+            deps.onTick?.(last)
+            return last
+          }
+          last = {
+            phase,
+            activeSlots: 0,
+            maxStddev: null,
+            note: `⚡ 突发检测中 (截图识别已关闭，可通过快捷键或手动推荐触发)`,
+            detected: false,
+            mode: 'burst_detecting',
+            currentRound,
+            level
+          }
+          deps.onTick?.(last)
+          return last
+        }
+
         const stats = await deps.getBandStats()
         const validStats = stats ? stats.filter(s => Number.isFinite(s.stddev)) : []
         const active = validStats.filter(s => s.stddev >= BAND_ACTIVE_THRESHOLD)
@@ -251,13 +285,18 @@ export function createAssistScheduler(deps: AssistDeps, idleIntervalMs = 1_000):
 
       // 4. 已推送，等待玩家选卡（Pushed & Waiting Choice）
       if (mode === 'pushed_waiting_choice') {
-        const stats = await deps.getBandStats()
+        const captureAllowed = deps.isCaptureEnabled ? await deps.isCaptureEnabled() : true
+        const stats = captureAllowed ? await deps.getBandStats() : null
         const validStats = stats ? stats.filter(s => Number.isFinite(s.stddev)) : []
         const active = validStats.filter(s => s.stddev >= BAND_ACTIVE_THRESHOLD)
         const maxStddev = validStats.length ? Math.max(...validStats.map(s => s.stddev)) : null
 
-        // 卡片已从画面消失，说明玩家完成选卡！
-        if (active.length < ACTIVE_SLOTS_REQUIRED || Date.now() - burstStartTime >= burstTimeout) {
+        // 卡片已从画面消失，说明玩家完成选卡！若未开启截图则等待超时推进
+        if (
+          !captureAllowed ||
+          active.length < ACTIVE_SLOTS_REQUIRED ||
+          Date.now() - burstStartTime >= burstTimeout
+        ) {
           currentRound += 1
           mode = currentRound > 4 ? 'all_completed' : 'idle_sleep'
           // 立即清空残留面板：旧推荐已失效，不等 30s TTL（失败仅告警，不阻塞状态机）
@@ -363,6 +402,14 @@ export function getSharedAssistScheduler(): AssistScheduler {
       getBandStats: async () => {
         const { invoke } = await import('@tauri-apps/api/core')
         return (await invoke('mayhem_capture_band_stats')) as BandStatsDto[]
+      },
+      isCaptureEnabled: async () => {
+        const { getConfigByIpc } = await import('@renderer/services/ipc')
+        const { CONFIG_KEYS } = await import('@renderer/services/configKeys')
+        return (
+          (await getConfigByIpc<boolean>(CONFIG_KEYS.mayhemCaptureEnabled).catch(() => false)) ===
+          true
+        )
       },
       onRoundDone: async () => {
         const { invoke } = await import('@tauri-apps/api/core')

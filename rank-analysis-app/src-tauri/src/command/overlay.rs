@@ -13,6 +13,12 @@ use tauri::Emitter;
 /// 互相等待，导致页面资源加载、后续 IPC 和窗口关闭一起失去响应。
 #[tauri::command]
 pub async fn show_overlay_window(app: tauri::AppHandle) -> Result<(), String> {
+    if let Ok(v) = crate::config::get_config("settings.overlay.disabled").await {
+        if crate::config::extract_bool(&v).unwrap_or(false) {
+            log::info!("[overlay] Overlay 已被用户配置禁用，跳过显示");
+            return Ok(());
+        }
+    }
     crate::overlay::show(&app);
     Ok(())
 }
@@ -113,5 +119,11 @@ pub fn set_overlay_click_through(enabled: bool) -> Result<(), String> {
 /// 窗口不存在时会创建 WebView，与 show_overlay_window 一样必须离开同步 IPC 线程。
 #[tauri::command]
 pub async fn overlay_toggle(app: tauri::AppHandle) -> Result<bool, String> {
+    if let Ok(v) = crate::config::get_config("settings.overlay.disabled").await {
+        if crate::config::extract_bool(&v).unwrap_or(false) {
+            log::info!("[overlay] Overlay 已被用户配置禁用，跳过切换");
+            return Ok(false);
+        }
+    }
     crate::overlay::toggle(&app)
 }

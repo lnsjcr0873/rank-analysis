@@ -30,6 +30,13 @@ pub async fn get_next_actions(
     my_puuid: String,
     queue_id: i32,
 ) -> Result<Vec<NextAction>, String> {
+    if let Ok(v) = crate::config::get_config("settings.liveGamePoll.disabled").await {
+        if crate::config::extract_bool(&v).unwrap_or(false) {
+            log::debug!("[live] 对局 liveClientData 轮询已禁用，跳过拉取快照");
+            return Ok(Vec::new());
+        }
+    }
+
     let Some(snapshot) = get_live_game_snapshot().await? else {
         return Ok(Vec::new());
     };

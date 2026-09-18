@@ -331,6 +331,44 @@
         </n-text>
       </div>
     </n-card>
+
+    <!-- 大乱斗 3 选 1 推荐与截图识别 -->
+    <n-card>
+      <template #header>
+        <span class="setting-label">
+          <n-icon size="20" class="setting-item-icon setting-item-icon-start">
+            <WandSparkles />
+          </n-icon>
+          大乱斗 3 选 1 推荐
+        </span>
+      </template>
+      <template #header-extra>
+        <n-switch v-model:value="mayhemAssistEnabled" @update:value="updateMayhemAssistSwitch" />
+      </template>
+
+      <div :class="{ 'rules-inactive': !mayhemAssistEnabled }">
+        <div class="setting-item">
+          <span class="setting-label">
+            <n-icon size="20" class="setting-item-icon setting-item-icon-start">
+              <Camera />
+            </n-icon>
+            大乱斗轮询截图
+          </span>
+          <n-switch
+            v-model:value="mayhemCaptureEnabled"
+            :disabled="!mayhemAssistEnabled"
+            @update:value="updateMayhemCaptureSwitch"
+          />
+        </div>
+        <n-text
+          depth="3"
+          style="font-size: var(--font-size-sm); display: block; margin-top: var(--space-8)"
+        >
+          在海克斯大乱斗达到 3/7/11/15
+          级时触发三选一强化推荐。开启「大乱斗轮询截图」后会在达标等级节点轮询抓取屏幕卡片区域并识别文字，自动推送推荐到悬浮窗；若关闭轮询截图，则不执行任何后台抓屏（仍可在对局中使用快捷键或手动输入触发推荐）。两项功能默认均关闭。
+        </n-text>
+      </div>
+    </n-card>
   </n-space>
 </template>
 <script setup lang="ts">
@@ -338,8 +376,9 @@ import { VueDraggable } from 'vue-draggable-plus'
 import { computed, onMounted, ref } from 'vue'
 import { useMessage } from 'naive-ui'
 import { renderSingleSelectTag, renderLabel, filterChampionFunc } from '@renderer/utils/champion'
-import { CircleCheck, Zap, X, CirclePlay, Lightbulb, WandSparkles } from 'lucide-vue-next'
+import { CircleCheck, Zap, X, CirclePlay, Lightbulb, WandSparkles, Camera } from 'lucide-vue-next'
 import { getConfigByIpc, putConfigByIpc } from '@renderer/services/ipc'
+import { CONFIG_KEYS } from '@renderer/services/configKeys'
 import { assetPrefix } from '@renderer/services/http'
 import type { championOption } from '@renderer/types/domain/champion'
 import { invoke } from '@tauri-apps/api/core'
@@ -404,6 +443,10 @@ onMounted(async () => {
     (await getConfigByIpc<boolean>('settings.auto.tradeConfirmSwitch')) ?? false
   executeAtSecs.value = (await getConfigByIpc<number>('settings.auto.executeAtSecs')) ?? 5
   autoRune.value = (await getConfigByIpc<boolean>('settings.auto.runeSwitch')) ?? false
+  mayhemAssistEnabled.value =
+    (await getConfigByIpc<boolean>(CONFIG_KEYS.mayhemAssistEnabled)) ?? false
+  mayhemCaptureEnabled.value =
+    (await getConfigByIpc<boolean>(CONFIG_KEYS.mayhemCaptureEnabled)) ?? false
   await loadOpggTier()
   await reloadPickRules()
   await reloadBanRules()
@@ -516,6 +559,10 @@ const autoTradeConfirm = ref(false)
 const executeAtSecs = ref(5)
 /** 自动符文（P1-3）：选人锁定后按「英雄 → 符文页」切换 LCU 当前页 */
 const autoRune = ref(false)
+/** 大乱斗 3 选 1 强化推荐（默认关） */
+const mayhemAssistEnabled = ref(false)
+/** 大乱斗轮询截图（默认关） */
+const mayhemCaptureEnabled = ref(false)
 
 const selectPickChampionId = ref(null)
 const selectBanChampionId = ref(null)
@@ -551,6 +598,16 @@ const updatePickSwitch = async () => {
 }
 const updateBanSwitch = async () => {
   await putConfigByIpc('settings.auto.banChampionSwitch', autoBan.value)
+}
+
+const updateMayhemAssistSwitch = async () => {
+  await putConfigByIpc(CONFIG_KEYS.mayhemAssistEnabled, mayhemAssistEnabled.value)
+  const { setMayhemAssistEnabled } = await import('@renderer/composables/useInGameServices')
+  setMayhemAssistEnabled(mayhemAssistEnabled.value)
+}
+
+const updateMayhemCaptureSwitch = async () => {
+  await putConfigByIpc(CONFIG_KEYS.mayhemCaptureEnabled, mayhemCaptureEnabled.value)
 }
 
 // 兜底池写串行化：拖拽/增删高频连续触发 putConfigByIpc 时，后发请求若比先发

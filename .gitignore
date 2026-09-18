@@ -89,3 +89,8 @@ __pycache__/
 
 # UI 风格实验室（99 套本地设计稿，不入库）
 .img/
+
+# Gemini CLI
+.gemini/
+GEMINI.md
+

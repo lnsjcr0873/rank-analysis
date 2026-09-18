@@ -18,6 +18,8 @@ import {
 } from '../services/mayhemData'
 import { getSharedAssistScheduler, type AssistTick } from '../trigger'
 import { setOverlayClickThrough } from '@renderer/features/overlay/panels'
+import { putConfigByIpc } from '@renderer/services/ipc'
+import { CONFIG_KEYS } from '@renderer/services/configKeys'
 
 export const useMayhemStore = defineStore('mayhem', () => {
   const champions = ref<MayhemChampion[]>([])
@@ -232,9 +234,11 @@ export const useMayhemStore = defineStore('mayhem', () => {
     const s = getSharedAssistScheduler()
     if (s.running) {
       stopAssist()
+      void putConfigByIpc(CONFIG_KEYS.mayhemAssistEnabled, false).catch(() => {})
       return false
     } else {
       startAssist()
+      void putConfigByIpc(CONFIG_KEYS.mayhemAssistEnabled, true).catch(() => {})
       return true
     }
   }

@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { loadOverlayPrefs, saveOverlayPrefs } from '../overlayPrefs'
 
 const DEFAULTS = {
+  disabled: false,
   maxItems: 3,
   opacity: 0.9,
   hotkeyEnabled: true,
@@ -20,6 +21,7 @@ describe('overlayPrefs', () => {
 
   it('round-trips saved prefs', () => {
     saveOverlayPrefs({
+      disabled: true,
       maxItems: 5,
       opacity: 0.7,
       hotkeyEnabled: false,
@@ -27,6 +29,7 @@ describe('overlayPrefs', () => {
       anchor: 'top-left'
     })
     expect(loadOverlayPrefs()).toEqual({
+      disabled: true,
       maxItems: 5,
       opacity: 0.7,
       hotkeyEnabled: false,
@@ -41,6 +44,7 @@ describe('overlayPrefs', () => {
       JSON.stringify({ maxItems: 99, opacity: 0.1, hotkeyEnabled: true, anchor: 'top-right' })
     )
     expect(loadOverlayPrefs()).toEqual({
+      disabled: false,
       maxItems: 6,
       opacity: 0.5,
       hotkeyEnabled: true,
@@ -68,8 +72,15 @@ describe('overlayPrefs', () => {
   })
 
   it('clamps and rounds on save', () => {
-    saveOverlayPrefs({ maxItems: 9.7, opacity: 1.5, hotkeyEnabled: true, anchor: 'top-center' })
+    saveOverlayPrefs({
+      disabled: false,
+      maxItems: 9.7,
+      opacity: 1.5,
+      hotkeyEnabled: true,
+      anchor: 'top-center'
+    })
     expect(loadOverlayPrefs()).toEqual({
+      disabled: false,
       maxItems: 6,
       opacity: 1,
       hotkeyEnabled: true,
@@ -83,7 +94,13 @@ describe('overlayPrefs', () => {
       throw new Error('quota')
     })
     expect(() =>
-      saveOverlayPrefs({ maxItems: 4, opacity: 0.8, hotkeyEnabled: false, anchor: 'top-left' })
+      saveOverlayPrefs({
+        disabled: false,
+        maxItems: 4,
+        opacity: 0.8,
+        hotkeyEnabled: false,
+        anchor: 'top-left'
+      })
     ).not.toThrow()
     spy.mockRestore()
   })

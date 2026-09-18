@@ -204,6 +204,14 @@
         <n-space vertical :size="4" style="width: 100%">
           <n-space align="center" :size="12">
             <span style="font-size: var(--font-size-sm); color: var(--text-secondary)"
+              >禁用浮窗</span
+            >
+            <n-switch
+              v-model:value="overlayPrefs.disabled"
+              size="small"
+              @update:value="persistOverlay"
+            />
+            <span style="font-size: var(--font-size-sm); color: var(--text-secondary)"
               >建议条数</span
             >
             <n-input-number
@@ -212,6 +220,7 @@
               :min="1"
               :max="6"
               style="width: 90px"
+              :disabled="overlayPrefs.disabled"
               @update:value="persistOverlay"
             />
             <span style="font-size: var(--font-size-sm); color: var(--text-secondary)"
@@ -222,6 +231,7 @@
               :min="0.5"
               :max="1"
               :step="0.05"
+              :disabled="overlayPrefs.disabled"
               :format-tooltip="(v: number) => `${Math.round(v * 100)}%`"
               @update:value="persistOverlay"
             />
@@ -230,6 +240,7 @@
               v-model:value="overlayPrefs.anchor"
               size="tiny"
               style="width: 110px"
+              :disabled="overlayPrefs.disabled"
               :options="overlayAnchorOptions"
               @update:value="persistOverlay"
             />
@@ -239,6 +250,7 @@
             <n-switch
               v-model:value="overlayPrefs.hotkeyEnabled"
               size="small"
+              :disabled="overlayPrefs.disabled"
               @update:value="persistOverlay"
             />
             <n-input
@@ -247,13 +259,37 @@
               size="tiny"
               placeholder="Alt+A"
               style="width: 80px"
+              :disabled="overlayPrefs.disabled"
               @blur="persistOverlay"
               @keyup.enter="persistOverlay"
             />
             <n-text :depth="3" style="font-size: var(--font-size-xs)">开/关浮窗</n-text>
           </n-space>
           <n-text :depth="3" style="font-size: var(--font-size-sm)">
-            对局中悬浮的「下一动作建议」与搭子气泡浮窗样式；改动即时生效。
+            {{
+              overlayPrefs.disabled
+                ? '已开启「禁用浮窗」，对局中将不会弹出透明悬浮窗（包括下一动作、大乱斗强化与搭子气泡）。默认关闭（不禁用）。'
+                : '对局中悬浮的「下一动作建议」与搭子气泡浮窗样式；改动即时生效。默认保持启用。'
+            }}
+          </n-text>
+        </n-space>
+      </n-form-item>
+      <n-form-item label="对局数据轮询">
+        <n-space vertical :size="4" style="width: 100%">
+          <n-space align="center" :size="12">
+            <span style="font-size: var(--font-size-sm); color: var(--text-secondary)"
+              >禁用 1-2s allgamedata 轮询</span
+            >
+            <n-switch
+              v-model:value="disableLiveGamePoll"
+              size="small"
+              @update:value="handleDisableLiveGamePollUpdate"
+            />
+          </n-space>
+          <n-text :depth="3" style="font-size: var(--font-size-sm)">
+            开启后将禁用游戏对局中以 1-2 秒频率向本地游戏客户端（2999 端口）轮询 allgamedata
+            全量快照的功能，减少局内网络与 CPU
+            负载；「下一动作建议」将暂停自动更新。默认关闭（不禁用）。
           </n-text>
         </n-space>
       </n-form-item>
@@ -373,12 +409,36 @@ async function handleMayhemViewModeUpdate(val: string | number) {
 /** 对局浮窗偏好（localStorage，overlay 窗口同源读取；见 utils/overlayPrefs.ts） */
 const overlayPrefs = ref(loadOverlayPrefs())
 
+/** 禁用对局中 1-2s 频率轮询 allgamedata 开关（默认关：不禁用） */
+const disableLiveGamePoll = ref(false)
+
+async function handleDisableLiveGamePollUpdate(val: boolean) {
+  disableLiveGamePoll.value = val
+  try {
+    await putConfigByIpc(CONFIG_KEYS.disableLiveGamePoll, val)
+    const { setLiveGamePollDisabled } = await import('@renderer/composables/useInGameServices')
+    setLiveGamePollDisabled(val)
+  } catch (e) {
+    console.warn('[settings] disableLiveGamePoll 落盘失败:', e)
+  }
+}
+
 /** 持久化并实时广播给 overlay 窗口（Tauri emit 全局事件，无需后端参与） */
 async function persistOverlay() {
   saveOverlayPrefs(overlayPrefs.value)
-  // 热键开关与键位即时生效（幂等：先解绑再按需绑定）
   try {
-    await applyOverlayHotkey(overlayPrefs.value.hotkeyEnabled, overlayPrefs.value.hotkeyKey)
+    await putConfigByIpc(CONFIG_KEYS.disableOverlay, overlayPrefs.value.disabled)
+    const { setOverlayDisabled } = await import('@renderer/composables/useInGameServices')
+    await setOverlayDisabled(overlayPrefs.value.disabled)
+  } catch (e) {
+    console.warn('[settings] disableOverlay 同步失败:', e)
+  }
+  // 热键开关与键位即时生效（浮窗禁用时同时注销热键）
+  try {
+    await applyOverlayHotkey(
+      !overlayPrefs.value.disabled && overlayPrefs.value.hotkeyEnabled,
+      overlayPrefs.value.hotkeyKey
+    )
   } catch (e) {
     console.warn('全局热键注册失败:', e)
   }
@@ -548,6 +608,22 @@ onMounted(async () => {
     // 键不存在视为默认开（!== false 语义）；仅显式 false 才关闭
     if (typeof enabled === 'boolean') {
       intelEnabled.value = enabled !== false
+    }
+  } catch (e) {
+    console.error(e)
+  }
+  try {
+    const disabledOverlay = await getConfigByIpc<boolean>(CONFIG_KEYS.disableOverlay)
+    if (typeof disabledOverlay === 'boolean') {
+      overlayPrefs.value.disabled = disabledOverlay
+    }
+  } catch (e) {
+    console.error(e)
+  }
+  try {
+    const disabledPoll = await getConfigByIpc<boolean>(CONFIG_KEYS.disableLiveGamePoll)
+    if (typeof disabledPoll === 'boolean') {
+      disableLiveGamePoll.value = disabledPoll
     }
   } catch (e) {
     console.error(e)

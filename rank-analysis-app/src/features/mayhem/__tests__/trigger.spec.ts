@@ -192,4 +192,24 @@ describe('AssistScheduler - Smart Level-Driven Augment State Machine', () => {
     expect(tick.activeSlots).toBe(1)
     expect(tick.maxStddev).toBe(25)
   })
+
+  it('skips screen capture when isCaptureEnabled returns false even if level reached', async () => {
+    const getBandStats = vi.fn().mockResolvedValue([])
+    const getPhase = vi.fn().mockResolvedValue('InProgress')
+    const getLivePlayer = vi
+      .fn()
+      .mockResolvedValue({ inGame: true, level: 3 } as LivePlayerStateDto)
+
+    const scheduler = createAssistScheduler({
+      getPhase,
+      getLivePlayer,
+      getBandStats,
+      isCaptureEnabled: () => false
+    })
+
+    const tick = await scheduler.tick()
+    expect(tick.mode).toBe('burst_detecting')
+    expect(tick.detected).toBe(false)
+    expect(getBandStats).not.toHaveBeenCalled()
+  })
 })

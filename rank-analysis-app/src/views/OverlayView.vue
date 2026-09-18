@@ -53,6 +53,10 @@ watch(hasContent, async val => {
     clearTimeout(hideTimer)
     hideTimer = null
   }
+  if (prefs.value.disabled) {
+    void invoke('hide_overlay_window').catch(() => {})
+    return
+  }
   if (val) {
     await invoke('show_overlay_window').catch(() => {})
     return
@@ -104,34 +108,31 @@ function applyPanelEnvelope(env: OverlayPanelEnvelope | null | undefined) {
 }
 
 onMounted(async () => {
-  updateMaxByHeight()
   window.addEventListener('resize', updateMaxByHeight)
-
-  // 1. 初始化时主动从 Rust 端获取最新状态快照（防止事件先于监听器到达而丢失）
+  updateMaxByHeight()
+  if (prefs.value.disabled) {
+    void invoke('hide_overlay_window').catch(() => {})
+    return
+  }
   try {
     const state = (await invoke('get_overlay_state')) as {
-      panel?: OverlayPanelEnvelope
       actions?: NextAction[]
+      panel?: OverlayPanelEnvelope
     }
-    if (Array.isArray(state?.actions)) {
-      actions.value = state.actions
-    }
-    if (state?.panel) {
-      applyPanelEnvelope(state.panel)
-    }
-  } catch (e) {
-    console.warn('[overlay] get_overlay_state 初始化异常:', e)
-  }
+    actions.value = state?.actions ?? []
+    applyPanelEnvelope(state?.panel)
 
-  // 2. 注册实时事件监听
-  try {
     unlistenUpdate = await listen<NextAction[]>('overlay:update', event => {
-      actions.value = Array.isArray(event.payload) ? event.payload : []
+      actions.value = event.payload ?? []
     })
     unlistenConfig = await listen<Partial<OverlayPrefs>>('overlay:config', async event => {
       const merged = { ...prefs.value, ...(event.payload ?? {}) }
       prefs.value = { ...merged }
       saveOverlayPrefs(prefs.value)
+      if (prefs.value.disabled) {
+        void invoke('hide_overlay_window').catch(() => {})
+        return
+      }
       if (event.payload?.anchor) {
         const { setOverlayLayout } = await import('../features/overlay/panels')
         await setOverlayLayout(320, 200, event.payload.anchor).catch(() => {})
@@ -158,7 +159,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div v-if="hasContent" class="overlay-container">
+  <div v-if="hasContent && !prefs.disabled" class="overlay-container">
     <div v-if="companionText" class="overlay-card overlay-bubble" :style="cardStyle">
       {{ companionText }}
     </div>

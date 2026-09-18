@@ -321,6 +321,14 @@ pub fn mayhem_slot_band_rects() -> Result<Vec<crate::mayhem::capture::Rect>, Str
 /// 这是判断「三选一是否出现」的唯一信号源（阈值由前端 trigger 层持有）。
 #[tauri::command]
 pub async fn mayhem_capture_band_stats() -> Result<Vec<crate::mayhem::capture::BandStat>, String> {
+    if let Ok(v) = crate::config::get_config("settings.mayhem.captureEnabled").await {
+        if !crate::config::extract_bool(&v).unwrap_or(false) {
+            return Ok(Vec::new());
+        }
+    } else {
+        return Ok(Vec::new());
+    }
+
     #[cfg(windows)]
     {
         // 单次 BitBlt 抓包围盒 + 纯内存切片：3 次 DWM 同步 → 1 次。
@@ -549,6 +557,30 @@ pub async fn mayhem_assist_tick(
     if phase != "InProgress" {
         return Ok(serde_json::json!({
             "phase": phase, "pushed": false, "reason": "not-in-game", "activeSlots": 0
+        }));
+    }
+
+    if let Ok(v) = crate::config::get_config("settings.mayhem.assistEnabled").await {
+        if !crate::config::extract_bool(&v).unwrap_or(false) {
+            return Ok(serde_json::json!({
+                "phase": phase, "pushed": false, "reason": "assist-disabled", "activeSlots": 0
+            }));
+        }
+    } else {
+        return Ok(serde_json::json!({
+            "phase": phase, "pushed": false, "reason": "assist-disabled", "activeSlots": 0
+        }));
+    }
+
+    if let Ok(v) = crate::config::get_config("settings.mayhem.captureEnabled").await {
+        if !crate::config::extract_bool(&v).unwrap_or(false) {
+            return Ok(serde_json::json!({
+                "phase": phase, "pushed": false, "reason": "capture-disabled", "activeSlots": 0
+            }));
+        }
+    } else {
+        return Ok(serde_json::json!({
+            "phase": phase, "pushed": false, "reason": "capture-disabled", "activeSlots": 0
         }));
     }
 
