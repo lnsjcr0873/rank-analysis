@@ -447,7 +447,40 @@ async fn process_session_data(app_handle: AppHandle, seq: u64) -> Result<(), Str
     };
 
     if is_multi_team {
-        build_cherry_subteams(&mut session, &mut session_data, &my_summoner.puuid).await?;
+        let eog_subteam_map: Option<std::collections::HashMap<String, i32>> =
+            match crate::lcu::api::eog_stats::EogStatsBlock::get().await {
+                Ok(eog) => {
+                    let map: std::collections::HashMap<String, i32> = eog
+                        .stats_block
+                        .players
+                        .into_iter()
+                        .filter(|p| !p.puuid.is_empty() && p.subteam_id > 0)
+                        .map(|p| (p.puuid, p.subteam_id))
+                        .collect();
+                    if map.is_empty() {
+                        None
+                    } else {
+                        log::info!(
+                            "[CHERRY] EOG endpoint available, {} authoritative subteam mappings",
+                            map.len()
+                        );
+                        Some(map)
+                    }
+                }
+                Err(e) => {
+                    log::warn!(
+                        "[CHERRY] EOG endpoint unavailable, fallback to teamParticipantId: {}",
+                        e
+                    );
+                    None
+                }
+            };
+        build_cherry_subteams(
+            &mut session,
+            &mut session_data,
+            &my_summoner.puuid,
+            eog_subteam_map,
+        );
     } else {
         build_classic_subteams(&mut session, &mut session_data, &my_summoner.puuid);
     }
@@ -644,11 +677,12 @@ fn build_classic_subteams(session: &mut Session, session_data: &mut SessionData,
 ///    EndOfGame 阶段返回 16 个玩家的 `puuid + subteamId(1~8)`，权威配对。
 /// 2. fallback: `gameflow/session.teamOne` 的 `teamParticipantId` —— champ-select /
 ///    lobby 阶段或 EOG 端点不可用时使用，按 tpid 分组（可能稀疏，单人对会显示已离开）。
-async fn build_cherry_subteams(
+fn build_cherry_subteams(
     session: &mut Session,
     session_data: &mut SessionData,
     my_puuid: &str,
-) -> Result<(), String> {
+    eog_subteam_map: Option<std::collections::HashMap<String, i32>>,
+) {
     let mut all_players: Vec<crate::lcu::api::session::OnePlayer> = Vec::new();
     all_players.append(&mut session.game_data.team_one);
     all_players.append(&mut session.game_data.team_two);
@@ -668,36 +702,6 @@ async fn build_cherry_subteams(
             })
             .collect();
     }
-
-    // 尝试拉 EOG 实时端点拿权威 puuid → subteamId 映射
-    let eog_subteam_map: Option<std::collections::HashMap<String, i32>> =
-        match crate::lcu::api::eog_stats::EogStatsBlock::get().await {
-            Ok(eog) => {
-                let map: std::collections::HashMap<String, i32> = eog
-                    .stats_block
-                    .players
-                    .into_iter()
-                    .filter(|p| !p.puuid.is_empty() && p.subteam_id > 0)
-                    .map(|p| (p.puuid, p.subteam_id))
-                    .collect();
-                if map.is_empty() {
-                    None
-                } else {
-                    log::info!(
-                        "[CHERRY] EOG endpoint available, {} authoritative subteam mappings",
-                        map.len()
-                    );
-                    Some(map)
-                }
-            }
-            Err(e) => {
-                log::warn!(
-                    "[CHERRY] EOG endpoint unavailable, fallback to teamParticipantId: {}",
-                    e
-                );
-                None
-            }
-        };
 
     let used_eog = eog_subteam_map.is_some();
 
@@ -757,7 +761,6 @@ async fn build_cherry_subteams(
     // EOG 没返回权威 subteamId 时，当前数据是 tpid 兜底（在新斗魂下 tpid 噪音很大），
     // 标记 pending 让前端持续轮询直到 EOG ready。
     session_data.cherry_subteams_pending = !used_eog;
-    Ok(())
 }
 
 async fn push_basic_info(
@@ -799,8 +802,8 @@ async fn push_basic_info(
         *team = futures::future::join_all(futures).await;
     }
 
-    for subteam in &mut session_data.subteams {
-        fill_team(&mut subteam.players).await;
+    for i in 0..session_data.subteams.len() {
+        fill_team(&mut session_data.subteams[i].players).await;
     }
 
     // 旧任务的基础信息不再推送（防旧局快照晚到覆盖）。

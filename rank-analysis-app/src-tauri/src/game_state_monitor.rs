@@ -393,8 +393,8 @@ async fn probe_lcu_state() -> (Result<Summoner, String>, Result<String, String>)
 #[cfg(windows)]
 pub fn trim_working_set() {
     unsafe {
-        use winapi::um::memoryapi::SetProcessWorkingSetSize;
         use winapi::um::processthreadsapi::GetCurrentProcess;
+        use winapi::um::winbase::SetProcessWorkingSetSize;
         let _ = SetProcessWorkingSetSize(GetCurrentProcess(), usize::MAX, usize::MAX);
         log::info!("[system] 游戏对局中，已执行 Working Set Trim 归还物理内存");
     }

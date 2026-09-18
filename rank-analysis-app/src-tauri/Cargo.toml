@@ -109,5 +109,6 @@ winapi = { version = "0.3.9", features = [
     "dxgi1_2",
     "dxgiformat",
     "dxgitype",
+    "winerror",
   ] } # Windows api，用于获取 lol 进程信息 / 提权重启 / 拉起登录客户端
 winreg = "0.55" # 清理腾讯登录客户端注册的 LOL 开机自启项（command/launcher.rs）

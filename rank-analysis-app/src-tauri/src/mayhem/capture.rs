@@ -537,6 +537,8 @@ pub mod dxgi {
     use std::sync::Mutex;
     use std::time::{Duration, Instant};
 
+    use winapi::shared::dxgi::{IDXGIAdapter, IDXGIDevice, IDXGIOutput, IDXGIResource};
+    use winapi::shared::dxgi1_2::{IDXGIOutput1, IDXGIOutputDuplication, DXGI_OUTDUPL_FRAME_INFO};
     use winapi::shared::dxgiformat::DXGI_FORMAT_B8G8R8A8_UNORM;
     use winapi::shared::dxgitype::DXGI_SAMPLE_DESC;
     use winapi::shared::minwindef::UINT;
@@ -548,8 +550,6 @@ pub mod dxgi {
         D3D11_USAGE_STAGING,
     };
     use winapi::um::d3dcommon::{D3D_DRIVER_TYPE_HARDWARE, D3D_FEATURE_LEVEL_11_0};
-    use winapi::um::dxgi::{IDXGIAdapter, IDXGIDevice, IDXGIOutput, IDXGIResource};
-    use winapi::um::dxgi1_2::{IDXGIOutput1, IDXGIOutputDuplication, DXGI_OUTDUPL_FRAME_INFO};
     use winapi::Interface;
 
     use super::gdi::RegionRgba;

@@ -139,7 +139,7 @@ pub async fn preview_overlay_window(app: tauri::AppHandle) -> Result<(), String>
             item_id: 3089,
             reason: "核心装备：经济充足，回城建议优先合成帽子".to_string(),
             urgency: "high".to_string(),
-            valid_until: 0,
+            valid_until: 0.0,
         },
         NextAction {
             kind: "objective".to_string(),
@@ -147,7 +147,7 @@ pub async fn preview_overlay_window(app: tauri::AppHandle) -> Result<(), String>
             item_id: 0,
             reason: "资源提醒：小龙即将刷新，建议提前靠向河道控视野".to_string(),
             urgency: "medium".to_string(),
-            valid_until: 0,
+            valid_until: 0.0,
         },
         NextAction {
             kind: "recall".to_string(),
@@ -155,7 +155,7 @@ pub async fn preview_overlay_window(app: tauri::AppHandle) -> Result<(), String>
             item_id: 0,
             reason: "状态偏低：敌方中野游走，控线后建议就地回城补给".to_string(),
             urgency: "low".to_string(),
-            valid_until: 0,
+            valid_until: 0.0,
         },
     ];
 
