@@ -872,27 +872,30 @@ async fn process_subteam_parallel(
             // 留痕：否则 LCU 断连时前端只见空卡片，无法区分「玩家没数据」与
             // 「拉取失败」。不往 SessionSummoner 加 wire 字段——前端类型与
             // 渲染逻辑都得跟着动，收益不成比例；诊断走日志。
+            let puuid1 = puuid.clone();
+            let puuid2 = puuid.clone();
+            let puuid3 = puuid.clone();
             let (summoner, match_history, rank) = tokio::join!(
-                async {
-                    match Summoner::get_summoner_by_puuid(&puuid).await {
+                async move {
+                    match Summoner::get_summoner_by_puuid(&puuid1).await {
                         Ok(s) => s,
                         Err(e) => {
                             log::warn!(
                                 "[session seq={seq}] summoner 拉取失败，降级默认值: puuid={} err={}",
-                                puuid_short(&puuid),
+                                puuid_short(&puuid1),
                                 e
                             );
                             Summoner::default()
                         }
                     }
                 },
-                async {
+                async move {
                     // 必须走缓存路径（miss 时固定拉满 0-49 再切片），不能裸拉 0..count-1：
                     // LCU 按 puuid 整包缓存战绩，冷 puuid 的**首个请求区间会钉死它缓存的
                     // 场数**，之后 begIndex/endIndex 被忽略、永远整包返回。若这里先发小区间
                     // 请求，战绩页/标签计算从此只能拿到 count 场（真机实测复现）。
                     let mut result =
-                        match MatchHistory::get_match_history_by_puuid(&puuid, 0, count - 1).await {
+                        match MatchHistory::get_match_history_by_puuid(&puuid2, 0, count - 1).await {
                             Ok(mut mh) => {
                                 if let Err(e) = mh.enrich_info_cn() {
                                     log::warn!("[session seq={seq}] 战绩中文化失败: {}", e);
@@ -902,7 +905,7 @@ async fn process_subteam_parallel(
                             Err(e) => {
                                 log::warn!(
                                     "[session seq={seq}] match_history 拉取失败，降级默认值: puuid={} err={}",
-                                    puuid_short(&puuid),
+                                    puuid_short(&puuid2),
                                     e
                                 );
                                 MatchHistory::default()
@@ -914,20 +917,20 @@ async fn process_subteam_parallel(
                     }
                     result
                 },
-                async {
-                    match Rank::get_rank_by_puuid(&puuid).await {
+                async move {
+                    match Rank::get_rank_by_puuid(&puuid3).await {
                         Ok(mut r) => {
                             r.enrich_cn_info();
                             r
                         }
-                            Err(e) => {
-                                log::warn!(
-                                    "[session seq={seq}] rank 拉取失败，降级默认值: puuid={} err={}",
-                                    puuid_short(&puuid),
-                                    e
-                                );
-                                Rank::default()
-                            }
+                        Err(e) => {
+                            log::warn!(
+                                "[session seq={seq}] rank 拉取失败，降级默认值: puuid={} err={}",
+                                puuid_short(&puuid3),
+                                e
+                            );
+                            Rank::default()
+                        }
                     }
                 }
             );
