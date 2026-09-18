@@ -1701,9 +1701,7 @@ mod tests {
             is_multi_team: true,
             ..Default::default()
         };
-        build_cherry_subteams(&mut session, &mut data, "p-3-0")
-            .await
-            .unwrap();
+        build_cherry_subteams(&mut session, &mut data, "p-3-0", None);
         assert_eq!(data.subteams.len(), 8);
         for s in &data.subteams {
             assert_eq!(s.players.len(), 2);
@@ -1768,9 +1766,7 @@ mod tests {
             is_multi_team: true,
             ..Default::default()
         };
-        build_cherry_subteams(&mut session, &mut data, "a")
-            .await
-            .unwrap();
+        build_cherry_subteams(&mut session, &mut data, "a", None);
         assert_eq!(data.subteams.len(), 2);
         assert_eq!(data.subteams[0].players.len(), 2);
         assert_eq!(data.subteams[1].players.len(), 1);
@@ -1823,9 +1819,7 @@ mod tests {
             is_multi_team: true,
             ..Default::default()
         };
-        build_cherry_subteams(&mut session, &mut data, "paired-1-0")
-            .await
-            .unwrap();
+        build_cherry_subteams(&mut session, &mut data, "paired-1-0", None);
         // 不合并：每个 raw tpid 保留为独立 subteam
         assert_eq!(data.subteams.len(), 12);
         // 我方排第一
