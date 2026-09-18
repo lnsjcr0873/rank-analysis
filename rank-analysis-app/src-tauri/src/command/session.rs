@@ -510,16 +510,9 @@ async fn process_session_data(app_handle: AppHandle, seq: u64) -> Result<(), Str
             })
             .collect();
 
-        let mut filled: Vec<SessionSummoner> = Vec::with_capacity(players_meta.len());
-        process_subteam_parallel(
-            &players_meta,
-            &mut filled,
-            mode,
-            &app_handle,
-            subteam_id,
-            seq,
-        )
-        .await?;
+        let filled =
+            process_subteam_parallel(players_meta, mode, app_handle.clone(), subteam_id, seq)
+                .await?;
         session_data.subteams[subteam_idx].players = filled;
     }
 
@@ -820,13 +813,12 @@ async fn push_basic_info(
 }
 
 async fn process_subteam_parallel(
-    players: &[crate::lcu::api::session::OnePlayer],
-    result: &mut Vec<SessionSummoner>,
+    players: Vec<crate::lcu::api::session::OnePlayer>,
     mode: i32,
-    app_handle: &AppHandle,
+    app_handle: AppHandle,
     subteam_id: i32,
     seq: u64,
-) -> Result<(), String> {
+) -> Result<Vec<SessionSummoner>, String> {
     /// 日志用 puuid 截断（前 8 位）：完整 puuid 是玩家标识，日志只留可辨识前缀。
     fn puuid_short(puuid: &str) -> &str {
         if puuid.len() <= 8 {
@@ -848,7 +840,7 @@ async fn process_subteam_parallel(
     let total = players.len();
 
     let futures = players
-        .iter()
+        .into_iter()
         .enumerate()
         .map(|(index, player)| async move {
             if player.puuid.is_empty() {
@@ -1020,6 +1012,8 @@ async fn process_subteam_parallel(
     // 数据仍写回 result（供调用方组装最终快照），但旧任务不再逐个推送给前端。
     let emit_allowed = is_latest_task(&SESSION_TASK_SEQ, seq);
 
+    let mut result = Vec::with_capacity(total);
+
     for (index, session_summoner) in fetched_players.into_iter().enumerate() {
         result.push(session_summoner.clone());
 
@@ -1030,7 +1024,7 @@ async fn process_subteam_parallel(
         let update = PlayerUpdate {
             subteam_id,
             index,
-            total: players.len(),
+            total,
             player: session_summoner,
         };
 
@@ -1039,7 +1033,7 @@ async fn process_subteam_parallel(
         }
     }
 
-    Ok(())
+    Ok(result)
 }
 
 fn add_pre_group_markers(session_data: &mut SessionData) {
