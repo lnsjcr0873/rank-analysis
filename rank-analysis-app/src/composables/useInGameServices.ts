@@ -21,12 +21,13 @@ import type { SessionData } from '@renderer/types/domain/gaming'
 import { getConfigByIpc } from '@renderer/services/ipc'
 import { CONFIG_KEYS } from '@renderer/services/configKeys'
 import { loadOverlayPrefs } from '@renderer/utils/overlayPrefs'
+import { startLiveBridge, stopLiveBridge } from '@renderer/companion/bridge'
 
 /** 局内下一动作建议：全局单例，Gaming 只读展示，服务负责轮询更新 */
 export const inGameNextActions = ref<NextAction[]>([])
 
 const NEXT_ACTION_THROTTLE_MS = 30_000
-const NEXT_ACTION_POLL_MS = 2_000
+const NEXT_ACTION_POLL_MS = 5_000
 
 let nextActionTimer: ReturnType<typeof setInterval> | null = null
 let lastNextActionAt = 0
@@ -183,6 +184,8 @@ function ensureInGameLoop(sessionData: SessionData): void {
       } else {
         stopMayhemAssist()
       }
+      // AI 搭子桥：对局进行中按需启动
+      startLiveBridge()
     } else {
       if (nextActionTimer) {
         clearInterval(nextActionTimer)
@@ -190,6 +193,7 @@ function ensureInGameLoop(sessionData: SessionData): void {
       }
       inGameNextActions.value = []
       stopMayhemAssist()
+      stopLiveBridge()
       void invoke('hide_overlay_window').catch(() => {})
     }
   })

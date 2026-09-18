@@ -78,9 +78,9 @@ static CURRENT_ACTIONS: LazyLock<Mutex<Vec<crate::live::NextAction>>> =
 static CURRENT_WIDTH: LazyLock<Mutex<f64>> = LazyLock::new(|| Mutex::new(OVERLAY_WIDTH));
 static CURRENT_HEIGHT: LazyLock<Mutex<f64>> = LazyLock::new(|| Mutex::new(OVERLAY_HEIGHT));
 
-/// Overlay 窗口固定尺寸（评估文档 §3.1）。
+/// Overlay 窗口固定尺寸（评估文档 §3.1，高度留出足够自适应展示空间）。
 const OVERLAY_WIDTH: f64 = 320.0;
-const OVERLAY_HEIGHT: f64 = 200.0;
+const OVERLAY_HEIGHT: f64 = 360.0;
 /// 窗口与屏幕边缘的间距。
 const OVERLAY_MARGIN: f64 = 16.0;
 
@@ -103,11 +103,30 @@ pub fn clear_current_panel() {
     *CURRENT_PANEL_ENVELOPE
         .lock()
         .unwrap_or_else(|e| e.into_inner()) = None;
+    let has_actions = !CURRENT_ACTIONS
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .is_empty();
+    if !has_actions {
+        hide();
+    }
 }
 
 /// 设置当前的 NextAction 建议数据
 pub fn set_current_actions(actions: Vec<crate::live::NextAction>) {
+    let is_empty = actions.is_empty();
     *CURRENT_ACTIONS.lock().unwrap_or_else(|e| e.into_inner()) = actions;
+    if is_empty {
+        let has_panel = CURRENT_PANEL_ENVELOPE
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+            .map(|env| !panel_expired(env))
+            .unwrap_or(false);
+        if !has_panel {
+            hide();
+        }
+    }
 }
 
 /// 获取当前所有激活的 Overlay 状态快照（过期面板按 null 返回）。
@@ -222,7 +241,7 @@ pub fn force_hide() {
 pub fn layout(app: &tauri::AppHandle, width: f64, height: f64, anchor: &str) {
     *CURRENT_ANCHOR.lock().unwrap_or_else(|e| e.into_inner()) = anchor.to_string();
     let width = width.clamp(200.0, 900.0);
-    let height = height.clamp(80.0, 500.0);
+    let height = height.clamp(80.0, 600.0);
     *CURRENT_WIDTH.lock().unwrap_or_else(|e| e.into_inner()) = width;
     *CURRENT_HEIGHT.lock().unwrap_or_else(|e| e.into_inner()) = height;
     if let Some(w) = get_window() {
@@ -233,11 +252,8 @@ pub fn layout(app: &tauri::AppHandle, width: f64, height: f64, anchor: &str) {
 
 /// 按锚点将窗口贴**浮窗所在显示器**顶部（带边距）。
 ///
-/// 双屏场景游戏常跑在副屏：固定取主显示器会把浮窗画到玩家看不到的屏上。
-/// 优先 `current_monitor`（浮窗当前所在屏，Tauri 已按逻辑坐标换算，
-/// 无混合 DPI 二次缩放的歧义），拿不到时回退主显示器。
-/// debug5：虚拟桌面坐标系下副屏原点非 (0,0)（如右侧副屏 (1920,0)），
-/// 必须叠加 `monitor.position()` 逻辑原点，否则副屏游戏时浮窗被画到主屏。
+/// 修复 DPI 坐标换算：在计算对齐锚点时，通过 Scale Factor 统一换算为物理像素，
+/// 调用物理定位接口精准贴靠主屏幕边缘，彻底解决高分屏（125%/150% 等）下浮窗飞出屏幕的问题。
 fn position_by_anchor(app: &tauri::AppHandle, width: f64, anchor: &str) {
     let Some(w) = get_window() else {
         return;
@@ -252,22 +268,26 @@ fn position_by_anchor(app: &tauri::AppHandle, width: f64, anchor: &str) {
         return;
     };
     let scale_factor = monitor.scale_factor();
-    let logical_screen_w = monitor.size().width as f64 / scale_factor;
-    let x = match anchor {
-        "top-left" => OVERLAY_MARGIN,
-        "top-center" => (logical_screen_w - width) / 2.0,
-        // 默认右上（历史行为）
-        _ => logical_screen_w - width - OVERLAY_MARGIN,
+    let phys_screen_w = monitor.size().width as i32;
+    let phys_width = (width * scale_factor).round() as i32;
+    let phys_margin = (OVERLAY_MARGIN * scale_factor).round() as i32;
+
+    let phys_x = match anchor {
+        "top-left" => phys_margin,
+        "top-center" => (phys_screen_w - phys_width) / 2,
+        // 默认右上
+        _ => phys_screen_w - phys_width - phys_margin,
     };
-    let y = match anchor {
-        "top-right" => 64.0, // 避开顶栏窗控按钮区域（最小化/最大化/关闭）
-        _ => OVERLAY_MARGIN,
+    let phys_y = match anchor {
+        "top-right" => (64.0 * scale_factor).round() as i32, // 避开顶栏窗控按钮区域
+        _ => phys_margin,
     };
     let origin = monitor.position();
-    let final_x = origin.x as f64 / scale_factor + x;
-    let final_y = origin.y as f64 / scale_factor + y;
-    let _ = w.set_position(Position::Logical(tauri::LogicalPosition::new(
-        final_x, final_y,
+    let final_phys_x = origin.x + phys_x;
+    let final_phys_y = origin.y + phys_y;
+    let _ = w.set_position(Position::Physical(tauri::PhysicalPosition::new(
+        final_phys_x,
+        final_phys_y,
     )));
 }
 

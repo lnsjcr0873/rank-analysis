@@ -127,3 +127,41 @@ pub async fn overlay_toggle(app: tauri::AppHandle) -> Result<bool, String> {
     }
     crate::overlay::toggle(&app)
 }
+
+/// 预览浮窗（设置页「测试并预览浮窗」调用）。
+/// 组装典型模拟建议并在屏幕目标位置弹出浮窗展示。
+#[tauri::command]
+pub async fn preview_overlay_window(app: tauri::AppHandle) -> Result<(), String> {
+    let mock_actions = vec![
+        NextAction {
+            kind: "buy_item".to_string(),
+            champion_id: 103,
+            item_id: 3089,
+            reason: "核心装备：经济充足，回城建议优先合成帽子".to_string(),
+            urgency: "high".to_string(),
+            valid_until: 0,
+        },
+        NextAction {
+            kind: "objective".to_string(),
+            champion_id: 103,
+            item_id: 0,
+            reason: "资源提醒：小龙即将刷新，建议提前靠向河道控视野".to_string(),
+            urgency: "medium".to_string(),
+            valid_until: 0,
+        },
+        NextAction {
+            kind: "recall".to_string(),
+            champion_id: 103,
+            item_id: 0,
+            reason: "状态偏低：敌方中野游走，控线后建议就地回城补给".to_string(),
+            urgency: "low".to_string(),
+            valid_until: 0,
+        },
+    ];
+
+    crate::overlay::set_current_actions(mock_actions.clone());
+    crate::overlay::show(&app);
+    let _ = app.emit_to("overlay", "overlay:update", &mock_actions);
+
+    Ok(())
+}

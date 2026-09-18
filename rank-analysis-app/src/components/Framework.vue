@@ -54,7 +54,6 @@ import { useWindowShortcuts } from '@renderer/composables/useWindowShortcuts'
 import { useZoom } from '@renderer/composables/useZoom'
 import { useStartupDialogs } from '@renderer/composables/useStartupDialogs'
 import { isMainWindow } from '@renderer/utils/windows'
-import { startLiveBridge } from '@renderer/companion/bridge'
 
 /**
  * 应用主布局框架组件（v3 壳层：舰桥导航 + 三段顶栏 + 命令面板）。
@@ -115,26 +114,16 @@ useZoom()
 // 多窗口快捷键（Ctrl+W 关子窗 / Ctrl+Tab 切窗）：主窗与战绩子窗共用
 useWindowShortcuts()
 
-// AI 搭子桥（C2）：应用级单例，对局中周期拉取事件 → 台词 → 浮窗气泡。
-// 仅在主窗口执行轮询，避免每个子窗口重复发起 Live Client 请求与浮窗气泡
+// 局内常驻服务（debug4-4：nextAction 轮询 + overlay 显隐 + mayhem 调度 + AI 搭子桥）：
+// 仅主窗口启动，严格按对局状态受控驱动（非游戏期间不向 2999 端口发送任何盲打请求）
 const isMain = isMainWindow()
-const liveBridge = isMain ? startLiveBridge() : null
-
-// 局内常驻服务（debug4-4：nextAction 轮询 + overlay 显隐 + mayhem 调度）：
-// 与路由解耦，Gaming 切页不再中断。同样仅主窗口启动。
 if (isMain) {
   useInGameServices()
 }
 onMounted(() => {
-  if (isMain) {
-    liveBridge?.start()
-  }
   window.addEventListener('keydown', onGlobalKey)
 })
 onUnmounted(() => {
-  if (isMain) {
-    liveBridge?.stop()
-  }
   window.removeEventListener('keydown', onGlobalKey)
 })
 

@@ -1,12 +1,20 @@
 <template>
   <span
+    ref="containerRef"
     class="lazy-img"
     :class="{
       'lazy-img-loading': state === 'loading',
       'lazy-img-error': state === 'error'
     }"
   >
-    <img :src="renderSrc" :alt="alt" loading="lazy" @load="onLoad" @error="onError" />
+    <img
+      v-if="isVisible"
+      :src="renderSrc"
+      :alt="alt"
+      loading="lazy"
+      @load="onLoad"
+      @error="onError"
+    />
   </span>
 </template>
 
@@ -14,6 +22,9 @@
 /**
  * 懒加载图片组件
  *
+ * 结合 IntersectionObserver 严格实现前台视窗可见性校验：
+ * 只有人眼真正看得见的 DOM 才发起请求，未进入视口的 DOM 绝对不发网络与 asset:// IPC 请求，
+ * 杜绝批量渲染时的跨进程内存拷贝风暴与主事件循环阻塞。
  * 在图片加载完成前显示 shimmer 占位动画，加载失败时降低透明度作为错误回退。
  *
  * 失败重试：LCU 静态资源端点在客户端刚启动的 1~2s 内常返回一次 404/连接重置，
@@ -25,7 +36,7 @@
  * <LazyImg src="/champion/1.png" alt="champion" />
  * ```
  */
-import { computed, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 
 const props = defineProps<{
   /** 图片地址 */
@@ -81,8 +92,35 @@ function onError() {
   }, RETRY_DELAY_MS)
 }
 
+const containerRef = ref<HTMLElement | null>(null)
+const isVisible = ref(typeof IntersectionObserver === 'undefined')
+let observer: IntersectionObserver | null = null
+
+onMounted(() => {
+  if (typeof IntersectionObserver !== 'undefined' && containerRef.value) {
+    observer = new IntersectionObserver(
+      entries => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            isVisible.value = true
+            observer?.disconnect()
+            observer = null
+            break
+          }
+        }
+      },
+      { rootMargin: '60px' }
+    )
+    observer.observe(containerRef.value)
+  } else {
+    isVisible.value = true
+  }
+})
+
 onUnmounted(() => {
   if (retryTimer) clearTimeout(retryTimer)
+  observer?.disconnect()
+  observer = null
 })
 </script>
 

@@ -298,6 +298,11 @@ impl GameStateMonitor {
             // 同步清空面板信封：否则下局 overlay 挂载时快照同步会闪出上局旧推荐
             crate::overlay::clear_current_panel();
         }
+        // 补充四：进入对局时主动修剪进程物理工作集内存（Working Set Trim）
+        // 将暂时用不到的物理内存归还系统和游戏进程
+        if !was_in_game && is_in_game {
+            trim_working_set();
+        }
 
         // 阶段跳变时唤醒对局中挂起的自动化任务（accept_match 等）：
         // 它们在 InProgress/GameStart 期间零轮询挂起，此处毫秒级唤醒。
@@ -385,6 +390,19 @@ async fn probe_lcu_state() -> (Result<Summoner, String>, Result<String, String>)
 ///         ...
 /// }
 /// ```
+#[cfg(windows)]
+pub fn trim_working_set() {
+    unsafe {
+        use winapi::um::memoryapi::SetProcessWorkingSetSize;
+        use winapi::um::processthreadsapi::GetCurrentProcess;
+        let _ = SetProcessWorkingSetSize(GetCurrentProcess(), usize::MAX, usize::MAX);
+        log::info!("[system] 游戏对局中，已执行 Working Set Trim 归还物理内存");
+    }
+}
+
+#[cfg(not(windows))]
+pub fn trim_working_set() {}
+
 pub async fn start_game_state_monitor(app_handle: AppHandle, stop: Arc<AtomicBool>) {
     log::info!("Starting game state monitor");
 
@@ -398,12 +416,32 @@ pub async fn start_game_state_monitor(app_handle: AppHandle, stop: Arc<AtomicBoo
         // 造成 LCU 卡顿恢复后的事件风暴；Delay 语义改为「顺延到下一个整周期」。
         ticker.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
+        let mut in_game_ticks: u32 = 0;
+
         loop {
             if stop.load(Ordering::Relaxed) {
                 log::info!("[shard] game-state-monitor stopped");
                 return;
             }
             ticker.tick().await;
+
+            // 补充三：变主动机械轮询为被动监听。对局进行中时将机械探测降频到 30 秒一次
+            // 阶段变化仍由 listener.rs 中的 WebSocket 实时推送响应，系统调用下降 93.3%
+            {
+                let is_in_game = {
+                    let guard = monitor.read().await;
+                    guard.last_state.connected
+                        && guard.last_state.phase.as_deref() == Some("InProgress")
+                };
+                if is_in_game {
+                    in_game_ticks = in_game_ticks.saturating_add(1);
+                    if in_game_ticks % 15 != 0 {
+                        continue;
+                    }
+                } else {
+                    in_game_ticks = 0;
+                }
+            }
 
             // 探测（HTTP I/O）在锁外执行，不阻塞任何并发读请求
             let (summoner_result, phase_result) = probe_lcu_state().await;

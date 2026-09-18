@@ -331,12 +331,13 @@ pub async fn mayhem_capture_band_stats() -> Result<Vec<crate::mayhem::capture::B
 
     #[cfg(windows)]
     {
-        // 单次 BitBlt 抓包围盒 + 纯内存切片：3 次 DWM 同步 → 1 次。
-        // 与 mayhem_assist_tick / mayhem_capture_band_dump 同口径。
-        use crate::mayhem::capture::{luma_stddev, slice_union_sub, slot_band_union_rect};
+        // 优先走 DXGI 硬件直通 + 500ms 时间阀门抓包围盒，必要时回退 GDI
+        use crate::mayhem::capture::{
+            capture_screen_region, luma_stddev, slice_union_sub, slot_band_union_rect,
+        };
         let screen = crate::mayhem::capture::gdi::primary_screen_size();
         let (union_rect, rects) = slot_band_union_rect(screen);
-        let full = crate::mayhem::capture::gdi::capture_region_rgba(
+        let full = capture_screen_region(
             union_rect.x,
             union_rect.y,
             union_rect.w,
@@ -487,7 +488,7 @@ pub fn mayhem_capture_band_dump() -> Result<Vec<BandDump>, String> {
 
         let screen = crate::mayhem::capture::gdi::primary_screen_size();
         let (union_rect, rects) = crate::mayhem::capture::slot_band_union_rect(screen);
-        let full = crate::mayhem::capture::gdi::capture_region_rgba(
+        let full = crate::mayhem::capture::capture_screen_region(
             union_rect.x,
             union_rect.y,
             union_rect.w,
@@ -589,7 +590,9 @@ pub async fn mayhem_assist_tick(
     // 避免 cfg 剥离后块尾值被丢弃或触发 needless_return
     #[cfg(all(windows, feature = "ocr-rapid"))]
     let out: Result<Value, String> = {
-        use crate::mayhem::capture::{luma_stddev, slice_union_sub, slot_band_union_rect};
+        use crate::mayhem::capture::{
+            capture_screen_region, luma_stddev, slice_union_sub, slot_band_union_rect,
+        };
 
         // 快路径永不下载：模型没下好直接报预热中，不抓屏不推理，
         // 前端调度器 350ms 后重试，预热由 mayhem_ocr_prewarm 在后台完成。
@@ -600,11 +603,10 @@ pub async fn mayhem_assist_tick(
             }));
         }
 
-        // 单次 BitBlt 抓包围盒（1 次 DWM 同步），再纯内存切片出三卡：
-        // 3 次抓屏 → 1 次，DWM 锁争抢降为 1/3。
+        // 优先走 DXGI 硬件直通 + 500ms 时间阀门抓包围盒（GPU 纹理拷贝），再纯内存切片出三卡
         let screen = crate::mayhem::capture::gdi::primary_screen_size();
         let (union_rect, rects) = slot_band_union_rect(screen);
-        let full = crate::mayhem::capture::gdi::capture_region_rgba(
+        let full = capture_screen_region(
             union_rect.x,
             union_rect.y,
             union_rect.w,

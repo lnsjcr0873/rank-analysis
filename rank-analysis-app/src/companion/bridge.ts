@@ -154,9 +154,16 @@ export function createLiveBridge(deps: LiveBridgeDeps = {}): LiveBridge {
 
 let singleton: LiveBridge | null = null
 
-/** 应用级单例桥（Framework.vue 启动一次；重复调用返回同一实例）。 */
+/** 应用级单例桥（Framework.vue / useInGameServices 启动；重复调用返回同一实例）。 */
 export function startLiveBridge(deps: LiveBridgeDeps = {}): LiveBridge {
   singleton ??= createLiveBridge(deps)
   if (!singleton.running) singleton.start()
   return singleton
+}
+
+/** 停止应用级单例桥 */
+export function stopLiveBridge(): void {
+  if (singleton?.running) {
+    singleton.stop()
+  }
 }

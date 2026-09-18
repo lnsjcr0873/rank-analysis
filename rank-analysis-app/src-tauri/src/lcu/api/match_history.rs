@@ -188,23 +188,37 @@ impl MatchHistory {
     }
 
     /// 为每条对局拉取详情（game_detail）并写入。
+    ///
+    /// 增加并发流控（限制同时最多 3 个请求），避免瞬间并发 20~50 个本地 TLS 连接
+    /// 导致打满 CPU 核心与耗尽本地套接字端口。
     pub async fn enrich_game_detail(&mut self) -> Result<(), String> {
         if self.games.games.is_empty() {
             return Ok(());
         }
 
-        let futures = self.games.games.iter_mut().map(|game| async move {
-            match GameDetail::get_game_detail_by_id(&game.game_id).await {
+        use futures::stream::{self, StreamExt};
+
+        let details = stream::iter(self.games.games.iter().map(|g| g.game_id))
+            .map(|game_id| async move {
+                let res = GameDetail::get_game_detail_by_id(&game_id).await;
+                (game_id, res)
+            })
+            .buffer_unordered(3)
+            .collect::<Vec<_>>()
+            .await;
+
+        for (game_id, res) in details {
+            match res {
                 Ok(detail) => {
-                    game.game_detail = detail;
+                    if let Some(game) = self.games.games.iter_mut().find(|g| g.game_id == game_id) {
+                        game.game_detail = detail;
+                    }
                 }
                 Err(e) => {
-                    log::warn!("Failed to get game detail for {}: {}", game.game_id, e);
+                    log::warn!("Failed to get game detail for {}: {}", game_id, e);
                 }
             }
-        });
-
-        futures::future::join_all(futures).await;
+        }
 
         Ok(())
     }

@@ -37,6 +37,11 @@ vi.mock('@renderer/services/nextAction', () => ({
   getNextActions: vi.fn().mockResolvedValue([])
 }))
 
+vi.mock('@renderer/companion/bridge', () => ({
+  startLiveBridge: vi.fn(),
+  stopLiveBridge: vi.fn()
+}))
+
 import { invoke } from '@tauri-apps/api/core'
 import {
   useInGameServices,

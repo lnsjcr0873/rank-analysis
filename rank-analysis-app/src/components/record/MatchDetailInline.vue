@@ -191,7 +191,7 @@
           </div>
 
           <div class="match-detail-tab-pane">
-            <KeepAlive>
+            <KeepAlive :max="2">
               <component :is="activeTabComponent" />
             </KeepAlive>
           </div>
@@ -218,7 +218,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, ref, watch, onMounted, toRef, provide } from 'vue'
+import { computed, ref, watch, onMounted, onUnmounted, toRef, provide } from 'vue'
 import { CirclePlay, Sparkles, X } from 'lucide-vue-next'
 import { NButton, NIcon, NTooltip } from 'naive-ui'
 import { invoke } from '@tauri-apps/api/core'
@@ -522,6 +522,10 @@ watch(
   },
   { immediate: true }
 )
+
+onUnmounted(() => {
+  sgpDetail.value = null
+})
 </script>
 
 <style scoped>

@@ -264,6 +264,15 @@
               @keyup.enter="persistOverlay"
             />
             <n-text :depth="3" style="font-size: var(--font-size-xs)">开/关浮窗</n-text>
+            <n-button
+              size="tiny"
+              type="primary"
+              secondary
+              :disabled="overlayPrefs.disabled"
+              @click="handlePreviewOverlay"
+            >
+              测试并预览浮窗
+            </n-button>
           </n-space>
           <n-text :depth="3" style="font-size: var(--font-size-sm)">
             {{
@@ -453,6 +462,15 @@ async function persistOverlay() {
     await emit('overlay:config', overlayPrefs.value)
   } catch {
     /* overlay 未运行时广播失败可忽略 */
+  }
+}
+
+async function handlePreviewOverlay() {
+  try {
+    await invoke('preview_overlay_window')
+    message.success('已触发浮窗预览，请观察屏幕目标位置')
+  } catch (e) {
+    message.error(`预览失败: ${e}`)
   }
 }
 

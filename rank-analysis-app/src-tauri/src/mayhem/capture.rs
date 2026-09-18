@@ -527,6 +527,286 @@ mod geometry_tests {
 }
 
 #[cfg(windows)]
+pub mod dxgi {
+    //! DXGI Desktop Duplication 显卡硬件直通捕获。
+    //!
+    //! 显存内纹理直拷 + 仅拉取指定卡牌目标区域，CPU 占用趋近于 0，消除 GDI 带来的显卡帧排队清空。
+    //! 内置 500ms 时间阀门，防止高刷显示器 (144Hz/240Hz) 下驱动中断与事件同步吃满 CPU。
+
+    use std::ptr::{null, null_mut};
+    use std::sync::Mutex;
+    use std::time::{Duration, Instant};
+
+    use winapi::Interface;
+    use winapi::shared::dxgiformat::DXGI_FORMAT_B8G8R8A8_UNORM;
+    use winapi::shared::dxgitype::DXGI_SAMPLE_DESC;
+    use winapi::shared::minwindef::UINT;
+    use winapi::shared::winerror::{DXGI_ERROR_ACCESS_LOST, DXGI_ERROR_WAIT_TIMEOUT, S_OK};
+    use winapi::um::d3d11::{
+        D3D11CreateDevice, ID3D11Device, ID3D11DeviceContext, ID3D11Resource, ID3D11Texture2D,
+        D3D11_BOX, D3D11_CPU_ACCESS_READ, D3D11_CREATE_DEVICE_BGRA_SUPPORT, D3D11_MAP_READ,
+        D3D11_MAPPED_SUBRESOURCE, D3D11_SDK_VERSION, D3D11_TEXTURE2D_DESC, D3D11_USAGE_STAGING,
+    };
+    use winapi::um::d3dcommon::{D3D_DRIVER_TYPE_HARDWARE, D3D_FEATURE_LEVEL_11_0};
+    use winapi::um::dxgi::{IDXGIAdapter, IDXGIDevice, IDXGIOutput, IDXGIResource};
+    use winapi::um::dxgi1_2::{DXGI_OUTDUPL_FRAME_INFO, IDXGIOutput1, IDXGIOutputDuplication};
+
+    use super::gdi::RegionRgba;
+
+    const MIN_CAPTURE_INTERVAL: Duration = Duration::from_millis(500);
+
+    struct DxgiState {
+        device: *mut ID3D11Device,
+        context: *mut ID3D11DeviceContext,
+        dupl: *mut IDXGIOutputDuplication,
+        last_capture: Option<Instant>,
+    }
+
+    unsafe impl Send for DxgiState {}
+    unsafe impl Sync for DxgiState {}
+
+    impl Drop for DxgiState {
+        fn drop(&mut self) {
+            unsafe {
+                if !self.dupl.is_null() {
+                    (*self.dupl).Release();
+                }
+                if !self.context.is_null() {
+                    (*self.context).Release();
+                }
+                if !self.device.is_null() {
+                    (*self.device).Release();
+                }
+            }
+        }
+    }
+
+    static DXGI_STATE: Mutex<Option<DxgiState>> = Mutex::new(None);
+
+    unsafe fn init_dxgi() -> Result<DxgiState, String> {
+        let mut device: *mut ID3D11Device = null_mut();
+        let mut context: *mut ID3D11DeviceContext = null_mut();
+        let feature_levels = [D3D_FEATURE_LEVEL_11_0];
+        let mut feature_level = 0;
+
+        let hr = D3D11CreateDevice(
+            null_mut(),
+            D3D_DRIVER_TYPE_HARDWARE,
+            null_mut(),
+            D3D11_CREATE_DEVICE_BGRA_SUPPORT,
+            feature_levels.as_ptr(),
+            feature_levels.len() as UINT,
+            D3D11_SDK_VERSION,
+            &mut device,
+            &mut feature_level,
+            &mut context,
+        );
+        if hr != S_OK || device.is_null() || context.is_null() {
+            return Err(format!("D3D11CreateDevice failed: hr={hr:#x}"));
+        }
+
+        let mut dxgi_device: *mut IDXGIDevice = null_mut();
+        let hr = (*device).QueryInterface(&IDXGIDevice::uuidof(), &mut dxgi_device as *mut _ as *mut _);
+        if hr != S_OK || dxgi_device.is_null() {
+            (*device).Release();
+            (*context).Release();
+            return Err(format!("QueryInterface IDXGIDevice failed: hr={hr:#x}"));
+        }
+
+        let mut adapter: *mut IDXGIAdapter = null_mut();
+        let hr = (*dxgi_device).GetAdapter(&mut adapter);
+        (*dxgi_device).Release();
+        if hr != S_OK || adapter.is_null() {
+            (*device).Release();
+            (*context).Release();
+            return Err(format!("GetAdapter failed: hr={hr:#x}"));
+        }
+
+        let mut output: *mut IDXGIOutput = null_mut();
+        let hr = (*adapter).EnumOutputs(0, &mut output);
+        (*adapter).Release();
+        if hr != S_OK || output.is_null() {
+            (*device).Release();
+            (*context).Release();
+            return Err(format!("EnumOutputs failed: hr={hr:#x}"));
+        }
+
+        let mut output1: *mut IDXGIOutput1 = null_mut();
+        let hr = (*output).QueryInterface(&IDXGIOutput1::uuidof(), &mut output1 as *mut _ as *mut _);
+        (*output).Release();
+        if hr != S_OK || output1.is_null() {
+            (*device).Release();
+            (*context).Release();
+            return Err(format!("QueryInterface IDXGIOutput1 failed: hr={hr:#x}"));
+        }
+
+        let mut dupl: *mut IDXGIOutputDuplication = null_mut();
+        let hr = (*output1).DuplicateOutput(device as *mut _, &mut dupl);
+        (*output1).Release();
+        if hr != S_OK || dupl.is_null() {
+            (*device).Release();
+            (*context).Release();
+            return Err(format!("DuplicateOutput failed: hr={hr:#x}"));
+        }
+
+        Ok(DxgiState {
+            device,
+            context,
+            dupl,
+            last_capture: None,
+        })
+    }
+
+    pub fn capture_region(x: i32, y: i32, w: i32, h: i32) -> Result<RegionRgba, String> {
+        if w <= 0 || h <= 0 {
+            return Err("capture region size must be positive".into());
+        }
+
+        let mut guard = DXGI_STATE.lock().map_err(|e| e.to_string())?;
+        if guard.is_none() {
+            unsafe {
+                *guard = Some(init_dxgi()?);
+            }
+        }
+
+        let state = guard.as_mut().unwrap();
+
+        if let Some(last) = state.last_capture {
+            let elapsed = last.elapsed();
+            if elapsed < MIN_CAPTURE_INTERVAL {
+                std::thread::sleep(MIN_CAPTURE_INTERVAL - elapsed);
+            }
+        }
+        state.last_capture = Some(Instant::now());
+
+        unsafe {
+            let mut frame_info: DXGI_OUTDUPL_FRAME_INFO = std::mem::zeroed();
+            let mut desktop_resource: *mut IDXGIResource = null_mut();
+
+            let hr = (*state.dupl).AcquireNextFrame(50, &mut frame_info, &mut desktop_resource);
+            if hr == DXGI_ERROR_WAIT_TIMEOUT {
+                return Err("DXGI AcquireNextFrame timeout".into());
+            }
+            if hr == DXGI_ERROR_ACCESS_LOST {
+                *guard = None;
+                return Err("DXGI access lost".into());
+            }
+            if hr != S_OK || desktop_resource.is_null() {
+                return Err(format!("AcquireNextFrame failed: hr={hr:#x}"));
+            }
+
+            let mut desktop_texture: *mut ID3D11Texture2D = null_mut();
+            let hr = (*desktop_resource).QueryInterface(
+                &ID3D11Texture2D::uuidof(),
+                &mut desktop_texture as *mut _ as *mut _,
+            );
+            (*desktop_resource).Release();
+            if hr != S_OK || desktop_texture.is_null() {
+                let _ = (*state.dupl).ReleaseFrame();
+                return Err(format!("QueryInterface ID3D11Texture2D failed: hr={hr:#x}"));
+            }
+
+            let staging_desc = D3D11_TEXTURE2D_DESC {
+                Width: w as UINT,
+                Height: h as UINT,
+                MipLevels: 1,
+                ArraySize: 1,
+                Format: DXGI_FORMAT_B8G8R8A8_UNORM,
+                SampleDesc: DXGI_SAMPLE_DESC {
+                    Count: 1,
+                    Quality: 0,
+                },
+                Usage: D3D11_USAGE_STAGING,
+                BindFlags: 0,
+                CPUAccessFlags: D3D11_CPU_ACCESS_READ,
+                MiscFlags: 0,
+            };
+
+            let mut staging_texture: *mut ID3D11Texture2D = null_mut();
+            let hr = (*state.device).CreateTexture2D(&staging_desc, null(), &mut staging_texture);
+            if hr != S_OK || staging_texture.is_null() {
+                (*desktop_texture).Release();
+                let _ = (*state.dupl).ReleaseFrame();
+                return Err(format!("CreateTexture2D staging failed: hr={hr:#x}"));
+            }
+
+            let source_box = D3D11_BOX {
+                left: x.max(0) as UINT,
+                top: y.max(0) as UINT,
+                front: 0,
+                right: (x + w) as UINT,
+                bottom: (y + h) as UINT,
+                back: 1,
+            };
+
+            (*state.context).CopySubresourceRegion(
+                staging_texture as *mut ID3D11Resource,
+                0,
+                0,
+                0,
+                0,
+                desktop_texture as *mut ID3D11Resource,
+                0,
+                &source_box,
+            );
+
+            (*desktop_texture).Release();
+            let _ = (*state.dupl).ReleaseFrame();
+
+            let mut mapped: D3D11_MAPPED_SUBRESOURCE = std::mem::zeroed();
+            let hr = (*state.context).Map(
+                staging_texture as *mut ID3D11Resource,
+                0,
+                D3D11_MAP_READ,
+                0,
+                &mut mapped,
+            );
+            if hr != S_OK || mapped.pData.is_null() {
+                (*staging_texture).Release();
+                return Err(format!("Map staging texture failed: hr={hr:#x}"));
+            }
+
+            let src_pitch = mapped.RowPitch as usize;
+            let mut buf = vec![0u8; (w * h * 4) as usize];
+            let dst_pitch = (w * 4) as usize;
+            let src_slice = std::slice::from_raw_parts(mapped.pData as *const u8, src_pitch * h as usize);
+
+            for row in 0..h as usize {
+                let src_start = row * src_pitch;
+                let dst_start = row * dst_pitch;
+                buf[dst_start..dst_start + dst_pitch]
+                    .copy_from_slice(&src_slice[src_start..src_start + dst_pitch]);
+            }
+
+            (*state.context).Unmap(staging_texture as *mut ID3D11Resource, 0);
+            (*staging_texture).Release();
+
+            for px in buf.as_chunks_mut::<4>().0 {
+                px.swap(0, 2);
+            }
+
+            Ok(RegionRgba {
+                width: w,
+                height: h,
+                rgba: buf,
+            })
+        }
+    }
+}
+
+/// 统一屏幕区域捕获入口：优先走 DXGI 硬件直通与时间阀门节流，驱动异常时无缝回退 GDI BitBlt
+#[cfg(windows)]
+pub fn capture_screen_region(x: i32, y: i32, w: i32, h: i32) -> Result<gdi::RegionRgba, String> {
+    match dxgi::capture_region(x, y, w, h) {
+        Ok(res) => Ok(res),
+        Err(err) => {
+            log::debug!("[capture] DXGI 捕获回退至 GDI ({err})");
+            gdi::capture_region_rgba(x, y, w, h)
+        }
+    }
+}
+
+#[cfg(windows)]
 pub mod gdi {
     //! GDI BitBlt 区域抓取（v1）。独占全屏不可用 → 引导用户改无边框窗口。
 

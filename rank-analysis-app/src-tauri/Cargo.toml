@@ -103,5 +103,11 @@ winapi = { version = "0.3.9", features = [
     "shellapi",
     "winuser",
     "wingdi", # mayhem/capture.rs：BitBlt 屏幕区域抓取（A3.1 v1）
+    "d3d11", # mayhem/capture.rs：DXGI Desktop Duplication 显卡硬件直通抓屏
+    "d3dcommon",
+    "dxgi",
+    "dxgi1_2",
+    "dxgiformat",
+    "dxgitype",
   ] } # Windows api，用于获取 lol 进程信息 / 提权重启 / 拉起登录客户端
 winreg = "0.55" # 清理腾讯登录客户端注册的 LOL 开机自启项（command/launcher.rs）

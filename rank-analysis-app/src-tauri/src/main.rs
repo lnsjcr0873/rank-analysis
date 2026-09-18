@@ -315,6 +315,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             command::overlay::set_overlay_layout,
             command::overlay::set_overlay_click_through,
             command::overlay::overlay_toggle,
+            command::overlay::preview_overlay_window,
             command::cache_cdragon_icons,
         ]);
 

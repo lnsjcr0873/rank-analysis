@@ -35,6 +35,7 @@ vi.mock('naive-ui', async importOriginal => {
   return { ...actual, useMessage: () => messageMock }
 })
 
+import { invoke } from '@tauri-apps/api/core'
 import { CONFIG_KEYS } from '@renderer/services/configKeys'
 import { getConfigByIpc, putConfigByIpc } from '@renderer/services/ipc'
 import {
@@ -45,6 +46,7 @@ import General from '../General.vue'
 
 const mockGet = vi.mocked(getConfigByIpc)
 const mockPut = vi.mocked(putConfigByIpc)
+const mockInvoke = vi.mocked(invoke)
 const mockSetOverlayDisabled = vi.mocked(setOverlayDisabled)
 const mockSetLiveGamePollDisabled = vi.mocked(setLiveGamePollDisabled)
 
@@ -111,5 +113,20 @@ describe('General.vue - overlay and live game poll switches', () => {
 
     expect(mockPut).toHaveBeenCalledWith(CONFIG_KEYS.disableLiveGamePoll, true)
     expect(mockSetLiveGamePollDisabled).toHaveBeenCalledWith(true)
+  })
+
+  it('clicks preview overlay button: invokes preview_overlay_window', async () => {
+    const wrapper = mount(General, {
+      global: { plugins: [naive] }
+    })
+    await new Promise(r => setTimeout(r, 0))
+    await wrapper.vm.$nextTick()
+
+    const overlayItem = wrapper.findAll('.n-form-item').find(el => el.text().includes('对局浮窗'))
+    const previewBtn = overlayItem!.findAll('button').find(b => b.text().includes('测试并预览浮窗'))
+    expect(previewBtn).toBeDefined()
+    await previewBtn!.trigger('click')
+    await new Promise(r => setTimeout(r, 10))
+    expect(mockInvoke).toHaveBeenCalledWith('preview_overlay_window')
   })
 })
