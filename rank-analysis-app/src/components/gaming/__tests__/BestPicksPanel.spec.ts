@@ -196,6 +196,12 @@ function candidateArg(): { value: number[] } {
   return args[1]
 }
 
+/** useBestPicks 收到的敌方 Ref（第 1 个入参 = effectiveEnemyIds，响应式跟随点亮集合） */
+function enemyIdsArg(): { value: number[] } {
+  const args = mockedUseBestPicks.mock.calls[0] as unknown as Array<{ value: number[] }>
+  return args[0]
+}
+
 describe('BestPicksPanel', () => {
   it('把 enemyIds/candidateIds/tier 传给 useBestPicks（响应式透传）', async () => {
     await mountPanel()
@@ -433,5 +439,47 @@ describe('BestPicksPanel', () => {
     // 切回 A 命中模块缓存：网络请求数不再涨，且候选回到 51
     expect(historyNames()).toHaveLength(callsAfterB)
     expect(candidateArg().value).toEqual([51])
+  })
+
+  it('点亮敌方筛选：点击敌方头像熄灭后只针对剩余点亮敌方计算（effectiveEnemyIds 跟随）', async () => {
+    const wrapper = await mountPanel()
+    const enemyAvatars = wrapper.findAll('.bp-enemy-avatar')
+    expect(enemyAvatars).toHaveLength(3)
+    // 初始全亮：敌方入参 = 全部已锁
+    expect(enemyIdsArg().value).toEqual([104, 103, 102])
+    // 熄灭 104（点击第一个敌方头像）
+    await enemyAvatars[0].trigger('click')
+    await nextTick()
+    expect(enemyIdsArg().value).toEqual([103, 102])
+    expect(enemyAvatars[0].classes()).toContain('bp-enemy-avatar--dim')
+    // 底部口径标注点亮数
+    expect(wrapper.text()).toContain('按敌方已锁 2/3（点亮）计算')
+    // 再点一次点亮回来
+    await enemyAvatars[0].trigger('click')
+    await nextTick()
+    expect(enemyIdsArg().value).toEqual([104, 103, 102])
+    expect(enemyAvatars[0].classes()).not.toContain('bp-enemy-avatar--dim')
+  })
+
+  it('局部熄灭时不误伤队友：点击敌方头像不影响协同维度入参', async () => {
+    const wrapper = await mountPanel({ teammateIds: [300] })
+    const enemyAvatars = wrapper.findAll('.bp-enemy-avatar')
+    await enemyAvatars[0].trigger('click')
+    await nextTick()
+    const args = mockedUseBestPicks.mock.calls[0]
+    expect(args[0].value).toEqual([103, 102])
+    expect(args[4]?.value).toEqual([300])
+  })
+
+  it('选人期新增锁定的敌方默认点亮参与对位（手动熄灭的保持熄灭）', async () => {
+    const wrapper = await mountPanel()
+    const enemyAvatars = wrapper.findAll('.bp-enemy-avatar')
+    await enemyAvatars[0].trigger('click') // 熄灭 104 -> [103,102]
+    await nextTick()
+    expect(enemyIdsArg().value).toEqual([103, 102])
+    // 敌方又锁定 105：默认点亮参与，不打扰已熄灭的 104
+    await wrapper.setProps({ enemyIds: [104, 103, 102, 105] })
+    await nextTick()
+    expect(enemyIdsArg().value).toEqual([103, 102, 105])
   })
 })

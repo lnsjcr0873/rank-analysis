@@ -24,8 +24,14 @@
               v-for="e in enemyPicks"
               :key="e.championId"
               class="bp-enemy-avatar"
+              :class="{ 'bp-enemy-avatar--dim': !isEnemyLit(e.championId) }"
               :src="getChampionUrl(e.championId)"
               :alt="championName(e.championId)"
+              :title="
+                championName(e.championId) +
+                (isEnemyLit(e.championId) ? '（已点亮，参与对位）' : '（已熄灭，点击点亮）')
+              "
+              @click.stop="toggleEnemyLit(e.championId)"
             />
           </span>
           <span class="bp-arrow-label">{{ barArrowLabel }}</span>
@@ -188,7 +194,7 @@
           {{ emptyText }}
         </div>
         <div class="bp-panel-footer">
-          <span>按敌方已锁{{ hasSynergy ? ' + 队友已亮协同' : '' }}计算</span>
+          <span>按敌方已锁{{ enemyCountLabel }}{{ hasSynergy ? ' + 队友已亮协同' : '' }}计算</span>
           <span v-if="filterStatusLabel" class="bp-filter-status">{{ filterStatusLabel }}</span>
           <span class="bp-panel-source">OP.GG {{ region }} · {{ tier }}</span>
         </div>
@@ -206,6 +212,10 @@ import { ChevronDown } from 'lucide-vue-next'
  * 敌方/队友头像 + Top3 推荐；点击展开 Top5 卡（头像/名字/总分 bar/
  * 协同子分/对位子分/逐条证据）。数据来自 [`useBestPicks`]：反查敌方
  * counters + 命中队友 synergies 融合评分，未知对位/协同记 0 不编造。
+ *
+ * 头像点亮筛选：队友头像（绿描边）与敌方头像（红描边）都可点击点亮/熄灭。
+ * - 灭队友 = 该队友不参与协同；灭敌方 = 该敌方不作为对位目标（只针对点亮的
+ *   个别敌方计算 counter）。新锁定的敌方默认点亮参与，用户手动熄灭的保持熄灭。
  *
  * 候选池细粒度筛选（弹层内控制、配置持久化）：
  * - 「仅已拥有」：`lol-champions/v1/owned-champions-minimal`，排位只能选已拥有
@@ -364,6 +374,61 @@ const effectiveTeammateIds = computed(() => {
   if (litTeammates.value.size === 0) return props.teammateIds
   return props.teammateIds.filter(id => litTeammates.value.has(id))
 })
+
+/** 点亮敌方集合：只有点亮（在此集合中）的敌方参与对位计算。
+ *  初始全亮（空集合 = 全部参与）；点击熄灭则移除、再点击点亮则加入。
+ *  与队友协同同构——但语义相反：队友是「可选协同锚」，敌方是「可选对位目标」，
+ *  用户可只针对个别锁定的敌方计算 counter，其余敌方不参与评分。 */
+const litEnemies = ref<Set<number>>(new Set())
+
+function isEnemyLit(championId: number): boolean {
+  // 初始空集合 = 全部点亮
+  if (litEnemies.value.size === 0) return true
+  return litEnemies.value.has(championId)
+}
+
+function toggleEnemyLit(championId: number): void {
+  const next = new Set(litEnemies.value)
+  if (next.size === 0) {
+    // 从全亮状态切换：熄灭当前点击的，其余保持点亮
+    enemyPicks.value.forEach(e => {
+      if (e.championId !== championId) next.add(e.championId)
+    })
+  } else if (next.has(championId)) {
+    next.delete(championId)
+  } else {
+    next.add(championId)
+  }
+  litEnemies.value = next
+}
+
+/** 有效对位敌方：仅点亮状态下的敌方参与计算（排除非正 id，全亮态直接透传） */
+const effectiveEnemyIds = computed(() => {
+  const ids =
+    litEnemies.value.size === 0
+      ? props.enemyIds
+      : props.enemyIds.filter(id => litEnemies.value.has(id))
+  return ids.filter(id => id > 0)
+})
+
+/** 选人期敌方逐个锁定：新锁定的敌方默认参与对位（仅有手动熄灭记录时维护，
+ *  全亮态无需扩展；只点亮「新出现」的 id——之前已存在的手动熄灭敌方保持熄灭）。 */
+watch(
+  () => props.enemyIds,
+  (ids, prevIds) => {
+    if (litEnemies.value.size === 0) return
+    const next = new Set(litEnemies.value)
+    const prev = prevIds ?? []
+    let changed = false
+    for (const id of ids) {
+      if (id > 0 && !next.has(id) && !prev.includes(id)) {
+        next.add(id)
+        changed = true
+      }
+    }
+    if (changed) litEnemies.value = next
+  }
+)
 
 /** 筛选不可用时的提示文案（降级为不筛该维度） */
 const filterHint = computed(() => {
@@ -530,7 +595,7 @@ const expandHint = computed(() => {
 })
 
 const { picks, isLoading, error } = useBestPicks(
-  computed(() => props.enemyIds),
+  effectiveEnemyIds,
   filteredCandidates,
   computed(() => props.tier),
   computed(() => props.region),
@@ -656,6 +721,14 @@ const barArrowLabel = computed(() => {
 const allNonPositive = computed(
   () => picks.value.length > 0 && picks.value.every(p => p.score <= 0)
 )
+
+/** 敌方点亮口径：有熄灭时标注「N/M（点亮）」（全亮时省略，保持文案不变） */
+const enemyCountLabel = computed(() => {
+  const total = enemyPicks.value.length
+  const lit = effectiveEnemyIds.value.length
+  if (total === 0 || lit === total) return ''
+  return ` ${lit}/${total}（点亮）`
+})
 
 /** 底部来源行附注：当前生效的候选池筛选（供用户核对推荐口径） */
 const filterStatusLabel = computed(() => {
@@ -797,13 +870,24 @@ function championName(id: number): string {
   flex-shrink: 0;
 }
 
-/* 队友头像（协同锚点）：浅绿描边与敌方（灰描边）区分，避免两者混淆 */
+/* 队友头像（协同锚点）：浅绿描边与敌方（红描边）区分，避免两者混淆 */
 .bp-teammate-avatar {
   border-color: color-mix(in srgb, var(--semantic-win, #18a058) 60%, transparent);
   cursor: pointer;
 }
 
 .bp-teammate-avatar--dim {
+  opacity: 0.3;
+  filter: grayscale(1);
+}
+
+/* 敌方头像（对位目标）：红描边区别于协同锚点，可点亮/熄灭——只针对点亮的敌方计算 counter */
+.bp-enemy-avatar {
+  border-color: color-mix(in srgb, var(--semantic-loss, #d03050) 55%, transparent);
+  cursor: pointer;
+}
+
+.bp-enemy-avatar--dim {
   opacity: 0.3;
   filter: grayscale(1);
 }
