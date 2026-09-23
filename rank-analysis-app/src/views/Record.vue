@@ -74,8 +74,8 @@
             :focus-game-id="focusGameId"
             :champion-filter="championFilterCmd"
             :v2-wide="widePane"
-            :selected-id="selectedGameId"
-            @select="onSelectGame"
+            :open-game-id="openGameId"
+            @open="openGame"
             @hover-champion="hoveredChampion = $event"
             @leave-champion="hoveredChampion = null"
             @pool-change="championPool = $event"
@@ -110,11 +110,7 @@
             下一个 <ArrowRight class="btn-arrow-glyph" />
           </button>
         </div>
-        <MatchDetailInline
-          :game="selectedGame"
-          :region="regionQuery"
-          @close="selectedGame = null"
-        />
+        <MatchDetailInline :game="selectedGame" :region="regionQuery" @close="openGame(null)" />
       </aside>
       <!-- 回到顶部 FAB：内容区滚动超过阈值后显示，点击平滑回顶 -->
       <Transition name="fab">
@@ -146,6 +142,7 @@ import type { Game } from '../types/domain/match'
 import type { ChampionPoolEntry } from '../components/record/championPool'
 import { useBreakpoint } from '@renderer/composables/useBreakpoint'
 import { usePlayerRecordData } from '@renderer/composables/usePlayerRecordData'
+import { useRecordV2 } from '@renderer/composables/useRecordV2'
 import { shouldYieldToEditableTarget } from '@renderer/utils/domHotkey'
 
 const route = useRoute()
@@ -153,14 +150,24 @@ const { isMobile, isCompact } = useBreakpoint()
 
 /** v3 宽屏双栏：详情走右侧常驻栏；窄窗自动回退内嵌展开 */
 const widePane = computed(() => !isCompact.value && !isMobile.value)
-const selectedGameId = ref<number | null>(null)
-const selectedGame = ref<Game | null>(null)
+
+/** 战绩 v2 重构灰度开关：false 时回退旧"聚焦吞页"交互；结构收敛与缺陷修复不回退 */
+const recordV2 = useRecordV2()
+
+/**
+ * 当前打开的对局 id（单一事实源）：宽屏驱动右侧详情栏，窄屏经
+ * MatchHistory 内嵌展开。收敛前存在 `selectedGameId + selectedGame +
+ * focusGameId` 三态互相搬运，现只保留 openGameId 一种真相，详情对象派生。
+ */
+const openGameId = ref<number | null>(null)
+const selectedGame = computed<Game | null>(
+  () => games.value.find(g => g.gameId === openGameId.value) ?? null
+)
 
 /** 聚焦记忆（会话级）：重进战绩页自动恢复上次聚焦的对局 */
 const FOCUS_KEY = 'record.focusGameId'
-function onSelectGame(g: Game | null) {
-  selectedGame.value = g
-  selectedGameId.value = g?.gameId ?? null
+function openGame(g: Game | null) {
+  openGameId.value = g?.gameId ?? null
   try {
     if (g) sessionStorage.setItem(FOCUS_KEY, String(g.gameId))
     else sessionStorage.removeItem(FOCUS_KEY)
@@ -168,26 +175,33 @@ function onSelectGame(g: Game | null) {
     /* 隐私模式写失败静默 */
   }
 }
-/** 聚焦模式：宽屏详情展开时隐藏左栏与列表，整页只留详情（收回恢复） */
-const focusMode = computed(() => widePane.value && !!selectedGame.value)
 
-/** 聚焦模式内上/下一个对局（按全量列表顺序，找不到当前项时禁用步进） */
+/**
+ * 旧版"聚焦吞页"模式：仅 aRecordV2 回退时（recordV2=false）生效——
+ * 宽屏详情展开隐藏左栏与列表，整页只留详情；v2 下列表常驻、不开吞页。
+ */
+const focusMode = computed(() => !recordV2.value && widePane.value && !!selectedGame.value)
+
+/** 详情栏内上/下一个对局（按全量列表顺序，找不到当前项时禁用步进） */
 const detailIndex = computed(() => {
   const id = selectedGame.value?.gameId
   return id === undefined ? -1 : games.value.findIndex(g => g.gameId === id)
 })
 function stepDetail(dir: -1 | 1) {
   const next = games.value[detailIndex.value + dir]
-  if (next) onSelectGame(next)
+  if (next) openGame(next)
 }
 
-/** 聚焦模式下键盘切换：Esc 收回、←/→ 上/下一个对局 */
+/**
+ * 键盘切换：Esc 收回、←/→ 上/下一个对局。
+ * 门禁统一为"宽屏且打开过详情"（v2 下列表常驻同样可用，不再依赖吞页态）。
+ */
 function onGlobalKey(e: KeyboardEvent) {
-  if (!focusMode.value) return
+  if (!widePane.value || openGameId.value == null) return
   if (shouldYieldToEditableTarget(e)) return
   if (e.key === 'Escape') {
     e.preventDefault()
-    onSelectGame(null)
+    openGame(null)
   } else if (e.key === 'ArrowLeft') {
     e.preventDefault()
     stepDetail(-1)
@@ -203,18 +217,6 @@ const sideOpen = ref(false)
 /** 断点回到宽窗（左栏常驻）时关闭抽屉，避免残留遮罩/状态 */
 watch(isCompact, compact => {
   if (!compact) sideOpen.value = false
-})
-
-/**
- * 跨断点聚焦保持：宽屏下展开的详情在切到窄窗时，转交给
- * MatchHistory 的内嵌展开机制（focusGameId 定位并就地展开），
- * 避免详情凭空消失；窄→宽无对称需求（内嵌展开仍在列表中可见）。
- */
-watch(widePane, w => {
-  if (!w && selectedGame.value) {
-    focusGameId.value = selectedGame.value.gameId
-    onSelectGame(null)
-  }
 })
 
 /** 回到顶部 FAB：内容区滚动超过阈值显示，点击平滑回顶 */
@@ -266,14 +268,14 @@ const hoveredChampion = ref<number | null>(null)
 /** 近期对局全量（由 MatchHistory 上抛，D-P3 分时曲线数据源） */
 const games = ref<Game[]>([])
 
-/** 聚焦恢复：列表数据到达后，若会话内记录了上次聚焦的对局则自动重开 */
+/** 聚焦恢复：列表数据到达后，若会话内记录了上次聚焦的对局则自动重开（仅宽屏详情栏场景） */
 watch(games, list => {
-  if (selectedGame.value || !list.length) return
+  if (openGameId.value != null || !list.length) return
   try {
     const stored = sessionStorage.getItem(FOCUS_KEY)
     if (!stored) return
     const target = list.find(g => String(g.gameId) === stored)
-    if (target && widePane.value) onSelectGame(target)
+    if (target && widePane.value) openGame(target)
   } catch {
     /* 隐私模式读取失败静默 */
   }

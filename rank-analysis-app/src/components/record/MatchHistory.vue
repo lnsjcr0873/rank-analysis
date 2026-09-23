@@ -66,7 +66,12 @@
               </n-button>
             </n-dropdown>
           </div>
-          <n-button size="small" class="toolbar-expand-all" @click="toggleExpandAll">
+          <n-button
+            v-if="!props.v2Wide"
+            size="small"
+            class="toolbar-expand-all"
+            @click="toggleExpandAll"
+          >
             {{ anyExpanded ? '收起全部' : '展开全部' }}
           </n-button>
           <div class="pagination">
@@ -205,7 +210,7 @@
             :games="game"
             :champion-options="championOptions"
             :expanded="expandedGameIds.has(game.gameId)"
-            :selected="props.selectedId === game.gameId"
+            :selected="props.openGameId === game.gameId"
             :class="{ 'list-item-flash': highlightedGameId === game.gameId }"
             @open-detail="toggleDetail(game)"
             @hover-champion="emit('hover-champion', $event)"
@@ -305,8 +310,8 @@ const emit = defineEmits<{
   'champion-filter-handled': []
   /** 筛选状态变化（英雄筛选生效/清除），供左栏英雄池同步选中态 */
   'filter-change': [filter: MatchFilterState]
-  /** v2 宽屏详情栏：卡片点选上抛（null = 取消选中） */
-  select: [game: Game | null]
+  /** v2 宽屏详情栏：点选上抛（null = 取消选中，父级以 openGameId 单源承接） */
+  open: [game: Game | null]
 }>()
 
 const props = defineProps<{
@@ -316,8 +321,12 @@ const props = defineProps<{
   championFilter?: number
   /** v3 宽屏双栏范式开关（父级计算 isCompact 后下发） */
   v2Wide?: boolean
-  /** v2 宽屏下当前右侧详情栏选中的对局 id（回显选中态） */
-  selectedId?: number | null
+  /**
+   * v2 宽屏下当前右侧详情栏打开的对局 id（回显选中态）。
+   * v2 宽屏真/窄屏假切换时，本组件承接该 id 转内嵌展开（原先由父级
+   * watch(widePane) 搬运 focusGameId，现收敛为 openGameId 单源回传）。
+   */
+  openGameId?: number | null
 }>()
 
 /**
@@ -629,9 +638,19 @@ async function focusGame(gameId: number): Promise<void> {
     emit('focus-handled')
     return
   }
+  const g = filteredGames.value[idx]
+  if (!g) {
+    emit('focus-handled')
+    return
+  }
   page.value = Math.floor(idx / PAGE_SIZE.value) + 1
-  expandedGameIds.value.add(gameId)
-  expandedGameIds.value = new Set(expandedGameIds.value)
+  if (props.v2Wide) {
+    // v2 宽屏：详情统一走右栏（open 单源），不再内嵌展开；列表内仍定位高亮
+    emit('open', g)
+  } else {
+    expandedGameIds.value.add(gameId)
+    expandedGameIds.value = new Set(expandedGameIds.value)
+  }
   nextTick(() => {
     const el = document.querySelector<HTMLElement>(`[data-game-id="${gameId}"]`)
     if (!el) return
@@ -653,12 +672,26 @@ watch(
   }
 )
 
+/**
+ * 跨断点承接（收敛后替代父级 watch(widePane) 搬运 hack）：
+ * 宽屏右栏打开的详情在切到窄窗（v2Wide→false）时，转交内嵌展开，
+ * 避免详情凭空消失；已在内嵌展开集合中的 id 不重复下发命令，防 resize 抖动。
+ */
+watch(
+  () => [props.v2Wide, props.openGameId] as const,
+  ([wide, id]) => {
+    if (wide || id == null || id <= 0) return
+    if (expandedGameIds.value.has(id)) return
+    void focusGame(id as number)
+  }
+)
+
 /** 行卡点击：已展开则收起，未展开则就地展开（允许多开）；
  *  v3 宽屏双栏（v2Wide）下改为单选上抛，不再内嵌展开 */
 function toggleDetail(game: Game) {
   if (props.v2Wide) {
-    const same = props.selectedId === game.gameId
-    emit('select', same ? null : game)
+    const same = props.openGameId === game.gameId
+    emit('open', same ? null : game)
     return
   }
   if (expandedGameIds.value.has(game.gameId)) {
@@ -680,8 +713,10 @@ const anyExpanded = computed(() => expandedGameIds.value.size > 0)
 /**
  * 一键展开全部 / 收起全部：对当前筛选命中的所有对局批量就地展开，
  * 再点一次全部收起（含此前手动单开的）。
+ * v2 宽屏下按钮已隐藏（详情走右栏单源），此处再兜底防命令误入。
  */
 function toggleExpandAll() {
+  if (props.v2Wide) return
   if (anyExpanded.value) {
     expandedGameIds.value = new Set()
     return
@@ -907,6 +942,27 @@ function onViewportResize() {
  * 不在当前页（更早的对局）→ 翻到所在页并就地展开详情，待渲染后回滚定位。
  */
 function selectTrendGame(gameId: number) {
+  if (props.v2Wide) {
+    // v2 宽屏：详情统一走右栏单源，列表内翻页定位 + 闪烁高亮
+    const game = allGames.value.find(g => g.gameId === gameId)
+    if (!game) return
+    const idx = filteredGames.value.findIndex(g => g.gameId === gameId)
+    if (idx < 0) return
+    const targetPage = Math.floor(idx / PAGE_SIZE.value) + 1
+    const wasOnPage = page.value === targetPage
+    if (!wasOnPage) page.value = targetPage
+    emit('open', game)
+    nextTick(() => {
+      const el = document.querySelector<HTMLElement>(`[data-game-id="${gameId}"]`)
+      if (!el) return
+      highlightedGameId.value = gameId
+      el.scrollIntoView({ behavior: 'smooth', block: wasOnPage ? 'center' : 'start' })
+      armTimeout(() => {
+        if (highlightedGameId.value === gameId) highlightedGameId.value = null
+      }, 1600)
+    })
+    return
+  }
   const target = document.querySelector<HTMLElement>(`[data-game-id="${gameId}"]`)
   if (target) {
     highlightedGameId.value = gameId

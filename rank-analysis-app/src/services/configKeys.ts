@@ -52,6 +52,11 @@ export const CONFIG_KEYS = {
   matchPageMode: 'record.pageMode',
   /** 战绩列表 fixed 模式的固定条数（默认 10） */
   matchPageSize: 'record.pageSize',
+  /**
+   * 战绩面板 v2 重构灰度开关（默认开；关闭回退旧"聚焦吞页"行为，用于线上事故一键回旧）。
+   * 结构收敛/缺陷修复属 bug 修复不随此开关回退，只有可观测布局/交互差异受控。
+   */
+  recordV2: 'record.v2Enabled',
   /** 禁用对局悬浮窗（Overlay）（默认 false，即不禁用） */
   disableOverlay: 'settings.overlay.disabled',
   /** 禁用游戏对局中 1-2s 频率轮询 allgamedata（默认 false，即不禁用） */

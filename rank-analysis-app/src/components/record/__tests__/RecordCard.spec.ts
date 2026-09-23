@@ -10,10 +10,18 @@
 import { describe, it, expect, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { ref } from 'vue'
-import type { Game, Participant } from '@renderer/types/domain/match'
+import type { Game, Participant, MatchPlayerIdentity } from '@renderer/types/domain/match'
+import type { championOption } from '@renderer/types/domain/champion'
+import { getRecordCardDensity } from '../useRecordCardDensity'
 
 vi.mock('@renderer/composables/useTheme', () => ({
   useTheme: () => ({ isDark: ref(true) })
+}))
+
+/** 战绩 v2 灰度开关：默认开启；局部测试可翻成 false 验证一键回旧 */
+const recordV2Switch = vi.hoisted(() => ({ v: { value: true } as { value: boolean } }))
+vi.mock('@renderer/composables/useRecordV2', () => ({
+  useRecordV2: () => recordV2Switch.v
 }))
 
 const assetDetail = vi.hoisted(() => ({
@@ -221,5 +229,150 @@ describe('RecordCard 键盘可达性（R22-3）', () => {
     await card.trigger('keydown.space')
     expect(wrapper.emitted('open-detail')).toHaveLength(2)
     wrapper.unmount()
+  })
+})
+
+/* ==================== P1：v2 阵容列密度 ==================== */
+
+const CHAMP_OPTIONS: championOption[] = [
+  { label: '锤石', realName: 'Thresh', value: 17, nickname: '魂锁典狱长' },
+  { label: '盲僧', realName: 'LeeSin', value: 1, nickname: '李青' },
+  { label: '奥莉安娜', realName: 'Orianna', value: 61, nickname: '发条' },
+  { label: '伊泽瑞尔', realName: 'Ezreal', value: 81, nickname: 'EZ' },
+  { label: '锐雯', realName: 'Riven', value: 92, nickname: '放逐之刃' },
+  { label: '蕾欧娜', realName: 'Leona', value: 89, nickname: '日女' }
+]
+
+function identities(names: string[]): MatchPlayerIdentity[] {
+  return names.map(summonerName => ({
+    player: {
+      accountId: 1,
+      platformId: 'TJ100',
+      gameName: summonerName,
+      tagLine: 'A',
+      summonerName,
+      summonerId: 1
+    }
+  }))
+}
+
+function fiveFiveGame(): Game {
+  const ownIds = [17, 1, 61, 81, 92]
+  const enemyIds = [89, 1, 61, 81, 17]
+  const own: Participant[] = ownIds.map((championId, i) =>
+    participant({
+      participantId: i + 1,
+      teamId: 100,
+      championId,
+      stats: { ...participant().stats, kills: 6 + i, deaths: 3, assists: 8 }
+    })
+  )
+  const enemy: Participant[] = enemyIds.map((championId, i) =>
+    participant({
+      participantId: i + 6,
+      teamId: 200,
+      championId,
+      stats: { ...participant().stats, kills: 1, deaths: 9, assists: 3 }
+    })
+  )
+  return gameOf({
+    participants: [...own, ...enemy],
+    participantIdentities: identities([
+      '我方一号',
+      '我方二号',
+      '我方三号',
+      '我方四号',
+      '我方五号',
+      ...enemy.map((_, i) => `敌${i + 1}`)
+    ])
+  })
+}
+
+function cherryEightGame(): Game {
+  const own: Participant[] = [17, 1, 61, 81].map((championId, i) =>
+    participant({ participantId: i + 1, teamId: 300, championId })
+  )
+  const enemy: Participant[] = [89, 92, 1, 61].map((championId, i) =>
+    participant({ participantId: i + 5, teamId: 400, championId })
+  )
+  return gameOf({ gameMode: 'CHERRY', queueId: 1700, participants: [...own, ...enemy] })
+}
+
+function mountCardAt(game: Game, density: 'compact' | 'medium' | 'wide') {
+  return mount(RecordCard, {
+    props: { games: game, density, championOptions: CHAMP_OPTIONS },
+    global: { stubs }
+  })
+}
+
+describe('RecordCard v2 阵容列密度（P1）', () => {
+  it('getRecordCardDensity 边界：<720 compact、720–900 medium、>=900 wide', () => {
+    expect(getRecordCardDensity(0)).toBe('compact')
+    expect(getRecordCardDensity(719)).toBe('compact')
+    expect(getRecordCardDensity(720)).toBe('medium')
+    expect(getRecordCardDensity(899)).toBe('medium')
+    expect(getRecordCardDensity(900)).toBe('wide')
+    expect(getRecordCardDensity(1200)).toBe('wide')
+  })
+
+  it('wide：渲染双方 5v5 阵容列，我方队排前且自带 is-self 高亮 + 迷你 KDA', () => {
+    const wrapper = mountCardAt(fiveFiveGame(), 'wide')
+    expect(wrapper.find('.record-card-lineup').exists()).toBe(true)
+    const teams = wrapper.findAll('.record-card-lineup-team')
+    expect(teams).toHaveLength(2)
+    expect(teams[0].classes()).toContain('is-own')
+    expect(teams[0].findAll('.record-card-lineup-row')).toHaveLength(5)
+    expect(teams[1].findAll('.record-card-lineup-row')).toHaveLength(5)
+    const selfRow = teams[0].find('.record-card-lineup-row')
+    expect(selfRow.classes()).toContain('is-self')
+    expect(selfRow.find('.record-card-lineup-name').text()).toBe('锤石')
+    expect(selfRow.attributes('title')).toBe('我方一号')
+    expect(teams[0].find('.record-card-lineup-kda').text()).toContain('6/3/8')
+    expect(teams[1].find('.record-card-lineup-kda').text()).toContain('1/9/3')
+    wrapper.unmount()
+  })
+
+  it('wide：英雄名按 championOptions 回退为「英雄 id」', () => {
+    const wrapper = mount(RecordCard, {
+      props: { games: fiveFiveGame(), density: 'wide' },
+      global: { stubs }
+    })
+    const names = wrapper.findAll('.record-card-lineup-name').map(el => el.text())
+    expect(names).toContain('英雄 1')
+    wrapper.unmount()
+  })
+
+  it('medium：阵容列在 DOM（hover 揭示），基行 KDA 仍在', () => {
+    const wrapper = mountCardAt(fiveFiveGame(), 'medium')
+    expect(wrapper.classes()).toContain('rc-density-medium')
+    expect(wrapper.find('.record-card-lineup').exists()).toBe(true)
+    expect(wrapper.find('.record-card-kda').text()).toContain('6/3/8')
+    wrapper.unmount()
+  })
+
+  it('compact：不渲染阵容列（DOM 零成本，保住基线节点数）', () => {
+    const wrapper = mountCardAt(fiveFiveGame(), 'compact')
+    expect(wrapper.classes()).toContain('rc-density-compact')
+    expect(wrapper.find('.record-card-lineup').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('斗魂 CHERRY：按队伍分组（4+4），我方队排前', () => {
+    const wrapper = mountCardAt(cherryEightGame(), 'wide')
+    const teams = wrapper.findAll('.record-card-lineup-team')
+    expect(teams).toHaveLength(2)
+    expect(teams[0].classes()).toContain('is-own')
+    expect(teams[0].findAll('.record-card-lineup-row')).toHaveLength(4)
+    expect(teams[1].findAll('.record-card-lineup-row')).toHaveLength(4)
+    wrapper.unmount()
+  })
+
+  it('aRecordV2 关闭时整卡回退旧交互：即便密度档位为 wide 也不渲染阵容列，且打 rc-d-legacy', () => {
+    recordV2Switch.v.value = false
+    const wrapper = mountCardAt(fiveFiveGame(), 'wide')
+    expect(wrapper.classes()).toContain('rc-d-legacy')
+    expect(wrapper.find('.record-card-lineup').exists()).toBe(false)
+    wrapper.unmount()
+    recordV2Switch.v.value = true
   })
 })
