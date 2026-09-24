@@ -22,6 +22,7 @@ import {
   type CounterSortDir,
   type CounterSortKey,
   type DualPick,
+  type PickDimension,
   type SynergyItem,
   type SynergySortDir,
   type SynergySortKey
@@ -174,6 +175,8 @@ let lastRevision = opggRevision.value
  * @param coverageFirst - 为 true 时优先按 counter 敌方人数排序（覆盖度优先）
  * @param teammatePositions - 我方队友本局分路（championId → LCU 命名，如
  *   { 103: 'top' }）；有值用本局位置拉 synergies（更贴近实际），缺失回退主分路
+ * @param dimension - 评分维度（'all' = 双维融合；'counter' = 只看对位，跳过队友
+ *   拉取；'synergy' = 只看协同，跳过敌方拉取且覆盖度排序不生效）
  */
 export function useBestPicks(
   enemyIds: Ref<number[]>,
@@ -183,7 +186,8 @@ export function useBestPicks(
   teammateIds: Ref<number[]> = ref<number[]>([]),
   myPosition: Ref<string> = ref(''),
   coverageFirst: Ref<boolean> = ref(false),
-  teammatePositions: Ref<Record<number, string>> = ref({})
+  teammatePositions: Ref<Record<number, string>> = ref({}),
+  dimension: Ref<PickDimension> = ref('all')
 ): {
   picks: Ref<DualPick[]>
   isLoading: Ref<boolean>
@@ -207,25 +211,30 @@ export function useBestPicks(
     teammates: number[],
     myPos: string,
     coverage: boolean,
-    positions: Record<number, string>
+    positions: Record<number, string>,
+    dim: PickDimension
   ): Promise<void> => {
     isLoading.value = true
     error.value = false
     try {
-      // 每个敌方已锁英雄：快照主分路 → 对位情报
+      // 每个敌方已锁英雄：快照主分路 → 对位情报（synergy 单维模式不拉，省请求）
       const enemyIntelById = new Map<number, ChampionIntel>()
-      for (const enemyId of ids) {
-        const intel = await intelFor(enemyId, t, r)
-        if (intel) enemyIntelById.set(enemyId, intel)
+      if (dim !== 'synergy') {
+        for (const enemyId of ids) {
+          const intel = await intelFor(enemyId, t, r)
+          if (intel) enemyIntelById.set(enemyId, intel)
+        }
       }
       if (disposed) return
 
       // 每个队友已亮英雄：本局分路优先、主分路回退 → 对位情报
-      // （synergies 同源返回，供协同分；本局位置更贴近实际打法）
+      // （synergies 同源返回，供协同分；本局位置更贴近实际打法。counter 单维不拉）
       const teammateIntelById = new Map<number, ChampionIntel>()
-      for (const teammateId of teammates) {
-        const intel = await intelFor(teammateId, t, r, positions[teammateId])
-        if (intel) teammateIntelById.set(teammateId, intel)
+      if (dim !== 'counter') {
+        for (const teammateId of teammates) {
+          const intel = await intelFor(teammateId, t, r, positions[teammateId])
+          if (intel) teammateIntelById.set(teammateId, intel)
+        }
       }
       if (disposed) return
 
@@ -247,7 +256,13 @@ export function useBestPicks(
         }
       }
 
-      picks.value = computeDualPicks(pool, enemyIntelById, teammateIntelById, coverage)
+      // 维度收敛：counter/synergy 只把对应维度 map 传给评分（空 map 该维度记 0 分）；
+      // 协同没有「覆盖度」概念，synergy 下覆盖度排序不生效避免排序退化。
+      const counterMap = dim === 'synergy' ? new Map<number, ChampionIntel>() : enemyIntelById
+      const synergyMap = dim === 'counter' ? new Map<number, ChampionIntel>() : teammateIntelById
+      const effectiveCoverage = dim === 'synergy' ? false : coverage
+
+      picks.value = computeDualPicks(pool, counterMap, synergyMap, effectiveCoverage)
       error.value = false
     } catch {
       if (disposed) return
@@ -304,9 +319,10 @@ export function useBestPicks(
       myPosition,
       opggRevision,
       coverageFirst,
-      teammatePositions
+      teammatePositions,
+      dimension
     ],
-    async ([ids, candidates, t, r, teammates, myPos, rev, coverage, positions]) => {
+    async ([ids, candidates, t, r, teammates, myPos, rev, coverage, positions, dim]) => {
       if (timer) {
         clearTimeout(timer)
         timer = null
@@ -323,9 +339,17 @@ export function useBestPicks(
         picks.value = []
         return
       }
+      // 维度早退：只看对位但无敌方可算 / 只看协同但无队友可算（另一维有数据也不参与）
+      if (
+        (dim === 'counter' && validIds.length === 0) ||
+        (dim === 'synergy' && validTeammates.length === 0)
+      ) {
+        picks.value = []
+        return
+      }
       timer = setTimeout(() => {
         timer = null
-        void run(validIds, candidates, t, r, validTeammates, myPos, coverage, positions)
+        void run(validIds, candidates, t, r, validTeammates, myPos, coverage, positions, dim)
       }, DEBOUNCE_MS)
     },
     { immediate: true }

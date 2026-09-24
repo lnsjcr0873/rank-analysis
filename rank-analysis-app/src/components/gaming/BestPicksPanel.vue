@@ -95,6 +95,13 @@
             class="bp-control"
             @update:value="onChangeCount"
           />
+          <span class="bp-control-label">维度</span>
+          <n-select
+            v-model:value="dimension"
+            :options="dimensionOptions"
+            size="tiny"
+            class="bp-control"
+          />
         </div>
         <div class="bp-filter-row">
           <n-checkbox
@@ -111,7 +118,11 @@
             class="bp-filter-check"
             >仅英雄池</n-checkbox
           >
-          <n-checkbox v-model:checked="coverageFirst" size="small" class="bp-filter-check"
+          <n-checkbox
+            v-model:checked="coverageFirst"
+            size="small"
+            class="bp-filter-check"
+            :disabled="dimSynergyOnly"
             >优先覆盖</n-checkbox
           >
           <span v-if="poolLoading" class="bp-filter-hint">英雄池统计中…</span>
@@ -136,7 +147,7 @@
           <span v-if="filterHint" class="bp-filter-hint">{{ filterHint }}</span>
         </div>
         <div v-if="allNonPositive" class="bp-none-warning">
-          敌方当前阵容下无正面对位优势英雄（以下为相对最不劣）
+          {{ nonPositiveHint }}
         </div>
         <n-scrollbar v-if="picks.length > 0" max-height="380px" class="bp-panel-scroll">
           <div v-for="p in shownPicks" :key="p.championId" class="bp-pick-card">
@@ -147,12 +158,14 @@
                 <span class="bp-pick-card-score" :class="scoreClass(p.score)"
                   >分数 {{ scoreText(p.score) }}</span
                 >
-                <template v-if="hasSynergy">
+                <template v-if="!dimCounterOnly && hasSynergy">
                   <span
                     class="bp-pick-card-subscore"
                     :class="p.synergyScore > 0 ? 'score-positive' : 'score-zero'"
                     >协同 {{ scoreText(p.synergyScore) }}</span
                   >
+                </template>
+                <template v-if="!dimSynergyOnly && (dimCounterOnly || hasSynergy)">
                   <span class="bp-pick-card-subscore" :class="subScoreClass(p.counterScore)"
                     >对位 {{ scoreText(p.counterScore) }}</span
                   >
@@ -162,28 +175,29 @@
                 <span class="bp-pick-card-bar-fill" :style="{ width: scoreBarWidth(p.score) }" />
               </div>
               <div class="bp-pick-card-evidence">
-                <template v-for="e in p.synergyEvidences" :key="`syn-${e.teammateChampionId}`">
-                  <span class="bp-evidence-line ev-synergy">
-                    协同 {{ championName(e.teammateChampionId) }}（{{
-                      formatCounterLine(e.winRate, e.play)
-                    }}）
-                  </span>
+                <template v-if="!dimCounterOnly">
+                  <template v-for="e in p.synergyEvidences" :key="`syn-${e.teammateChampionId}`">
+                    <span class="bp-evidence-line ev-synergy">
+                      协同 {{ championName(e.teammateChampionId) }}（{{
+                        formatCounterLine(e.winRate, e.play)
+                      }}）
+                    </span>
+                  </template>
                 </template>
-                <template v-for="e in p.evidences" :key="e.againstChampionId">
-                  <span
-                    class="bp-evidence-line"
-                    :class="e.relation === 'favored' ? 'ev-good' : 'ev-bad'"
-                  >
-                    {{ e.relation === 'favored' ? '克制' : '被克' }}
-                    {{ championName(e.againstChampionId) }}（{{
-                      formatCounterLine(e.winRate, e.play)
-                    }}）
-                  </span>
+                <template v-if="!dimSynergyOnly">
+                  <template v-for="e in p.evidences" :key="e.againstChampionId">
+                    <span
+                      class="bp-evidence-line"
+                      :class="e.relation === 'favored' ? 'ev-good' : 'ev-bad'"
+                    >
+                      {{ e.relation === 'favored' ? '克制' : '被克' }}
+                      {{ championName(e.againstChampionId) }}（{{
+                        formatCounterLine(e.winRate, e.play)
+                      }}）
+                    </span>
+                  </template>
                 </template>
-                <span
-                  v-if="p.evidences.length === 0 && p.synergyEvidences.length === 0"
-                  class="bp-evidence-none"
-                >
+                <span v-if="cardHasNoEvidence(p)" class="bp-evidence-none">
                   其余对位/协同无 OP.GG 数据
                 </span>
               </div>
@@ -194,7 +208,7 @@
           {{ emptyText }}
         </div>
         <div class="bp-panel-footer">
-          <span>按敌方已锁{{ enemyCountLabel }}{{ hasSynergy ? ' + 队友已亮协同' : '' }}计算</span>
+          <span>{{ calcFooter }}</span>
           <span v-if="filterStatusLabel" class="bp-filter-status">{{ filterStatusLabel }}</span>
           <span class="bp-panel-source">OP.GG {{ region }} · {{ tier }}</span>
         </div>
@@ -217,6 +231,11 @@ import { ChevronDown } from 'lucide-vue-next'
  * - 灭队友 = 该队友不参与协同；灭敌方 = 该敌方不作为对位目标（只针对点亮的
  *   个别敌方计算 counter）。新锁定的敌方默认点亮参与，用户手动熄灭的保持熄灭。
  *
+ * 评分维度筛选（弹层内下拉、配置持久化 `bestPicksDimension`）：
+ * - 综合 = 对位 + 协同双维融合（旧版默认行为）；只看对位/只看协同时另一维
+ *   的拉取/评分/子分/证据行/文案全部收敛到当前维度。无可点亮锚点时禁用
+ *   对应单维（无队友时「只看协同」无意义）。
+ *
  * 候选池细粒度筛选（弹层内控制、配置持久化）：
  * - 「仅已拥有」：`lol-champions/v1/owned-champions-minimal`，排位只能选已拥有
  *   英雄故默认开；LCU 失败时降级为不筛该维度并提示。
@@ -231,9 +250,11 @@ import { invoke } from '@tauri-apps/api/core'
 import { useAssetUrl } from '@renderer/composables/useAssetUrl'
 import {
   formatCounterLine,
+  PICK_DIMENSION_OPTIONS,
   PICK_POSITION_OPTIONS,
   resolvePanelPosition,
   type DualPick,
+  type PickDimension,
   type PickPositionFilter
 } from '@renderer/features/gaming/services/counterIntel'
 import { useBestPicks } from '@renderer/composables/useCounterIntel'
@@ -307,6 +328,30 @@ const positionFilter = ref<PickPositionFilter>('follow')
 const effectivePosition = computed(() =>
   resolvePanelPosition(positionFilter.value, props.myPosition)
 )
+
+// ---- 评分维度筛选：综合 / 只看协同 / 只看对位 ----
+// 综合 = counter + synergy 融合；只看协同/对位时另一维度的评分与证据行不参与。
+// 维度选项在无可点亮队友/敌方时禁用对应单维，避免选到一个注定空结果的模式。
+
+const DIMENSION_KEY = 'bestPicksDimension'
+
+/** 评分维度：默认综合（与旧版双维融合行为一致） */
+const dimension = ref<PickDimension>('all')
+
+/** 维度下拉选项：当前无对应锚时禁用单维（不可点亮队友 → 只看协同无意义，反之亦然） */
+const dimensionOptions = computed<
+  Array<{ label: string; value: PickDimension; disabled?: boolean }>
+>(() =>
+  PICK_DIMENSION_OPTIONS.map(o => {
+    if (o.value === 'synergy') return { ...o, disabled: effectiveTeammateIds.value.length === 0 }
+    if (o.value === 'counter') return { ...o, disabled: effectiveEnemyIds.value.length === 0 }
+    return o
+  })
+)
+
+/** 单维模式的渲染开关（驱动子分/证据行/文案的按维度取舍） */
+const dimSynergyOnly = computed(() => dimension.value === 'synergy')
+const dimCounterOnly = computed(() => dimension.value === 'counter')
 
 // ---- 候选池细粒度筛选：仅已拥有 / 仅英雄池（胜率·场次门槛） ----
 // 排位选人只能选已拥有的英雄，「仅已拥有」默认开；英雄池数据源与 Record 页同款
@@ -555,7 +600,7 @@ watch(
 )
 
 // 筛选状态落配置持久化（与 displayCount 同模式，失败静默）
-async function persistFilter(key: string, value: boolean | number): Promise<void> {
+async function persistFilter(key: string, value: boolean | number | string): Promise<void> {
   try {
     await putConfigByIpc(key, value)
   } catch (e) {
@@ -581,6 +626,9 @@ watch(poolMinGames, v => {
 watch(coverageFirst, v => {
   if (filtersReady) void persistFilter(COVERAGE_FIRST_KEY, v)
 })
+watch(dimension, v => {
+  if (filtersReady) void persistFilter(DIMENSION_KEY, v)
+})
 
 /** 展示用推荐列表：按显示数量截断（'all' 时全量） */
 const shownPicks = computed(() =>
@@ -602,7 +650,8 @@ const { picks, isLoading, error } = useBestPicks(
   effectiveTeammateIds,
   effectivePosition,
   coverageFirst,
-  computed(() => props.teammatePositions)
+  computed(() => props.teammatePositions),
+  dimension
 )
 
 /** 显示数量变化：落配置持久化（下次打开仍生效） */
@@ -651,6 +700,12 @@ onMounted(async () => {
   } catch (e) {
     console.warn('[bestPicks] 优先覆盖配置读取失败:', e)
   }
+  try {
+    const saved = await getConfigByIpc<PickDimension>(DIMENSION_KEY)
+    if (saved === 'all' || saved === 'counter' || saved === 'synergy') dimension.value = saved
+  } catch (e) {
+    console.warn('[bestPicks] 维度配置读取失败，使用默认值:', e)
+  }
   filtersReady = true
 })
 
@@ -669,13 +724,17 @@ const hasSynergy = computed(() => teammatePicks.value.length > 0)
 const visible = computed(() => enemyPicks.value.length >= 2 || teammatePicks.value.length >= 1)
 
 const titleText = computed(() => {
+  if (dimSynergyOnly.value) return '与已亮队友协同的最佳选择'
+  if (dimCounterOnly.value) return '敌方已锁阵容下的最优应对'
   if (hasSynergy.value && enemyPicks.value.length > 0) return '协同队友 + 应对敌方'
   if (hasSynergy.value) return '与已亮队友协同的最佳选择'
   return '敌方已锁阵容下的最优应对'
 })
 
 const emptyText = computed(() => {
-  if (allNonPositive.value) return '当前无正面对位优势英雄'
+  if (allNonPositive.value) return nonPositiveHint.value
+  if (dimSynergyOnly.value) return '暂无协同数据'
+  if (dimCounterOnly.value) return '暂无对位数据'
   if (hasSynergy.value) return '暂无协同/对位数据'
   return '敌方尚未锁定英雄'
 })
@@ -707,20 +766,40 @@ function pickTitle(p: DualPick): string {
   return `${championName(p.championId)} 分数 ${scoreText(p.score)}`
 }
 
-/** 常驻条左侧标签：协同场景 vs 纯对位场景 */
-const barLabel = computed(() => (hasSynergy.value ? '与队友' : '对敌方'))
+/** 常驻条左侧标签：协同场景 vs 纯对位场景，随评分维度取词 */
+const barLabel = computed(() => {
+  if (dimCounterOnly.value) return '对敌方'
+  if (dimSynergyOnly.value) return '与队友'
+  return hasSynergy.value ? '与队友' : '对敌方'
+})
 
 /** 常驻条箭头文案 */
 const barArrowLabel = computed(() => {
+  if (dimSynergyOnly.value) return '最优协同'
+  if (dimCounterOnly.value) return '最优应对'
   if (hasSynergy.value && enemyPicks.value.length > 0) return '双维最优'
   if (hasSynergy.value) return '最优协同'
   return '最优应对'
 })
 
+/** 全部候选分数 ≤ 0：顶部提示「无正面对位优势」，随维度取词 */
+const nonPositiveHint = computed(() =>
+  dimSynergyOnly.value
+    ? '当前阵容下无正面协同收益的英雄（以下为相对最不劣）'
+    : '敌方当前阵容下无正面对位优势英雄（以下为相对最不劣）'
+)
+
 /** 全部候选分数 ≤ 0：顶部提示「无正面对位优势」 */
 const allNonPositive = computed(
   () => picks.value.length > 0 && picks.value.every(p => p.score <= 0)
 )
+
+/** 证据行是否为空：随维度只看对应维度的证据（另一维度隐藏时不算「有证据」） */
+function cardHasNoEvidence(p: DualPick): boolean {
+  if (dimCounterOnly.value) return p.evidences.length === 0
+  if (dimSynergyOnly.value) return p.synergyEvidences.length === 0
+  return p.evidences.length === 0 && p.synergyEvidences.length === 0
+}
 
 /** 敌方点亮口径：有熄灭时标注「N/M（点亮）」（全亮时省略，保持文案不变） */
 const enemyCountLabel = computed(() => {
@@ -728,6 +807,18 @@ const enemyCountLabel = computed(() => {
   const lit = effectiveEnemyIds.value.length
   if (total === 0 || lit === total) return ''
   return ` ${lit}/${total}（点亮）`
+})
+
+/** 底部口径行：随评分维度取词（对位参与数 + 协同参与数） */
+const calcFooter = computed(() => {
+  if (dimSynergyOnly.value || (hasSynergy.value && enemyPicks.value.length === 0)) {
+    return `按仅队友协同（${effectiveTeammateIds.value.length} 人）计算`
+  }
+  const anchor = `敌方已锁${enemyCountLabel.value || ` ${effectiveEnemyIds.value.length}`}`
+  if (dimCounterOnly.value) {
+    return `按${anchor}（仅对位）计算`
+  }
+  return `按${anchor}${hasSynergy.value ? ' + 队友协同' : ''}计算`
 })
 
 /** 底部来源行附注：当前生效的候选池筛选（供用户核对推荐口径） */
@@ -790,6 +881,16 @@ const activeFilterChips = computed(() => {
       label: '优先覆盖',
       reset: () => {
         coverageFirst.value = false
+      }
+    })
+  }
+  if (dimension.value !== 'all') {
+    const opt = PICK_DIMENSION_OPTIONS.find(o => o.value === dimension.value)
+    chips.push({
+      key: 'dim',
+      label: `维度 ${opt?.label ?? String(dimension.value)}`,
+      reset: () => {
+        dimension.value = 'all'
       }
     })
   }

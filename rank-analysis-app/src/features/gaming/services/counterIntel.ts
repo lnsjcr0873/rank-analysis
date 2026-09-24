@@ -120,6 +120,16 @@ export function resolvePanelPosition(filter: PickPositionFilter, myPosition: str
   return normalizeLcuPosition(filter) ?? ''
 }
 
+/** 推荐评分维度筛选："all" = 对位 + 协同融合；"counter" = 只看对位；"synergy" = 只看协同 */
+export type PickDimension = 'all' | 'counter' | 'synergy'
+
+/** 推荐评分维度下拉选项（label 中文） */
+export const PICK_DIMENSION_OPTIONS: Array<{ label: string; value: PickDimension }> = [
+  { label: '综合', value: 'all' },
+  { label: '只看协同', value: 'synergy' },
+  { label: '只看对位', value: 'counter' }
+]
+
 /**
  * 对位列表排序（纯函数，不修改原数组）。
  *

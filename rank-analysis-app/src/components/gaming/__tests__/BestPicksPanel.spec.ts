@@ -93,8 +93,8 @@ function makePicks(count = 3): DualPick[] {
   )
 }
 
-/** 面板内第 index 个 n-select（模板顺序：0 位置 / 1 段位 / 2 数量） */
-function wrapperSelect(index: number, wrapper: ReturnType<typeof mount>): ReturnType<typeof mount> {
+/** 面板内第 index 个 n-select（模板顺序：0 位置 / 1 段位 / 2 数量 / 3 维度） */
+function wrapperSelect(index: number, wrapper: ReturnType<typeof mount>) {
   return wrapper.findAllComponents(NSelect)[index]
 }
 
@@ -200,6 +200,20 @@ function candidateArg(): { value: number[] } {
 function enemyIdsArg(): { value: number[] } {
   const args = mockedUseBestPicks.mock.calls[0] as unknown as Array<{ value: number[] }>
   return args[0]
+}
+
+/** 面板内第 index 个 n-checkbox（模板顺序：0 仅已拥有 / 1 仅英雄池 / 2 优先覆盖） */
+function wrapperCheck(index: number, wrapper: ReturnType<typeof mount>) {
+  return wrapper.findAllComponents(NCheckbox)[index]
+}
+
+/** 切评分维度（第 4 个 n-select：0 位置 / 1 段位 / 2 数量 / 3 维度） */
+async function setDimension(
+  wrapper: ReturnType<typeof mount>,
+  value: 'all' | 'counter' | 'synergy'
+): Promise<void> {
+  wrapperSelect(3, wrapper).vm.$emit('update:value', value)
+  await nextTick()
 }
 
 describe('BestPicksPanel', () => {
@@ -481,5 +495,100 @@ describe('BestPicksPanel', () => {
     await wrapper.setProps({ enemyIds: [104, 103, 102, 105] })
     await nextTick()
     expect(enemyIdsArg().value).toEqual([103, 102, 105])
+  })
+
+  // ---- 评分维度筛选：综合 / 只看协同 / 只看对位 ----
+
+  it('维度默认综合：同时渲染协同与对位子分/证据，footer 带双口径', async () => {
+    composableMock.picks.value = makePicks()
+    const wrapper = await mountPanel({ teammateIds: [300] })
+    const first = wrapper.findAll('.bp-pick-card')[0]
+    expect(first.text()).toContain('协同 +0.10')
+    expect(first.text()).toContain('对位 +0.52')
+    expect(wrapper.text()).toContain('按敌方已锁 3 + 队友协同计算')
+  })
+
+  it('只看对位：隐藏协同子分与协同证据行，保留对位子分/克制证据', async () => {
+    composableMock.picks.value = makePicks()
+    const wrapper = await mountPanel({ teammateIds: [300] })
+    await setDimension(wrapper, 'counter')
+    const first = wrapper.findAll('.bp-pick-card')[0].text()
+    expect(first).toContain('对位 +0.52')
+    expect(first).toContain('克制 英雄104（58.0% · 210 局）')
+    expect(first).not.toContain('协同 +0.10')
+    expect(first).not.toContain('协同 英雄300')
+    expect(wrapper.find('.bp-panel-title').text()).toContain('敌方已锁阵容下的最优应对')
+    expect(wrapper.find('.bp-arrow-label').text()).toBe('最优应对')
+    expect(wrapper.text()).toContain('按敌方已锁 3（仅对位）计算')
+  })
+
+  it('只看协同：隐藏对位子分与克制/被克证据行，保留协同证据', async () => {
+    composableMock.picks.value = makePicks()
+    const wrapper = await mountPanel({ teammateIds: [300] })
+    await setDimension(wrapper, 'synergy')
+    const first = wrapper.findAll('.bp-pick-card')[0].text()
+    expect(first).toContain('协同 +0.10')
+    expect(first).toContain('协同 英雄300（60.0% · 120 局）')
+    expect(first).not.toContain('对位 +0.52')
+    expect(first).not.toContain('克制 英雄104')
+    expect(first).not.toContain('被克 英雄103')
+    expect(wrapper.find('.bp-panel-title').text()).toContain('与已亮队友协同的最佳选择')
+    expect(wrapper.find('.bp-arrow-label').text()).toBe('最优协同')
+    expect(wrapper.text()).toContain('按仅队友协同（1 人）计算')
+  })
+
+  it('只看协同时「优先覆盖」禁用（对位概念不参与协同评分）', async () => {
+    const wrapper = await mountPanel({ teammateIds: [300] })
+    const coverage = wrapperCheck(2, wrapper)
+    expect(coverage.props('disabled')).toBe(false)
+    await setDimension(wrapper, 'synergy')
+    expect(coverage.props('disabled')).toBe(true)
+    await setDimension(wrapper, 'all')
+    expect(coverage.props('disabled')).toBe(false)
+  })
+
+  it('维度作为第 9 个入参透传给 useBestPicks 且响应式跟随', async () => {
+    const wrapper = await mountPanel({ teammateIds: [300] })
+    const dimArg = () =>
+      (mockedUseBestPicks.mock.calls[0] as unknown as Array<{ value: string }>)[8]
+    expect(dimArg().value).toBe('all')
+    await setDimension(wrapper, 'synergy')
+    expect(dimArg().value).toBe('synergy')
+    await setDimension(wrapper, 'counter')
+    expect(dimArg().value).toBe('counter')
+  })
+
+  it('无队友时「只看协同」禁用，无敌方时「只看对位」禁用', async () => {
+    // 默认 3 敌方 + 0 队友：协同锚点缺失 → 协同禁用
+    let wrapper = await mountPanel({ teammateIds: [] })
+    let options = wrapperSelect(3, wrapper).props('options') as Array<{
+      value: string
+      disabled?: boolean
+    }>
+    expect(options.find(o => o.value === 'synergy')?.disabled).toBe(true)
+    expect(options.find(o => o.value === 'counter')?.disabled).toBe(false)
+    // 0 敌方 + 1 队友：对位锚点缺失 → 对位禁用
+    wrapper = await mountPanel({ teammateIds: [300], enemyIds: [] })
+    options = wrapperSelect(3, wrapper).props('options') as Array<{
+      value: string
+      disabled?: boolean
+    }>
+    expect(options.find(o => o.value === 'synergy')?.disabled).toBe(false)
+    expect(options.find(o => o.value === 'counter')?.disabled).toBe(true)
+  })
+
+  it('维度 chip 回显并以点击撤销回综合', async () => {
+    composableMock.picks.value = makePicks()
+    const wrapper = await mountPanel({ teammateIds: [300] })
+    await setDimension(wrapper, 'counter')
+    const chips = wrapper.findAll('.bp-chip')
+    const dimChip = chips.find(c => c.text().includes('只看对位'))
+    expect(dimChip).toBeTruthy()
+    await dimChip!.trigger('click')
+    await nextTick()
+    expect(wrapper.find('.bp-chip').exists()).toBe(false)
+    expect((mockedUseBestPicks.mock.calls[0] as unknown as Array<{ value: string }>)[8].value).toBe(
+      'all'
+    )
   })
 })
