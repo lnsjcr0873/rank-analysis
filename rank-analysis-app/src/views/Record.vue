@@ -7,10 +7,12 @@
       :tags="tags"
       :platform-id-cn="platformIdCn"
       :is-cross-region="isCrossRegion"
+      @refresh="refreshTick++"
     />
-    <div class="record-main" :class="{ 'record-main--focus': focusMode }">
-      <!-- 宽窗（>=1064）：左栏常驻；窄窗：隐藏并改用 NDrawer 抽屉 -->
+    <div class="record-main">
+      <!-- 宽窗（>=1064）：左栏常驻，顶部为分页（Akari 对齐）；窄窗：隐藏并改用 NDrawer 抽屉 -->
       <aside v-if="!isMobile && !isCompact" class="record-side">
+        <MatchHistoryPagination class="record-side-pagination" />
         <UserSidePanel
           :rank="rank"
           :solo5v5="solo5v5"
@@ -28,19 +30,39 @@
           @open-game="focusGameId = $event"
         />
       </aside>
-      <!-- 窄窗抽屉触发：内容区左上角悬浮按钮（左栏入口） -->
-      <n-button
-        v-if="isCompact"
-        circle
-        quaternary
-        class="record-side-trigger"
-        :title="sideOpen ? '收起侧栏' : '打开侧栏'"
-        @click="sideOpen = !sideOpen"
-      >
-        <template #icon>
-          <n-icon><Menu /></n-icon>
-        </template>
-      </n-button>
+      <!-- 窄窗：左栏入口 + 浮动分页收进内容区顶粘工具条（Akari @1064 紧凑布局） -->
+      <main :ref="el => bindContentScroll(el)" class="record-content">
+        <div v-if="isCompact" class="record-content-rail">
+          <n-button
+            circle
+            quaternary
+            class="record-side-trigger"
+            :title="sideOpen ? '收起侧栏' : '打开侧栏'"
+            @click="sideOpen = !sideOpen"
+          >
+            <template #icon>
+              <n-icon><Menu /></n-icon>
+            </template>
+          </n-button>
+          <MatchHistoryPagination floating class="record-rail-pagination" />
+        </div>
+        <div class="record-content-inner">
+          <MatchHistory
+            :focus-game-id="focusGameId"
+            :champion-filter="championFilterCmd"
+            :open-game-id="openGameId"
+            :refresh-tick="refreshTick"
+            @open="openGame"
+            @hover-champion="hoveredChampion = $event"
+            @leave-champion="hoveredChampion = null"
+            @pool-change="championPool = $event"
+            @games-change="games = $event"
+            @focus-handled="focusGameId = null"
+            @champion-filter-handled="championFilterCmd = 0"
+            @filter-change="activeChampion = $event.championId"
+          />
+        </div>
+      </main>
       <n-drawer
         v-if="isCompact"
         v-model:show="sideOpen"
@@ -68,50 +90,6 @@
           />
         </n-drawer-content>
       </n-drawer>
-      <main :ref="el => bindContentScroll(el)" class="record-content">
-        <div class="record-content-inner">
-          <MatchHistory
-            :focus-game-id="focusGameId"
-            :champion-filter="championFilterCmd"
-            :v2-wide="widePane"
-            :open-game-id="openGameId"
-            @open="openGame"
-            @hover-champion="hoveredChampion = $event"
-            @leave-champion="hoveredChampion = null"
-            @pool-change="championPool = $event"
-            @games-change="games = $event"
-            @focus-handled="focusGameId = null"
-            @champion-filter-handled="championFilterCmd = 0"
-            @filter-change="activeChampion = $event.championId"
-          />
-        </div>
-      </main>
-
-      <!-- v3 宽屏右侧详情栏：选中对局在此展示，列表保持节奏（<1064 回退内嵌展开） -->
-      <aside v-if="widePane && selectedGame" class="record-dpane">
-        <div class="record-dpane__nav">
-          <button
-            class="btn gho sm"
-            :disabled="detailIndex <= 0"
-            title="上一个对局（←）"
-            aria-label="上一个对局"
-            @click="stepDetail(-1)"
-          >
-            <ArrowLeft class="btn-arrow-glyph" /> 上一个
-          </button>
-          <span class="record-dpane__pos num"> {{ detailIndex + 1 }} / {{ games.length }} </span>
-          <button
-            class="btn gho sm"
-            :disabled="detailIndex >= games.length - 1"
-            title="下一个对局（→）"
-            aria-label="下一个对局"
-            @click="stepDetail(1)"
-          >
-            下一个 <ArrowRight class="btn-arrow-glyph" />
-          </button>
-        </div>
-        <MatchDetailInline :game="selectedGame" :region="regionQuery" @close="openGame(null)" />
-      </aside>
       <!-- 回到顶部 FAB：内容区滚动超过阈值后显示，点击平滑回顶 -->
       <Transition name="fab">
         <n-button
@@ -131,40 +109,27 @@
 </template>
 <script lang="ts" setup>
 import { onMounted, onBeforeUnmount, computed, ref, watch, type ComponentPublicInstance } from 'vue'
-import { useRoute } from 'vue-router'
 import { NButton, NIcon, NDrawer, NDrawerContent } from 'naive-ui'
-import { ArrowLeft, ArrowRight, ArrowUp, Menu } from 'lucide-vue-next'
+import { ArrowUp, Menu } from 'lucide-vue-next'
 import MatchHistory from '../components/record/MatchHistory.vue'
-import MatchDetailInline from '../components/record/MatchDetailInline.vue'
+import MatchHistoryPagination from '../components/record/MatchHistoryPagination.vue'
 import PlayerBar from '../components/record/PlayerBar.vue'
 import UserSidePanel from '../components/record/UserSidePanel.vue'
 import type { Game } from '../types/domain/match'
 import type { ChampionPoolEntry } from '../components/record/championPool'
 import { useBreakpoint } from '@renderer/composables/useBreakpoint'
 import { usePlayerRecordData } from '@renderer/composables/usePlayerRecordData'
-import { useRecordV2 } from '@renderer/composables/useRecordV2'
 import { shouldYieldToEditableTarget } from '@renderer/utils/domHotkey'
 
-const route = useRoute()
 const { isMobile, isCompact } = useBreakpoint()
 
-/** v3 宽屏双栏：详情走右侧常驻栏；窄窗自动回退内嵌展开 */
-const widePane = computed(() => !isCompact.value && !isMobile.value)
-
-/** 战绩 v2 重构灰度开关：false 时回退旧"聚焦吞页"交互；结构收敛与缺陷修复不回退 */
-const recordV2 = useRecordV2()
-
 /**
- * 当前打开的对局 id（单一事实源）：宽屏驱动右侧详情栏，窄屏经
- * MatchHistory 内嵌展开。收敛前存在 `selectedGameId + selectedGame +
- * focusGameId` 三态互相搬运，现只保留 openGameId 一种真相，详情对象派生。
+ * 当前打开的对局 id（单一事实源）：详情一律在 MatchHistory 就地内嵌展开，
+ * 这里只承接选中同步、键盘步进与重进会话恢复。
  */
 const openGameId = ref<number | null>(null)
-const selectedGame = computed<Game | null>(
-  () => games.value.find(g => g.gameId === openGameId.value) ?? null
-)
 
-/** 聚焦记忆（会话级）：重进战绩页自动恢复上次聚焦的对局 */
+/** 聚焦记忆（会话级）：重进战绩页自动恢复上次聚焦的对局（就地展开承接） */
 const FOCUS_KEY = 'record.focusGameId'
 function openGame(g: Game | null) {
   openGameId.value = g?.gameId ?? null
@@ -177,27 +142,11 @@ function openGame(g: Game | null) {
 }
 
 /**
- * 旧版"聚焦吞页"模式：仅 aRecordV2 回退时（recordV2=false）生效——
- * 宽屏详情展开隐藏左栏与列表，整页只留详情；v2 下列表常驻、不开吞页。
- */
-const focusMode = computed(() => !recordV2.value && widePane.value && !!selectedGame.value)
-
-/** 详情栏内上/下一个对局（按全量列表顺序，找不到当前项时禁用步进） */
-const detailIndex = computed(() => {
-  const id = selectedGame.value?.gameId
-  return id === undefined ? -1 : games.value.findIndex(g => g.gameId === id)
-})
-function stepDetail(dir: -1 | 1) {
-  const next = games.value[detailIndex.value + dir]
-  if (next) openGame(next)
-}
-
-/**
  * 键盘切换：Esc 收回、←/→ 上/下一个对局。
- * 门禁统一为"宽屏且打开过详情"（v2 下列表常驻同样可用，不再依赖吞页态）。
+ * 详情统一为就地展开，openGameId 承接列表定位/翻页，各断点行为一致。
  */
 function onGlobalKey(e: KeyboardEvent) {
-  if (!widePane.value || openGameId.value == null) return
+  if (openGameId.value == null) return
   if (shouldYieldToEditableTarget(e)) return
   if (e.key === 'Escape') {
     e.preventDefault()
@@ -210,7 +159,17 @@ function onGlobalKey(e: KeyboardEvent) {
     stepDetail(1)
   }
 }
-const regionQuery = computed(() => (route.query.region as string) ?? '')
+
+/** 详情步进：按全量列表顺序（找不到当前项时禁用步进） */
+const detailIndex = computed(() => {
+  const id = openGameId.value
+  return id === null ? -1 : games.value.findIndex(g => g.gameId === id)
+})
+function stepDetail(dir: -1 | 1) {
+  const next = games.value[detailIndex.value + dir]
+  if (next) openGame(next)
+}
+
 /** 窄窗左栏抽屉开关（进入宽窗时自动关闭，避免跨断点残留） */
 const sideOpen = ref(false)
 
@@ -265,17 +224,20 @@ const {
 /** 左栏英雄池数据与当前 hover 高亮（由 MatchHistory 上抛） */
 const championPool = ref<ChampionPoolEntry[]>([])
 const hoveredChampion = ref<number | null>(null)
-/** 近期对局全量（由 MatchHistory 上抛，D-P3 分时曲线数据源） */
+/** 近期对局全量（由 MatchHistory 上抛，供键盘步进与聚焦恢复使用） */
 const games = ref<Game[]>([])
 
-/** 聚焦恢复：列表数据到达后，若会话内记录了上次聚焦的对局则自动重开（仅宽屏详情栏场景） */
+/** PlayerBar 刷新计数：递增后下发 MatchHistory 重新拉当前召唤师最近对局 */
+const refreshTick = ref(0)
+
+/** 聚焦恢复：列表数据到达后，若会话内记录了上次聚焦的对局则自动重开（就地展开） */
 watch(games, list => {
   if (openGameId.value != null || !list.length) return
   try {
     const stored = sessionStorage.getItem(FOCUS_KEY)
     if (!stored) return
     const target = list.find(g => String(g.gameId) === stored)
-    if (target && widePane.value) openGame(target)
+    if (target) openGame(target)
   } catch {
     /* 隐私模式读取失败静默 */
   }
@@ -333,21 +295,31 @@ watch(championPool, pool => {
   display: none;
 }
 
-/* 窄窗左栏抽屉：与常驻左栏同宽、同视觉（glass 卡片列） */
-.record-side-drawer :deep(.n-drawer-body) {
-  padding: var(--space-12);
+/* 左栏顶部页签：与左栏卡片列同宽对齐 */
+.record-side-pagination {
+  padding: var(--space-6) var(--space-4) var(--space-12);
+  margin-bottom: var(--space-8);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
-.record-side-drawer :deep(.n-drawer-content-wrapper) {
-  background: color-mix(in srgb, var(--bg-base) 96%, transparent);
+/* 窄窗内容区顶粘工具条：左栏入口 + 浮动分页（浮动覆盖在上方，不占文档流） */
+.record-content-rail {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-dock);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  margin: 0 calc(-1 * var(--space-8)) var(--space-12);
+  padding: var(--space-8);
+  backdrop-filter: blur(12px);
+  background: color-mix(in srgb, var(--bg-base) 72%, transparent);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 /* 窄窗抽屉触发按钮：内容区左上角悬浮，hover 高亮 */
 .record-side-trigger {
-  position: absolute;
-  top: var(--space-8);
-  left: var(--space-8);
-  z-index: var(--z-dock); /* debug6:禁ad-hoc 20，dock档 */
   color: var(--text-secondary);
   background: var(--glass-bg-mid);
   border: 1px solid var(--glass-border);
@@ -362,6 +334,15 @@ watch(championPool, pool => {
   color: var(--text-primary);
   border-color: var(--accent-gold-deep);
   transform: scale(1.05);
+}
+
+/* 窄窗抽屉：与常驻左栏同宽、同视觉（glass 卡片列） */
+.record-side-drawer :deep(.n-drawer-body) {
+  padding: var(--space-12);
+}
+
+.record-side-drawer :deep(.n-drawer-content-wrapper) {
+  background: color-mix(in srgb, var(--bg-base) 96%, transparent);
 }
 
 /* 回到顶部 FAB：右下角悬浮，glass 视觉与抽屉触发钮一致 */
@@ -410,39 +391,6 @@ watch(championPool, pool => {
 .record-content-inner {
   max-width: 1280px;
   margin: 0 auto;
-}
-
-/* v3 宽屏右侧详情栏：独立滚动 + 切角容器视觉 */
-.record-dpane {
-  width: 440px;
-  max-width: 45%;
-  flex-shrink: 0;
-  overflow-y: auto;
-  border-left: 1px solid var(--border-subtle);
-  padding-left: var(--space-12);
-  scrollbar-width: thin;
-}
-.record-dpane__nav {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-8);
-  margin-bottom: var(--space-8);
-}
-.record-dpane__pos {
-  font-family: 'Space Mono', 'Bahnschrift', monospace;
-  font-size: var(--font-size-xs);
-  color: var(--text-tertiary);
-}
-.record-dpane::-webkit-scrollbar {
-  width: 6px;
-}
-.record-dpane::-webkit-scrollbar-thumb {
-  border-radius: var(--radius-xs);
-  background: color-mix(in srgb, var(--text-tertiary) 35%, transparent);
-}
-.record-dpane::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in srgb, var(--text-tertiary) 55%, transparent);
 }
 
 /* 战绩列表滚动条细化：6px 圆角细条替代系统默认宽条（与详情页一致） */

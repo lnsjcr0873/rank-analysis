@@ -4,79 +4,111 @@
       <div class="player-bar-avatar-wrap">
         <n-avatar
           round
-          :size="36"
+          :size="64"
           :src="`${assetPrefix}/profile/${summoner?.profileIconId}`"
           fallback-src="https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726f1epng.png"
           class="player-bar-avatar"
         />
         <div class="player-bar-level">{{ summoner?.summonerLevel ?? 0 }}</div>
       </div>
-      <n-flex vertical :size="1" class="player-bar-identity-text">
-        <n-flex align="center" :size="4" :wrap="false">
+      <n-flex vertical :size="2" class="player-bar-identity-text">
+        <div class="player-bar-name-row">
           <n-ellipsis class="player-bar-nickname">
             {{ summoner?.gameName || '等待客户端连接…' }}
           </n-ellipsis>
           <span v-if="summoner?.tagLine" class="player-bar-tagline">#{{ summoner.tagLine }}</span>
-          <n-button v-if="summoner?.gameName" text size="tiny" @click="copyName">
+          <n-button
+            v-if="summoner?.gameName"
+            text
+            size="tiny"
+            class="player-bar-copy"
+            @click="copyName"
+          >
             <template #icon>
               <n-icon><Copy /></n-icon>
             </template>
           </n-button>
+        </div>
+        <div class="player-bar-sub">
           <PlayerNoteBadge
             v-if="summoner?.puuid"
             :puuid="summoner.puuid"
             :game-name="summoner.gameName"
             :tag-line="summoner.tagLine"
-            size="normal"
+            size="small"
           />
-        </n-flex>
+          <span v-if="!isCrossRegion && hasRealTier(soloInfo)" class="player-bar-tier">
+            <img :src="tierImage(soloInfo.tier)" class="player-bar-rank-img" alt="" />
+            <span class="player-bar-rank-text">{{ formatCompactTierText(soloInfo) }}</span>
+          </span>
+          <span v-if="!isCrossRegion" class="player-bar-recent">
+            <span class="player-bar-recent-label">近20场</span>
+            <span class="player-bar-recent-value"
+              >{{ recentData.wins }}W{{ recentData.losses }}L</span
+            >
+          </span>
+        </div>
+        <UnifiedTagRow
+          v-if="!isCrossRegion && (tags.length > 0 || hasNote)"
+          class="player-bar-tags"
+          :tags="tags"
+          :puuid="summoner.puuid"
+          :game-name="summoner.gameName"
+          :tag-line="summoner.tagLine"
+        />
       </n-flex>
     </div>
 
-    <n-flex v-if="!isCrossRegion" align="center" :size="14" class="player-bar-stats">
-      <div v-if="hasRealTier(soloInfo)" class="player-bar-rank">
-        <img :src="tierImage(soloInfo.tier)" class="player-bar-rank-img" alt="" />
-        <span class="player-bar-rank-text">{{ formatCompactTierText(soloInfo) }}</span>
+    <div class="player-bar-actions">
+      <div class="player-bar-platform">
+        <n-popover trigger="hover" v-if="serverDescription">
+          <template #trigger>
+            <n-tag size="small" :bordered="false" type="default" class="player-bar-platform-tag">
+              {{ platformIdCn }}
+            </n-tag>
+          </template>
+          <span>{{ serverDescription }}</span>
+        </n-popover>
+        <n-tag v-else size="small" :bordered="false" type="default" class="player-bar-platform-tag">
+          {{ platformIdCn }}
+        </n-tag>
       </div>
-      <!-- 单双/灵活胜率已并入左栏概览卡（RankCard），此处瘦身去重（R3） -->
-      <div class="player-bar-recent">
-        <span class="player-bar-recent-label">近20场</span>
-        <span class="player-bar-recent-value">
-          {{ recentData.wins }}W{{ recentData.losses }}L
-        </span>
-      </div>
-    </n-flex>
-
-    <div class="player-bar-platform">
-      <n-popover trigger="hover" v-if="serverDescription">
+      <n-tooltip trigger="hover">
         <template #trigger>
-          <n-tag size="small" :bordered="false" type="default" class="player-bar-platform-tag">
-            {{ platformIdCn }}
-          </n-tag>
+          <n-button
+            quaternary
+            circle
+            class="player-bar-refresh"
+            title="刷新战绩"
+            aria-label="刷新战绩"
+            @click="emit('refresh')"
+          >
+            <template #icon>
+              <n-icon><RefreshCw /></n-icon>
+            </template>
+          </n-button>
         </template>
-        <span>{{ serverDescription }}</span>
-      </n-popover>
-      <n-tag v-else size="small" :bordered="false" type="default" class="player-bar-platform-tag">
-        {{ platformIdCn }}
-      </n-tag>
+        刷新战绩
+      </n-tooltip>
     </div>
-
-    <UnifiedTagRow
-      v-if="!isCrossRegion && (tags.length > 0 || hasNote)"
-      class="player-bar-tags"
-      :tags="tags"
-      :puuid="summoner.puuid"
-      :game-name="summoner.gameName"
-      :tag-line="summoner.tagLine"
-    />
   </div>
 </template>
 
 <script lang="ts" setup>
 import { assetPrefix } from '@renderer/services/http'
-import { Copy } from 'lucide-vue-next'
+import { Copy, RefreshCw } from 'lucide-vue-next'
 import { computed } from 'vue'
-import { NAvatar, NButton, NFlex, NIcon, NEllipsis, NPopover, NTag, useMessage } from 'naive-ui'
+import {
+  NAvatar,
+  NButton,
+  NFlex,
+  NIcon,
+  NEllipsis,
+  NPopover,
+  NTag,
+  NTooltip,
+  useMessage
+} from 'naive-ui'
 import type { Rank, Summoner } from '@renderer/types/domain/player'
 import type { RankTag, RecentData } from '@renderer/types/domain/analysis'
 import { usePlayerNotesStore } from '@renderer/features/settings/stores/playerNotes'
@@ -93,6 +125,8 @@ const props = defineProps<{
   platformIdCn: string
   isCrossRegion: boolean
 }>()
+
+const emit = defineEmits<{ refresh: [] }>()
 
 const serverDesc: Record<string, string> = {
   联盟一区: '联盟一区：祖安、皮尔特沃夫、巨神峰、教育网、男爵领域、均衡教派、影流、守望之海',
@@ -120,13 +154,14 @@ const copyName = () => {
 </script>
 
 <style lang="css" scoped>
-/* 顶部紧凑玩家条（60px 高度级）：身份 | 段位与胜率 | 大区标签；有标签/备注时第二行 */
+/* 顶部身份区（112px 高度级，Akari player-tab 对齐）：头像 64 + 等级角标、昵称#tag、
+ * 段位/近20场子行、标签行；右侧大区标签 + 刷新钮 */
 .player-bar {
   display: flex;
   align-items: center;
   gap: var(--space-16);
-  height: 60px;
-  padding: 0 var(--space-16);
+  min-height: 112px;
+  padding: var(--space-12) var(--space-16);
   background: linear-gradient(180deg, rgba(21, 29, 41, 0.75), rgba(12, 16, 24, 0.85));
   border: 1px solid var(--border-subtle);
   clip-path: var(--clip-corner-sm);
@@ -142,7 +177,7 @@ const copyName = () => {
 .player-bar-identity {
   display: flex;
   align-items: center;
-  gap: var(--space-10);
+  gap: var(--space-14);
   min-width: 0;
 }
 
@@ -151,8 +186,12 @@ const copyName = () => {
   flex-shrink: 0;
 }
 
+.player-bar-avatar {
+  box-shadow: var(--shadow-md);
+}
+
 .player-bar-avatar :deep(img) {
-  border: 1px solid var(--border-subtle);
+  border: 2px solid color-mix(in srgb, var(--accent-gold-deep) 45%, var(--border-subtle));
 }
 
 .player-bar-level {
@@ -162,10 +201,11 @@ const copyName = () => {
   transform: translateX(-50%);
   background: var(--bg-elevated);
   border: 1px solid var(--border-subtle);
-  padding: 0 var(--space-4);
-  height: 14px;
-  line-height: 12px;
+  padding: 0 var(--space-6);
+  height: 18px;
+  line-height: 16px;
   border-radius: var(--radius-pill);
+  font-family: 'Space Mono', 'Bahnschrift', monospace;
   font-size: var(--font-size-2xs);
   color: var(--text-secondary);
   white-space: nowrap;
@@ -175,34 +215,49 @@ const copyName = () => {
 .player-bar-identity-text {
   flex: 1;
   min-width: 0;
+  gap: var(--space-8);
+}
+
+.player-bar-name-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  min-width: 0;
 }
 
 :deep(.player-bar-nickname) {
-  max-width: 220px;
-  font-size: var(--font-size-md);
-  font-weight: 700;
+  max-width: 260px;
+  font-size: var(--font-size-xl);
+  font-weight: 800;
 }
 
 .player-bar-tagline {
-  font-size: var(--font-size-xs);
+  font-size: var(--font-size-sm);
   color: var(--text-tertiary);
   white-space: nowrap;
 }
 
-.player-bar-stats {
-  margin-left: auto;
-  flex-shrink: 0;
+.player-bar-copy {
+  color: var(--text-tertiary);
 }
 
-.player-bar-rank {
+.player-bar-sub {
+  display: flex;
+  align-items: center;
+  gap: var(--space-10);
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.player-bar-tier {
   display: inline-flex;
   align-items: center;
   gap: var(--space-4);
 }
 
 .player-bar-rank-img {
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   object-fit: contain;
 }
 
@@ -231,6 +286,14 @@ const copyName = () => {
   font-weight: 700;
 }
 
+.player-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-10);
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
 .player-bar-platform {
   flex-shrink: 0;
 }
@@ -241,19 +304,31 @@ const copyName = () => {
   height: 18px;
 }
 
+.player-bar-refresh {
+  color: var(--text-secondary);
+}
+
+.player-bar-refresh:hover {
+  color: var(--accent-gold-deep);
+}
+
 .player-bar-tags {
   flex-shrink: 0;
 }
 
-/* 窄窗：隐藏次要统计（灵活/近20场），保留段位与单双胜率，防止横向溢出 */
+/* 窄窗：隐藏次要行（近20场/标签），保留身份、段位与大区，防止横向溢出 */
 @media (max-width: 900px) {
-  .player-bar-rate:nth-of-type(2),
   .player-bar-recent {
     display: none;
   }
 }
 
 @media (max-width: 640px) {
+  .player-bar {
+    min-height: 96px;
+    padding: var(--space-10) var(--space-12);
+  }
+
   .player-bar-rank-text {
     display: none;
   }

@@ -19,197 +19,397 @@
     @mouseenter="emit('hover-champion', games.participants[0].championId)"
     @mouseleave="emit('leave-champion')"
   >
-    <!-- v2 body：左侧既有基行 + 右侧双方阵容列 -->
-    <div class="record-card-body">
-      <!-- 单行固定列网格：所有卡片共用同一套列轨道，行与行严格对齐 -->
-      <div class="record-card-grid">
-        <!-- 胜负标记 + 时长（hover 看日期/模式，斗魂补名次） -->
-        <span
-          class="record-card-result-badge record-card-result-label"
-          :class="isWin ? 'is-win' : 'is-loss'"
-        >
-          {{ resultLabel }}
-        </span>
-        <!-- 时间/模式/日期：hover 看完整时间戳，模式并入日期行常显（R5：回溯哪天打的不用悬停） -->
-        <span class="record-card-time">
-          <span class="font-number record-card-duration">{{ durationText }}</span>
-          <span class="record-card-mode"
-            >{{ dateText }}<template v-if="modeShortText"> · {{ modeShortText }}</template></span
-          >
-        </span>
-
-        <!-- 英雄头像 + 召唤师技能 + MVP/SVP 角标 -->
-        <div class="record-card-champion">
-          <LazyImg
-            class="record-card-champion-img"
-            :src="`${assetPrefix}/champion/${games.participants[0].championId}`"
-            alt="champion"
-          />
+    <!-- 战绩 v2 关闭（aRecordV2=false）：回退旧 48px 单行网格，交互/密度契约不变 -->
+    <template v-if="isLegacy">
+      <div class="record-card-body">
+        <div class="record-card-grid">
+          <!-- 胜负标记 + 时长（hover 看日期/模式，斗魂补名次） -->
           <span
-            v-if="spell1Id > 0"
-            class="record-card-spell record-card-spell-1"
-            :title="`召唤师技能 ${spell1Id}`"
+            class="record-card-result-badge record-card-result-label"
+            :class="isWin ? 'is-win' : 'is-loss'"
           >
+            {{ resultLabel }}
+          </span>
+          <!-- 时间/模式/日期 -->
+          <span class="record-card-time">
+            <span class="font-number record-card-duration">{{ durationText }}</span>
+            <span class="record-card-mode"
+              >{{ dateText }}<template v-if="modeShortText"> · {{ modeShortText }}</template></span
+            >
+          </span>
+
+          <!-- 英雄头像 + 召唤师技能 + MVP/SVP 角标 -->
+          <div class="record-card-champion record-card-champion--legacy">
             <LazyImg
-              :src="assets.srcOf('spell', spell1Id)"
-              class="record-card-spell-img"
-              alt="spell"
-            />
-          </span>
-          <span
-            v-if="spell2Id > 0"
-            class="record-card-spell record-card-spell-2"
-            :title="`召唤师技能 ${spell2Id}`"
-          >
-            <LazyImg
-              :src="assets.srcOf('spell', spell2Id)"
-              class="record-card-spell-img"
-              alt="spell"
-            />
-          </span>
-          <span
-            v-if="games.mvp"
-            class="record-card-mvp"
-            :class="games.mvp === 'MVP' ? 'record-card-mvp-gold' : 'record-card-mvp-silver'"
-          >
-            {{ games.mvp }}
-          </span>
-        </div>
-
-        <!-- 英雄名 -->
-        <n-ellipsis class="record-card-champion-name">{{ championName }}</n-ellipsis>
-
-        <!-- KDA + CS/分钟（含野怪） -->
-        <span class="record-card-kda">
-          <span class="record-card-kda-line">
-            <span class="record-card-kda-kill">{{ games.participants[0].stats?.kills }}</span>
-            <span class="record-card-kda-sep">/</span>
-            <span class="record-card-kda-death">{{ games.participants[0].stats?.deaths }}</span>
-            <span class="record-card-kda-sep">/</span>
-            <span class="record-card-kda-assist">{{ games.participants[0].stats?.assists }}</span>
-          </span>
-          <span class="record-card-cs">{{ csText }}</span>
-        </span>
-
-        <!-- 伤害 mini 条（伤害/承伤/治疗三段占全队比例）+ 伤害数值 -->
-        <div class="record-card-damage">
-          <div class="record-card-minibar">
-            <span
-              class="record-card-minibar-seg record-card-minibar-dmg"
-              :style="{ width: `${minibarSegWidth(rate('damageDealtToChampionsRate'))}%` }"
+              class="record-card-champion-img"
+              :src="`${assetPrefix}/champion/${games.participants[0].championId}`"
+              alt="champion"
             />
             <span
-              class="record-card-minibar-seg record-card-minibar-taken"
-              :style="{ width: `${minibarSegWidth(rate('damageTakenRate'))}%` }"
-            />
-            <span
-              class="record-card-minibar-seg record-card-minibar-heal"
-              :style="{ width: `${minibarSegWidth(rate('healRate'))}%` }"
-            />
-          </div>
-          <span class="font-number record-card-damage-value">
-            {{ formatCompactNumber(games.participants[0].stats?.totalDamageDealtToChampions ?? 0) }}
-          </span>
-        </div>
-
-        <!-- 参团率 -->
-        <span
-          class="font-number record-card-group-rate"
-          :style="{ color: groupRateColor(games.participants[0].stats?.groupRate ?? 0, isDark) }"
-        >
-          {{ Math.round(games.participants[0].stats?.groupRate ?? 0) }}%参团
-        </span>
-
-        <!-- 装备前 4 件（augment 局替换为海克斯强化图标） -->
-        <div class="record-card-slots">
-          <template v-if="usesAugments">
-            <span
-              v-for="(augmentId, index) in displayedAugmentIds.slice(0, 4)"
-              :key="`record-augment-${index}`"
-              :class="[
-                'record-card-slot record-card-augment-shell',
-                augmentRarityClass(
-                  assets.detailOf('perk', augmentId)?.rarity,
-                  'record-card-augment'
-                )
-              ]"
+              v-if="spell1Id > 0"
+              class="record-card-spell record-card-spell-1"
+              :title="`召唤师技能 ${spell1Id}`"
             >
               <LazyImg
-                :src="assets.srcOf('perk', augmentId)"
-                class="record-card-slot-img"
-                alt="augment"
+                :src="assets.srcOf('spell', spell1Id)"
+                class="record-card-spell-img"
+                alt="spell"
               />
             </span>
             <span
-              v-for="i in Math.max(0, 4 - displayedAugmentIds.slice(0, 4).length)"
-              :key="`aug-${i}`"
-              class="record-card-slot record-card-slot-empty"
-            />
-          </template>
-          <template v-else>
-            <n-tooltip
-              v-for="(itemId, index) in itemIds.slice(0, 4)"
-              :key="`record-item-${index}`"
-              trigger="hover"
-              placement="top"
-              :disabled="!assets.detailOf('item', itemId)"
+              v-if="spell2Id > 0"
+              class="record-card-spell record-card-spell-2"
+              :title="`召唤师技能 ${spell2Id}`"
             >
-              <template #trigger>
-                <span v-if="itemId > 0" class="record-card-slot">
+              <LazyImg
+                :src="assets.srcOf('spell', spell2Id)"
+                class="record-card-spell-img"
+                alt="spell"
+              />
+            </span>
+            <span
+              v-if="games.mvp"
+              class="record-card-mvp"
+              :class="games.mvp === 'MVP' ? 'record-card-mvp-gold' : 'record-card-mvp-silver'"
+            >
+              {{ games.mvp }}
+            </span>
+          </div>
+
+          <!-- 英雄名 -->
+          <n-ellipsis class="record-card-champion-name">{{ championName }}</n-ellipsis>
+
+          <!-- KDA + CS/分钟（含野怪） -->
+          <span class="record-card-kda">
+            <span class="record-card-kda-line">
+              <span class="record-card-kda-kill">{{ games.participants[0].stats?.kills }}</span>
+              <span class="record-card-kda-sep">/</span>
+              <span class="record-card-kda-death">{{ games.participants[0].stats?.deaths }}</span>
+              <span class="record-card-kda-sep">/</span>
+              <span class="record-card-kda-assist">{{ games.participants[0].stats?.assists }}</span>
+            </span>
+            <span class="record-card-cs">{{ csText }}</span>
+          </span>
+
+          <!-- 伤害 mini 条（伤害/承伤/治疗三段占全队比例）+ 伤害数值 -->
+          <div class="record-card-damage">
+            <div class="record-card-minibar">
+              <span
+                class="record-card-minibar-seg record-card-minibar-dmg"
+                :style="{ width: `${minibarSegWidth(rate('damageDealtToChampionsRate'))}%` }"
+              />
+              <span
+                class="record-card-minibar-seg record-card-minibar-taken"
+                :style="{ width: `${minibarSegWidth(rate('damageTakenRate'))}%` }"
+              />
+              <span
+                class="record-card-minibar-seg record-card-minibar-heal"
+                :style="{ width: `${minibarSegWidth(rate('healRate'))}%` }"
+              />
+            </div>
+            <span class="font-number record-card-damage-value">
+              {{
+                formatCompactNumber(games.participants[0].stats?.totalDamageDealtToChampions ?? 0)
+              }}
+            </span>
+          </div>
+
+          <!-- 参团率 -->
+          <span
+            class="font-number record-card-group-rate"
+            :style="{ color: groupRateColor(games.participants[0].stats?.groupRate ?? 0, isDark) }"
+          >
+            {{ Math.round(games.participants[0].stats?.groupRate ?? 0) }}%参团
+          </span>
+
+          <!-- 装备前 4 件（augment 局替换为海克斯强化图标） -->
+          <div class="record-card-slots">
+            <template v-if="usesAugments">
+              <span
+                v-for="(augmentId, index) in displayedAugmentIds"
+                :key="`record-augment-${index}`"
+                :class="[
+                  'record-card-slot record-card-augment-shell',
+                  augmentRarityClass(
+                    assets.detailOf('perk', augmentId)?.rarity,
+                    'record-card-augment'
+                  )
+                ]"
+              >
+                <LazyImg
+                  :src="assets.srcOf('perk', augmentId)"
+                  class="record-card-slot-img"
+                  alt="augment"
+                />
+              </span>
+              <span
+                v-for="i in Math.max(0, 4 - displayedAugmentIds.length)"
+                :key="`aug-empty-${i}`"
+                class="record-card-slot record-card-slot-empty"
+              />
+            </template>
+            <template v-else>
+              <n-tooltip
+                v-for="(itemId, index) in itemIds.slice(0, 4)"
+                :key="`record-item-${index}`"
+                trigger="hover"
+                placement="top"
+                :disabled="!assets.detailOf('item', itemId)"
+              >
+                <template #trigger>
+                  <span v-if="itemId > 0" class="record-card-slot">
+                    <LazyImg
+                      :src="assets.srcOf('item', itemId)"
+                      class="record-card-slot-img"
+                      alt="item"
+                    />
+                  </span>
+                  <span v-else class="record-card-slot record-card-slot-empty" />
+                </template>
+                <AssetTooltipContent
+                  v-if="itemId > 0"
+                  :icon-src="assets.srcOf('item', itemId)"
+                  :name="assets.detailOf('item', itemId)?.name ?? ''"
+                  :description="assets.detailOf('item', itemId)?.description ?? ''"
+                />
+              </n-tooltip>
+            </template>
+          </div>
+
+          <!-- 展开箭头 -->
+          <n-icon
+            class="record-card-chevron"
+            :class="{ 'record-card-chevron--expanded': expanded }"
+          >
+            <ChevronDown />
+          </n-icon>
+        </div>
+      </div>
+    </template>
+
+    <!-- v2 Akari 折叠架构：116px 三区（主列 / 阵容列 / 展开箭头列） -->
+    <template v-else>
+      <div class="record-card-body record-card-body--v2">
+        <!-- 主列：头像+符文/技能 → KDA/伤害/参团 → 胜负+装备 → 元信息行 -->
+        <div class="record-card-main">
+          <div class="record-card-top">
+            <div class="record-card-avatar-cluster">
+              <div class="record-card-champion">
+                <LazyImg
+                  class="record-card-champion-img"
+                  :src="`${assetPrefix}/champion/${games.participants[0].championId}`"
+                  alt="champion"
+                />
+                <span
+                  v-if="games.mvp"
+                  class="record-card-mvp"
+                  :class="games.mvp === 'MVP' ? 'record-card-mvp-gold' : 'record-card-mvp-silver'"
+                >
+                  {{ games.mvp }}
+                </span>
+              </div>
+              <div v-if="spell1Id > 0 || spell2Id > 0" class="record-card-spells">
+                <span
+                  v-if="spell1Id > 0"
+                  class="record-card-spell"
+                  :title="`召唤师技能 ${spell1Id}`"
+                >
                   <LazyImg
-                    :src="assets.srcOf('item', itemId)"
-                    class="record-card-slot-img"
-                    alt="item"
+                    :src="assets.srcOf('spell', spell1Id)"
+                    class="record-card-spell-img"
+                    alt="spell"
                   />
                 </span>
-                <span v-else class="record-card-slot record-card-slot-empty" />
-              </template>
-              <AssetTooltipContent
-                v-if="itemId > 0"
-                :icon-src="assets.srcOf('item', itemId)"
-                :name="assets.detailOf('item', itemId)?.name ?? ''"
-                :description="assets.detailOf('item', itemId)?.description ?? ''"
-              />
-            </n-tooltip>
-          </template>
-        </div>
+                <span
+                  v-if="spell2Id > 0"
+                  class="record-card-spell"
+                  :title="`召唤师技能 ${spell2Id}`"
+                >
+                  <LazyImg
+                    :src="assets.srcOf('spell', spell2Id)"
+                    class="record-card-spell-img"
+                    alt="spell"
+                  />
+                </span>
+              </div>
+              <div v-if="rune1Id > 0 || rune2Id > 0" class="record-card-runes">
+                <span v-if="rune1Id > 0" class="record-card-rune" :title="`主系符文 ${rune1Id}`">
+                  <LazyImg
+                    :src="assets.srcOf('perk', rune1Id)"
+                    class="record-card-rune-img"
+                    alt="rune"
+                  />
+                </span>
+                <span v-if="rune2Id > 0" class="record-card-rune" :title="`副系符文 ${rune2Id}`">
+                  <LazyImg
+                    :src="assets.srcOf('perk', rune2Id)"
+                    class="record-card-rune-img"
+                    alt="rune"
+                  />
+                </span>
+              </div>
+            </div>
 
-        <!-- 展开箭头：就地展开时翻转朝上 -->
-        <n-icon class="record-card-chevron" :class="{ 'record-card-chevron--expanded': expanded }">
-          <ChevronDown />
-        </n-icon>
-      </div>
+            <span class="record-card-kda">
+              <span class="record-card-kda-line">
+                <span class="record-card-kda-kill">{{ games.participants[0].stats?.kills }}</span>
+                <span class="record-card-kda-sep">/</span>
+                <span class="record-card-kda-death">{{ games.participants[0].stats?.deaths }}</span>
+                <span class="record-card-kda-sep">/</span>
+                <span class="record-card-kda-assist">{{
+                  games.participants[0].stats?.assists
+                }}</span>
+              </span>
+              <span class="record-card-cs">{{ csText }}</span>
+            </span>
 
-      <!-- 双方阵容列：每行极小头像 + 英雄名（仅 wide 显名）+ 迷你 KDA -->
-      <div v-if="!isLegacy && activeDensity !== 'compact'" class="record-card-lineup">
-        <div
-          v-for="team in lineupTeams"
-          :key="team.key"
-          class="record-card-lineup-team"
-          :class="{ 'is-own': team.isOwn }"
-        >
-          <div
-            v-for="row in team.players"
-            :key="row.participantId"
-            class="record-card-lineup-row"
-            :class="{ 'is-self': row.isSelf }"
-            :title="row.summonerName ?? row.championName"
-          >
-            <LazyImg
-              class="record-card-lineup-ava"
-              :src="`${assetPrefix}/champion/${row.championId}`"
-              alt="champion"
-            />
-            <span class="record-card-lineup-name">{{ row.championName }}</span>
-            <span class="font-number record-card-lineup-kda"
-              ><b class="rc-k">{{ row.kills }}</b
-              >/<i class="rc-d">{{ row.deaths }}</i
-              >/<b class="rc-a">{{ row.assists }}</b></span
+            <div class="record-card-damage">
+              <div class="record-card-minibar">
+                <span
+                  class="record-card-minibar-seg record-card-minibar-dmg"
+                  :style="{ width: `${minibarSegWidth(rate('damageDealtToChampionsRate'))}%` }"
+                />
+                <span
+                  class="record-card-minibar-seg record-card-minibar-taken"
+                  :style="{ width: `${minibarSegWidth(rate('damageTakenRate'))}%` }"
+                />
+                <span
+                  class="record-card-minibar-seg record-card-minibar-heal"
+                  :style="{ width: `${minibarSegWidth(rate('healRate'))}%` }"
+                />
+              </div>
+              <span class="font-number record-card-damage-value">
+                {{
+                  formatCompactNumber(games.participants[0].stats?.totalDamageDealtToChampions ?? 0)
+                }}
+              </span>
+            </div>
+
+            <span
+              class="font-number record-card-group-rate"
+              :style="{
+                color: groupRateColor(games.participants[0].stats?.groupRate ?? 0, isDark)
+              }"
             >
+              {{ Math.round(games.participants[0].stats?.groupRate ?? 0) }}%参团
+            </span>
+          </div>
+
+          <div class="record-card-bottom">
+            <span
+              class="record-card-result-badge record-card-result-label"
+              :class="isWin ? 'is-win' : 'is-loss'"
+            >
+              {{ resultLabel }}
+            </span>
+            <div class="record-card-slots">
+              <template v-if="usesAugments">
+                <span
+                  v-for="(augmentId, index) in displayedAugmentIds"
+                  :key="`record-augment-${index}`"
+                  :class="[
+                    'record-card-slot record-card-augment-shell',
+                    augmentRarityClass(
+                      assets.detailOf('perk', augmentId)?.rarity,
+                      'record-card-augment'
+                    )
+                  ]"
+                >
+                  <LazyImg
+                    :src="assets.srcOf('perk', augmentId)"
+                    class="record-card-slot-img"
+                    alt="augment"
+                  />
+                </span>
+                <span
+                  v-for="i in Math.max(0, 4 - displayedAugmentIds.length)"
+                  :key="`aug-empty-${i}`"
+                  class="record-card-slot record-card-slot-empty"
+                />
+              </template>
+              <template v-else>
+                <n-tooltip
+                  v-for="(itemId, index) in itemIds"
+                  :key="`record-item-${index}`"
+                  trigger="hover"
+                  placement="top"
+                  :disabled="!assets.detailOf('item', itemId)"
+                >
+                  <template #trigger>
+                    <span v-if="itemId > 0" class="record-card-slot">
+                      <LazyImg
+                        :src="assets.srcOf('item', itemId)"
+                        class="record-card-slot-img"
+                        alt="item"
+                      />
+                    </span>
+                    <span v-else class="record-card-slot record-card-slot-empty" />
+                  </template>
+                  <AssetTooltipContent
+                    v-if="itemId > 0"
+                    :icon-src="assets.srcOf('item', itemId)"
+                    :name="assets.detailOf('item', itemId)?.name ?? ''"
+                    :description="assets.detailOf('item', itemId)?.description ?? ''"
+                  />
+                </n-tooltip>
+              </template>
+            </div>
+          </div>
+
+          <div class="record-card-meta">
+            <span class="record-card-mode"
+              >{{ dateText }}<template v-if="modeShortText"> · {{ modeShortText }}</template></span
+            >
+            <span class="record-card-meta-sep">·</span>
+            <span class="font-number record-card-duration">{{ durationText }}</span>
+            <span class="record-card-meta-sep">·</span>
+            <span v-if="relativeTimeText" class="record-card-relative">{{ relativeTimeText }}</span>
+            <span class="record-card-meta-sep">·</span>
+            <span class="record-card-map">{{ mapNameText }}</span>
           </div>
         </div>
+
+        <!-- 阵容列：双方各 5（斗魂 4）行迷你行，wide 常显 / medium hover 揭示 -->
+        <div v-if="activeDensity !== 'compact'" class="record-card-lineup">
+          <div
+            v-for="team in lineupTeams"
+            :key="team.key"
+            class="record-card-lineup-team"
+            :class="{ 'is-own': team.isOwn }"
+          >
+            <div
+              v-for="row in team.players"
+              :key="row.participantId"
+              class="record-card-lineup-row"
+              :class="{ 'is-self': row.isSelf }"
+              :title="row.summonerName ?? row.championName"
+            >
+              <LazyImg
+                class="record-card-lineup-ava"
+                :src="`${assetPrefix}/champion/${row.championId}`"
+                alt="champion"
+              />
+              <span class="record-card-lineup-name">{{ row.championName }}</span>
+              <span class="font-number record-card-lineup-kda"
+                ><b class="rc-k">{{ row.kills }}</b
+                >/<i class="rc-d">{{ row.deaths }}</i
+                >/<b class="rc-a">{{ row.assists }}</b></span
+              >
+            </div>
+          </div>
+        </div>
+
+        <!-- 展开箭头列：最右 w-8 竖分隔线 -->
+        <div class="record-card-chevron-rail">
+          <n-icon
+            class="record-card-chevron"
+            :class="{ 'record-card-chevron--expanded': expanded }"
+          >
+            <ChevronDown />
+          </n-icon>
+        </div>
       </div>
-    </div>
+    </template>
   </div>
 </template>
 
@@ -218,6 +418,7 @@ import { ChevronDown } from 'lucide-vue-next'
 import { computed, inject, onMounted, ref } from 'vue'
 import { NEllipsis, NIcon, NTooltip } from 'naive-ui'
 import { formatCompactNumber, formatGameDate } from '@renderer/utils/format'
+import { formatRelativeTime } from '@renderer/composables/useDateFormat'
 import { useTheme } from '@renderer/composables/useTheme'
 import { groupRateColor } from '@renderer/utils/colors'
 import { assetPrefix } from '@renderer/services/http'
@@ -276,6 +477,41 @@ const activeDensity = computed<RecordCardDensity>(() => {
   return getRecordCardDensity(measuredWidth.value)
 })
 
+/** LCU mapId → 地图中文名（覆盖率按当前主环境：峡谷/极地/斗魂） */
+const MAP_NAMES: Record<number, string> = {
+  1: '召唤师峡谷',
+  2: '召唤师峡谷',
+  11: '召唤师峡谷',
+  12: '嚎哭深渊',
+  14: '嚎哭深渊',
+  21: '嚎哭深渊',
+  22: '嚎哭深渊',
+  30: '斗魂竞技场',
+  31: '斗魂竞技场',
+  32: '斗魂竞技场',
+  33: '斗魂竞技场'
+}
+
+/**
+ * 对局时间戳归一化（与 formatGameDate 同规则：10 位秒 / 13~14 位毫秒 / 16 位微秒 /
+ * ISO 字符串），为相对时间提供数值时间戳；解析不了返回 null。
+ */
+function parseGameTs(raw: string): number | null {
+  if (!raw) return null
+  const ts = Number(raw)
+  let date: Date | null = null
+  if (Number.isFinite(ts) && ts > 0) {
+    const ms = ts < 1_000_000_000_000 ? ts * 1000 : ts >= 1_000_000_000_000_000 ? ts / 1000 : ts
+    const d = new Date(ms)
+    if (!Number.isNaN(d.getTime()) && d.getUTCFullYear() <= 2100) date = d
+  }
+  if (!date) {
+    const d = new Date(raw)
+    if (!Number.isNaN(d.getTime()) && d.getUTCFullYear() <= 2100) date = d
+  }
+  return date ? date.getTime() : null
+}
+
 interface LineupRow {
   participantId: number
   championId: number
@@ -333,6 +569,18 @@ const isWin = computed(() => props.games.participants[0].stats.win)
 const isCherry = computed(() => props.games.gameMode === 'CHERRY')
 const usesAugments = computed(() => isCherry.value || props.games.queueId === 2400)
 const placement = computed(() => props.games.participants[0]?.stats?.subteamPlacement ?? 0)
+
+/** 主系/副系符文图标 id（LCU：perk0=基石符文，perkSubStyle=副系风格） */
+const rune1Id = computed(() => props.games.participants[0]?.stats?.perk0 ?? 0)
+const rune2Id = computed(() => props.games.participants[0]?.stats?.perkSubStyle ?? 0)
+
+const mapNameText = computed(() => MAP_NAMES[props.games.mapId] ?? `地图 ${props.games.mapId}`)
+
+/** 相对时间（刚刚/N 分钟前/N 小时前/N 天前），解析不了为空则整段隐藏 */
+const relativeTimeText = computed(() => {
+  const ts = parseGameTs(props.games.gameCreationDate)
+  return ts == null ? '' : formatRelativeTime(ts)
+})
 
 /* 模式短名：斗魂/极地/单双/灵活/匹配/人机，未知 queueId 时退回 queueName 前 4 字 */
 const MODE_SHORT: Record<number, string> = {
@@ -411,7 +659,8 @@ const augmentIds = computed(() => {
 
 const displayedAugmentIds = computed(() => {
   const ids = augmentIds.value
-  return ids.length <= 6 ? ids : ids.slice(0, 5)
+  // 折叠卡最多展示 4 个强化槽（与旧版一致），多余只参与详情
+  return ids.length <= 4 ? ids : ids.slice(0, 4)
 })
 
 const itemIds = computed(() => {
@@ -437,7 +686,7 @@ function openDetail() {
 .record-card {
   position: relative;
   cursor: pointer;
-  height: 56px;
+  height: 116px;
   background: linear-gradient(180deg, rgba(21, 29, 41, 0.75), rgba(12, 16, 24, 0.85));
   border: 1px solid var(--border-subtle);
   clip-path: var(--clip-corner-sm);
@@ -448,6 +697,7 @@ function openDetail() {
 .rc-d-legacy {
   height: 48px;
 }
+
 .rc-d-legacy .record-card-body {
   display: block;
 }
@@ -498,11 +748,13 @@ function openDetail() {
 .record-card--sel {
   border-color: var(--brand) !important;
   box-shadow: 0 0 12px var(--glow-brand);
+  outline: 1px solid var(--brand-border);
+  background: var(--bg-raised);
 }
 
+/* === v2 关闭回退：旧 48px 单行网格 === */
 .record-card-grid {
   display: grid;
-  /* 固定列收窄 + 可伸缩列 minmax：窄窗下整体收缩而非溢出（列间 gap 同步收紧） */
   grid-template-columns:
     36px
     54px
@@ -523,43 +775,146 @@ function openDetail() {
   overflow: hidden;
 }
 
-/* === v2 阵容列（双方 10 人 + 迷你 KDA） === */
-.record-card-body {
+/* === v2 Akari 折叠架构（116px 三区） === */
+.record-card-body--v2 {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   height: 100%;
   min-width: 0;
 }
 
-/* 三档密度卡高：wide / medium-hover 展开到基准高（96~104 取 100） */
-.rc-density-wide {
-  height: 100px;
+.record-card-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 6px var(--space-10);
+  overflow: hidden;
 }
 
-.rc-density-medium:hover {
-  height: 100px;
+/* 首行：头像簇 → KDA → 伤害 → 参团 */
+.record-card-top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-10);
+  min-width: 0;
 }
 
+.record-card-avatar-cluster {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+/* 44px 头像 + 胜/败描边（奥术金工，非蓝/红） */
+.record-card-body--v2 .record-card-champion {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+}
+
+.record-card-body--v2 .record-card-champion-img {
+  display: block;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-sm);
+  border: 2px solid transparent;
+  box-sizing: border-box;
+}
+
+.record-card-win .record-card-body--v2 .record-card-champion-img {
+  border-color: color-mix(in srgb, var(--semantic-win) 65%, transparent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--semantic-win) 30%, transparent);
+}
+
+.record-card-loss .record-card-body--v2 .record-card-champion-img {
+  border-color: color-mix(in srgb, var(--semantic-loss) 60%, transparent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--semantic-loss) 25%, transparent);
+}
+
+/* 技能/符文竖列：20px 图标 ×2 */
+.record-card-spells,
+.record-card-runes {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.record-card-body--v2 .record-card-spell,
+.record-card-rune {
+  display: block;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 0, 0, 0.55);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  background: var(--glass-bg-low);
+  overflow: hidden;
+}
+
+.record-card-spell-img,
+.record-card-rune-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* 次行：胜负印章 + 装备 6 件 + 饰品 */
+.record-card-bottom {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-width: 0;
+}
+
+/* 元信息行：日期·模式 · 时长 · 相对时间 · 地图 */
+.record-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--font-size-2xs);
+  font-weight: 600;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  line-height: 1;
+}
+
+.record-card-meta-sep {
+  color: var(--text-quaternary);
+}
+
+.record-card-relative {
+  color: var(--text-quaternary);
+}
+
+/* 阵容列：宽档常显 / 中档 hover 揭示，宽 168px 对齐 Akari w-42 */
 .record-card-lineup {
   display: none;
   align-items: stretch;
   gap: var(--space-10);
-  padding-right: var(--space-10);
+  padding: 10px var(--space-10);
   flex-shrink: 0;
   height: 100%;
+  box-sizing: border-box;
 }
 
 .rc-density-wide .record-card-lineup,
 .rc-density-medium:hover .record-card-lineup {
   display: flex;
+  width: 168px;
 }
 
 .record-card-lineup-team {
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: space-between;
   gap: 1px;
   min-width: 0;
+  flex: 1 1 0;
 }
 
 .record-card-lineup-team:first-child {
@@ -575,7 +930,7 @@ function openDetail() {
   display: flex;
   align-items: center;
   gap: 4px;
-  height: 18px;
+  height: 16px;
   min-width: 0;
 }
 
@@ -594,7 +949,7 @@ function openDetail() {
 }
 
 .record-card-lineup-name {
-  font-size: var(--font-size-2xs); /* debug6:禁9px，10px起步 */
+  font-size: var(--font-size-2xs);
   color: var(--text-tertiary);
   white-space: nowrap;
   overflow: hidden;
@@ -609,7 +964,7 @@ function openDetail() {
 }
 
 .record-card-lineup-kda {
-  font-size: var(--font-size-2xs); /* debug6:禁9px，10px起步 */
+  font-size: var(--font-size-2xs);
   font-weight: 600;
   white-space: nowrap;
   flex-shrink: 0;
@@ -628,6 +983,33 @@ function openDetail() {
   color: var(--accent-gold-deep);
 }
 
+/* 展开箭头列：w-8 竖分隔线 */
+.record-card-chevron-rail {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--border-subtle);
+}
+
+.record-card-chevron {
+  color: var(--text-tertiary);
+  font-size: var(--font-size-md);
+  transition: transform var(--dur-fast) var(--ease-expo);
+}
+
+.record-card:hover .record-card-chevron {
+  color: var(--text-secondary);
+}
+
+/* 就地展开：箭头翻转朝上，与展开状态呼应 */
+.record-card-chevron--expanded {
+  transform: rotate(180deg) !important;
+  color: var(--text-primary);
+}
+
+/* === 共用：胜负印章 / KDA / 伤害 / 参团 / 装备 / 时分 ===== */
 /* 胜负切角印章（Hextech Notched Badge） */
 .record-card-result-badge {
   display: inline-flex;
@@ -672,19 +1054,13 @@ function openDetail() {
   text-shadow: none;
 }
 
-/* 时长 + 日期/模式（日期常显：R5 回溯不用悬停） */
-.record-card-time {
+/* 时长 + 日期/模式（日期常显：R5 回溯不用悬停；仅在 legacy 网格内竖排，v2 走 meta 行） */
+.rc-d-legacy .record-card-time {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 2px;
   line-height: 1;
-}
-
-/* v3 宽屏详情栏选中态：品牌描边高亮当前行 */
-.record-card--sel {
-  outline: 1px solid var(--brand-border);
-  background: var(--bg-raised);
 }
 
 .record-card-duration {
@@ -694,19 +1070,19 @@ function openDetail() {
 }
 
 .record-card-mode {
-  font-size: var(--font-size-2xs); /* debug6:禁9px，10px起步 */
+  font-size: var(--font-size-2xs);
   font-weight: 700;
   color: var(--text-tertiary);
 }
 
-/* 英雄头像 + 召唤师技能 + MVP */
-.record-card-champion {
+/* 英雄头像基础（legacy 36px 覆盖页） + MVP */
+.record-card-champion--legacy {
   position: relative;
   width: 36px;
   height: 36px;
 }
 
-.record-card-champion-img {
+.record-card-champion--legacy .record-card-champion-img {
   display: block;
   width: 36px;
   height: 36px;
@@ -715,16 +1091,16 @@ function openDetail() {
   box-sizing: border-box;
 }
 
-.record-card-win .record-card-champion-img {
+.record-card-win .record-card-champion--legacy .record-card-champion-img {
   border-color: color-mix(in srgb, var(--semantic-win) 45%, transparent);
 }
 
-.record-card-loss .record-card-champion-img {
+.record-card-loss .record-card-champion--legacy .record-card-champion-img {
   border-color: color-mix(in srgb, var(--semantic-loss) 40%, transparent);
 }
 
-/* 召唤师技能：头像左上角竖排两枚小图标 */
-.record-card-spell {
+/* legacy 召唤师技能：头像左上角竖排两枚小图标 */
+.record-card-champion--legacy .record-card-spell {
   position: absolute;
   left: -3px;
   width: 13px;
@@ -737,18 +1113,12 @@ function openDetail() {
   z-index: 1;
 }
 
-.record-card-spell-1 {
+.record-card-champion--legacy .record-card-spell-1 {
   top: -2px;
 }
 
-.record-card-spell-2 {
+.record-card-champion--legacy .record-card-spell-2 {
   top: 11px;
-}
-
-.record-card-spell-img {
-  display: block;
-  width: 100%;
-  height: 100%;
 }
 
 .record-card-mvp {
@@ -759,7 +1129,7 @@ function openDetail() {
   padding: 0 3px;
   height: 11px;
   font-weight: 800;
-  font-size: var(--font-size-2xs); /* debug6:禁8px，10px起步 */
+  font-size: var(--font-size-2xs);
   line-height: 11px;
   border-radius: var(--radius-pill);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
@@ -779,7 +1149,7 @@ function openDetail() {
   box-shadow: 0 0 4px rgba(148, 163, 184, 0.25);
 }
 
-/* 英雄名 */
+/* 英雄名（legacy 网格用） */
 .record-card-champion-name {
   font-size: var(--font-size-sm);
   font-weight: 600;
@@ -795,6 +1165,7 @@ function openDetail() {
   gap: 2px;
   line-height: 1;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .record-card-kda-line {
@@ -804,7 +1175,7 @@ function openDetail() {
 }
 
 .record-card-cs {
-  font-size: var(--font-size-2xs); /* debug6:禁9px，10px起步 */
+  font-size: var(--font-size-2xs);
   font-weight: 650;
   color: var(--text-tertiary);
   white-space: nowrap;
@@ -832,6 +1203,7 @@ function openDetail() {
   align-items: center;
   gap: var(--space-6);
   min-width: 0;
+  flex-shrink: 0;
 }
 
 .record-card-minibar {
@@ -874,6 +1246,7 @@ function openDetail() {
   font-size: var(--font-size-xs);
   font-weight: 650;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .record-card-group-rate.good {
@@ -884,11 +1257,17 @@ function openDetail() {
   color: var(--semantic-loss);
 }
 
-/* 装备 / augment 槽 */
+/* 装备 / augment 槽（v2 卡内 22px 槽 + 空槽补齐至 7） */
 .record-card-slots {
   display: flex;
   align-items: center;
   gap: var(--space-4);
+  min-width: 0;
+}
+
+.record-card-body--v2 .record-card-slot {
+  width: 22px;
+  height: 22px;
 }
 
 .record-card-slot {
@@ -962,23 +1341,5 @@ function openDetail() {
 
 .record-card-slot :deep(.record-card-slot-img) {
   filter: var(--augment-filter);
-}
-
-/* 展开箭头 */
-.record-card-chevron {
-  color: var(--text-tertiary);
-  font-size: var(--font-size-md);
-  transition: transform var(--dur-fast) var(--ease-expo);
-}
-
-.record-card:hover .record-card-chevron {
-  transform: translateY(1px);
-  color: var(--text-secondary);
-}
-
-/* 就地展开：箭头翻转朝上，与展开状态呼应 */
-.record-card-chevron--expanded {
-  transform: rotate(180deg) !important;
-  color: var(--text-primary);
 }
 </style>

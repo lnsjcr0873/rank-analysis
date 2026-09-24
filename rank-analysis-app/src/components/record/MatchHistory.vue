@@ -66,47 +66,9 @@
               </n-button>
             </n-dropdown>
           </div>
-          <n-button
-            v-if="!props.v2Wide"
-            size="small"
-            class="toolbar-expand-all"
-            @click="toggleExpandAll"
-          >
+          <n-button size="small" class="toolbar-expand-all" @click="toggleExpandAll">
             {{ anyExpanded ? '收起全部' : '展开全部' }}
           </n-button>
-          <div class="pagination">
-            <n-pagination>
-              <template #prev>
-                <n-button
-                  size="tiny"
-                  :disabled="page == 1 || isRequestingMatchHostory"
-                  @click="prevPage"
-                >
-                  <template #icon>
-                    <n-icon>
-                      <ArrowLeft></ArrowLeft>
-                    </n-icon>
-                  </template>
-                </n-button>
-              </template>
-              <template #label>
-                <span>{{ page }}/{{ pageCount }}</span>
-              </template>
-              <template #next>
-                <n-button
-                  size="tiny"
-                  @click="nextPage"
-                  :disabled="noMoreMatches || isRequestingMatchHostory"
-                >
-                  <template #icon>
-                    <n-icon>
-                      <ArrowRight></ArrowRight>
-                    </n-icon>
-                  </template>
-                </n-button>
-              </template>
-            </n-pagination>
-          </div>
           <n-tooltip trigger="hover">
             <template #trigger>
               <n-button quaternary circle size="small" class="toolbar-reset" @click="resetFilter">
@@ -234,7 +196,7 @@
 import RecordCard from './RecordCard.vue'
 import RecordCardSkeleton from './RecordCardSkeleton.vue'
 import TrendBar from './TrendBar.vue'
-import { ArrowLeft, ArrowRight, Repeat, Download, ChevronDown } from 'lucide-vue-next'
+import { Repeat, Download, ChevronDown } from 'lucide-vue-next'
 import {
   computed,
   nextTick,
@@ -296,6 +258,11 @@ import {
 } from './matchFilters'
 import { aggregateChampionPool, type ChampionPoolEntry } from './championPool'
 import { computePageSize, DEFAULT_PAGE_SIZE, type MatchPageMode } from './pageSize'
+import {
+  bindRecordPagination,
+  syncRecordPagination,
+  unbindRecordPagination
+} from './recordPagination'
 import { CONFIG_KEYS } from '@renderer/services/configKeys'
 
 /** 英雄池联动：hover 行卡时把当前英雄 id 上抛给父级（左栏 HeroPool 高亮/展开） */
@@ -310,7 +277,7 @@ const emit = defineEmits<{
   'champion-filter-handled': []
   /** 筛选状态变化（英雄筛选生效/清除），供左栏英雄池同步选中态 */
   'filter-change': [filter: MatchFilterState]
-  /** v2 宽屏详情栏：点选上抛（null = 取消选中，父级以 openGameId 单源承接） */
+  /** 选中对局同步（null = 取消选中）：parent 以 openGameId 单源承接，驱动键盘高亮/展开 */
   open: [game: Game | null]
 }>()
 
@@ -319,14 +286,14 @@ const props = defineProps<{
   focusGameId?: number | null
   /** 英雄池点击：非 0 时按该英雄筛选，与当前选中相同则取消（一次性命令） */
   championFilter?: number
-  /** v3 宽屏双栏范式开关（父级计算 isCompact 后下发） */
-  v2Wide?: boolean
   /**
-   * v2 宽屏下当前右侧详情栏打开的对局 id（回显选中态）。
-   * v2 宽屏真/窄屏假切换时，本组件承接该 id 转内嵌展开（原先由父级
-   * watch(widePane) 搬运 focusGameId，现收敛为 openGameId 单源回传）。
+   * 当前选中对局 id（键盘 ←/→ 步进 + Card selected 高亮）。
+   * 本组件承接该 id：非空且未展开时定位所在页并就地展开（原先由父级
+   * v2 宽屏右栏承接，现统一收敛为内嵌单源——详情永远内嵌展开）。
    */
   openGameId?: number | null
+  /** 刷新计数器：数值变化时重新拉取当前召唤师最近 50 场（PlayerBar 刷新按钮驱动） */
+  refreshTick?: number
 }>()
 
 /**
@@ -644,13 +611,8 @@ async function focusGame(gameId: number): Promise<void> {
     return
   }
   page.value = Math.floor(idx / PAGE_SIZE.value) + 1
-  if (props.v2Wide) {
-    // v2 宽屏：详情统一走右栏（open 单源），不再内嵌展开；列表内仍定位高亮
-    emit('open', g)
-  } else {
-    expandedGameIds.value.add(gameId)
-    expandedGameIds.value = new Set(expandedGameIds.value)
-  }
+  expandedGameIds.value.add(gameId)
+  expandedGameIds.value = new Set(expandedGameIds.value)
   nextTick(() => {
     const el = document.querySelector<HTMLElement>(`[data-game-id="${gameId}"]`)
     if (!el) return
@@ -673,31 +635,36 @@ watch(
 )
 
 /**
- * 跨断点承接（收敛后替代父级 watch(widePane) 搬运 hack）：
- * 宽屏右栏打开的详情在切到窄窗（v2Wide→false）时，转交内嵌展开，
- * 避免详情凭空消失；已在内嵌展开集合中的 id 不重复下发命令，防 resize 抖动。
+ * 选中对局承接（openGameId 单源回传，原 v2Wide 右栏范式已拆除）：
+ * 键盘 ←/→、外部跳转、跨视图点选统一由父级写 openGameId，这里只负责
+ * "未内嵌展开则定位并就地展开"——已在展开集合中的 id 不重复命令，防抖。
  */
 watch(
-  () => [props.v2Wide, props.openGameId] as const,
-  ([wide, id]) => {
-    if (wide || id == null || id <= 0) return
+  () => props.openGameId,
+  id => {
+    if (id == null || id <= 0) return
     if (expandedGameIds.value.has(id)) return
-    void focusGame(id as number)
+    const idx = filteredGames.value.findIndex(g => g.gameId === id)
+    if (idx < 0) return
+    page.value = Math.floor(idx / PAGE_SIZE.value) + 1
+    expandedGameIds.value.add(id)
+    expandedGameIds.value = new Set(expandedGameIds.value)
+    nextTick(() => {
+      const el = document.querySelector<HTMLElement>(`[data-game-id="${id}"]`)
+      if (!el) return
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    })
   }
 )
 
-/** 行卡点击：已展开则收起，未展开则就地展开（允许多开）；
- *  v3 宽屏双栏（v2Wide）下改为单选上抛，不再内嵌展开 */
+/** 行卡点击：已展开则收起，未展开则就地展开（允许多开），并同步选中上抛 */
 function toggleDetail(game: Game) {
-  if (props.v2Wide) {
-    const same = props.openGameId === game.gameId
-    emit('open', same ? null : game)
-    return
-  }
   if (expandedGameIds.value.has(game.gameId)) {
     expandedGameIds.value.delete(game.gameId)
+    emit('open', null)
   } else {
     expandedGameIds.value.add(game.gameId)
+    emit('open', game)
   }
   expandedGameIds.value = new Set(expandedGameIds.value)
 }
@@ -705,18 +672,15 @@ function toggleDetail(game: Game) {
 function collapseDetail(gameId: number) {
   expandedGameIds.value.delete(gameId)
   expandedGameIds.value = new Set(expandedGameIds.value)
+  if (props.openGameId === gameId) emit('open', null)
 }
 
 /** 是否已有任意对局就地展开（控制「展开全部 / 收起全部」按钮文案） */
 const anyExpanded = computed(() => expandedGameIds.value.size > 0)
 
-/**
- * 一键展开全部 / 收起全部：对当前筛选命中的所有对局批量就地展开，
- * 再点一次全部收起（含此前手动单开的）。
- * v2 宽屏下按钮已隐藏（详情走右栏单源），此处再兜底防命令误入。
- */
+/** 一键展开全部 / 收起全部：对当前筛选命中的所有对局批量就地展开，
+ * 再点一次全部收起（含此前手动单开的）。 */
 function toggleExpandAll() {
-  if (props.v2Wide) return
   if (anyExpanded.value) {
     expandedGameIds.value = new Set()
     return
@@ -942,27 +906,6 @@ function onViewportResize() {
  * 不在当前页（更早的对局）→ 翻到所在页并就地展开详情，待渲染后回滚定位。
  */
 function selectTrendGame(gameId: number) {
-  if (props.v2Wide) {
-    // v2 宽屏：详情统一走右栏单源，列表内翻页定位 + 闪烁高亮
-    const game = allGames.value.find(g => g.gameId === gameId)
-    if (!game) return
-    const idx = filteredGames.value.findIndex(g => g.gameId === gameId)
-    if (idx < 0) return
-    const targetPage = Math.floor(idx / PAGE_SIZE.value) + 1
-    const wasOnPage = page.value === targetPage
-    if (!wasOnPage) page.value = targetPage
-    emit('open', game)
-    nextTick(() => {
-      const el = document.querySelector<HTMLElement>(`[data-game-id="${gameId}"]`)
-      if (!el) return
-      highlightedGameId.value = gameId
-      el.scrollIntoView({ behavior: 'smooth', block: wasOnPage ? 'center' : 'start' })
-      armTimeout(() => {
-        if (highlightedGameId.value === gameId) highlightedGameId.value = null
-      }, 1600)
-    })
-    return
-  }
   const target = document.querySelector<HTMLElement>(`[data-game-id="${gameId}"]`)
   if (target) {
     highlightedGameId.value = gameId
@@ -1000,15 +943,54 @@ onMounted(async () => {
   // 本区深翻页依赖当前登录大区 platformId（SGP 网关支持本区查询）
   currentRegion.value = (await getCurrentSgpRegion()) ?? ''
   await getHistoryMatch(name.value)
+  // 分页桥接：真实翻页实现注册，供 Record.vue 宽/窄双点位的 MatchHistoryPagination 调用
+  bindRecordPagination({ next: nextPage, prev: prevPage })
+  syncRecordPagination({
+    page: page.value,
+    pageCount: pageCount.value,
+    noMoreMatches: noMoreMatches.value,
+    perPage: PAGE_SIZE.value,
+    total: filteredGames.value.length
+  })
 })
 
 onBeforeUnmount(() => {
+  unbindRecordPagination()
   collectGeneration.value++ // 使聚合收集上仍在进行的全量收集失效
   window.removeEventListener('resize', onViewportResize)
   if (pathTimer) clearTimeout(pathTimer)
   pendingTimers.forEach(clearTimeout)
   pendingTimers.clear()
 })
+
+// 分页状态变化 → 桥接同步（左栏/顶粘工具条的分页显示与翻页禁用态跟随）
+watch(
+  () => [
+    page.value,
+    pageCount.value,
+    noMoreMatches.value,
+    PAGE_SIZE.value,
+    filteredGames.value.length
+  ],
+  () => {
+    syncRecordPagination({
+      page: page.value,
+      pageCount: pageCount.value,
+      noMoreMatches: noMoreMatches.value,
+      perPage: PAGE_SIZE.value,
+      total: filteredGames.value.length
+    })
+  }
+)
+
+/** PlayerBar 刷新按钮：refreshTick 递增 → 重新拉当前召唤师最近 50 场 */
+watch(
+  () => props.refreshTick,
+  tick => {
+    if (tick == null) return
+    getHistoryMatch(name.value)
+  }
+)
 
 // 切换玩家（路由 name 变化）时列表与趋势条一起刷新
 watch(

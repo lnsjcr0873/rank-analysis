@@ -4,6 +4,7 @@ import type { Game, Participant, ParticipantStats } from '@renderer/types/domain
 import type { ChampionPoolEntry } from '../championPool'
 import { aggregateChampionPool } from '../championPool'
 import { TIME_WINDOW_HOURS, type MatchFilterState } from '../matchFilters'
+import { recordPagination, recordPaginationNext, resetRecordPagination } from '../recordPagination'
 
 /**
  * M1 B-测试(单元部分):MatchHistory 数据流与交互验收
@@ -134,11 +135,6 @@ const stubs = {
   RecordCard: true,
   RecordCardSkeleton: true,
   MatchDetailInline: true,
-  NPagination: {
-    name: 'NPagination',
-    template:
-      '<div class="n-pagination-stub"><slot name="prev" /><slot name="label" /><slot name="next" /></div>'
-  },
   NEmpty: {
     name: 'NEmpty',
     template: '<div class="n-empty-stub">{{ description }}<slot /><slot name="extra" /></div>',
@@ -201,6 +197,8 @@ describe('MatchHistory 数据流(M1 B-测试)', () => {
     // 隔离筛选持久化：上一用例写入的筛选会经 restoreFilters 污染后续挂载
     localStorage.removeItem('record.matchFilters')
     sessionStorage.removeItem('record.focusGameId')
+    // 分页桥接为模块级单例，上一用例翻页残留会污染本次读数
+    resetRecordPagination()
     Object.defineProperty(Element.prototype, 'scrollIntoView', {
       value: vi.fn(),
       writable: true,
@@ -216,21 +214,21 @@ describe('MatchHistory 数据流(M1 B-测试)', () => {
       endIndex: 49
     })
     expect(wrapper.findAll('.list-item')).toHaveLength(10)
-    expect(wrapper.text()).toContain('1/5')
+    expect(recordPagination.page).toBe(1)
+    expect(recordPagination.pageCount).toBe(5)
     wrapper.unmount()
   })
 
   it('翻页到末页后仍可稳定显示末页（原「收集更多」入口已并入分页）', async () => {
     const { wrapper } = await mountWithData()
-    const btns = wrapper.findAll('.n-pagination-stub button')
-    const next = btns.at(-1)!
     for (let i = 0; i < 4; i++) {
-      await next.trigger('click')
+      recordPaginationNext()
       await flushPromises()
     }
-    expect(wrapper.text()).toContain('5/5')
-    await next.trigger('click')
-    expect(wrapper.text()).toContain('5/5')
+    expect(recordPagination.page).toBe(5)
+    recordPaginationNext()
+    await flushPromises()
+    expect(recordPagination.page).toBe(5)
     expect(wrapper.findAll('.list-item')).toHaveLength(10)
     wrapper.unmount()
   })
@@ -239,16 +237,16 @@ describe('MatchHistory 数据流(M1 B-测试)', () => {
     const { wrapper } = await mountWithData()
     await setFilter(wrapper, 2, 'win')
     expect(wrapper.findAll('.list-item')).toHaveLength(10)
-    expect(wrapper.text()).toContain('1/2')
+    expect(recordPagination.pageCount).toBe(2)
     await setFilter(wrapper, 2, 'loss')
-    expect(wrapper.text()).toContain('1/3')
+    expect(recordPagination.pageCount).toBe(3)
     wrapper.unmount()
   })
 
   it('模式筛选:排位 420 -> 30 场 3 页', async () => {
     const { wrapper } = await mountWithData()
     await setFilter(wrapper, 0, 420)
-    expect(wrapper.text()).toContain('1/3')
+    expect(recordPagination.pageCount).toBe(3)
     expect(wrapper.findAll('.list-item')).toHaveLength(10)
     wrapper.unmount()
   })
@@ -256,7 +254,7 @@ describe('MatchHistory 数据流(M1 B-测试)', () => {
   it('英雄筛选:阿狸 103 -> 25 场 3 页', async () => {
     const { wrapper } = await mountWithData()
     await setFilter(wrapper, 1, 103)
-    expect(wrapper.text()).toContain('1/3')
+    expect(recordPagination.pageCount).toBe(3)
     expect(wrapper.findAll('.list-item')).toHaveLength(10)
     wrapper.unmount()
   })
@@ -265,7 +263,7 @@ describe('MatchHistory 数据流(M1 B-测试)', () => {
     const { wrapper } = await mountWithData()
     await setFilter(wrapper, 3, TIME_WINDOW_HOURS[1])
     expect(wrapper.findAll('.list-item')).toHaveLength(3)
-    expect(wrapper.text()).toContain('1/1')
+    expect(recordPagination.pageCount).toBe(1)
     await setFilter(wrapper, 2, 'loss')
     expect(wrapper.text()).toContain('没有匹配的对局')
     expect(wrapper.text()).toContain('清除筛选')
@@ -273,18 +271,18 @@ describe('MatchHistory 数据流(M1 B-测试)', () => {
     await clear!.trigger('click')
     await flushPromises()
     expect(wrapper.findAll('.list-item')).toHaveLength(10)
-    expect(wrapper.text()).toContain('1/5')
+    expect(recordPagination.pageCount).toBe(5)
     wrapper.unmount()
   })
 
   it('复位按钮清除全部筛选与页码', async () => {
     const { wrapper } = await mountWithData()
     await setFilter(wrapper, 2, 'win')
-    expect(wrapper.text()).toContain('1/2')
+    expect(recordPagination.pageCount).toBe(2)
     await wrapper.find('.toolbar-reset').trigger('click')
     await flushPromises()
     expect(wrapper.findAll('.list-item')).toHaveLength(10)
-    expect(wrapper.text()).toContain('1/5')
+    expect(recordPagination.pageCount).toBe(5)
     wrapper.unmount()
   })
 
@@ -336,7 +334,7 @@ describe('MatchHistory 数据流(M1 B-测试)', () => {
     const TrendBar = (await import('../TrendBar.vue')).default
     wrapper.findComponent(TrendBar).vm.$emit('select-game', 1049)
     await flushPromises()
-    expect(wrapper.text()).toContain('5/5')
+    expect(recordPagination.page).toBe(5)
     const detail = wrapper.findComponent(MatchDetailInline)
     expect(detail.exists()).toBe(true)
     expect(detail.props('game')?.gameId).toBe(1049)
@@ -393,11 +391,11 @@ describe('MatchHistory 数据流(M1 B-测试)', () => {
     const MatchDetailInline = (await import('../MatchDetailInline.vue')).default
     // 先设一个英雄筛选(103 只有 25 场,不含 1049),验证聚焦时会清掉
     await setFilter(wrapper, 1, 103)
-    expect(wrapper.text()).toContain('1/3')
+    expect(recordPagination.pageCount).toBe(3)
     await wrapper.setProps({ focusGameId: 1049 })
     await flushPromises()
     expect(wrapper.emitted('focus-handled')).toBeTruthy()
-    expect(wrapper.text()).toContain('5/5')
+    expect(recordPagination.page).toBe(5)
     const detail = wrapper.findComponent(MatchDetailInline)
     expect(detail.exists()).toBe(true)
     expect(detail.props('game')?.gameId).toBe(1049)
@@ -409,24 +407,25 @@ describe('MatchHistory 数据流(M1 B-测试)', () => {
     await wrapper.setProps({ championFilter: 103 })
     await flushPromises()
     expect(wrapper.emitted('champion-filter-handled')).toBeTruthy()
-    expect(wrapper.text()).toContain('1/3')
+    expect(recordPagination.pageCount).toBe(3)
     expect((wrapper.emitted('filter-change')!.at(-1)![0] as MatchFilterState).championId).toBe(103)
     // 父级收到回执后会先把命令位复位为 0，再点同一英雄才能触发「取消」切换
     await wrapper.setProps({ championFilter: 0 })
     await wrapper.setProps({ championFilter: 103 })
     await flushPromises()
-    expect(wrapper.text()).toContain('1/5')
+    expect(recordPagination.pageCount).toBe(5)
     expect((wrapper.emitted('filter-change')!.at(-1)![0] as MatchFilterState).championId).toBe(0)
     wrapper.unmount()
   })
 })
 
-describe('MatchHistory v2 宽屏单源（P0 状态收敛）', () => {
+describe('MatchHistory 就地展开单源（v2Wide 双范式拆除后统一收敛）', () => {
   vi.setConfig({ testTimeout: 30000 })
 
   beforeEach(() => {
     localStorage.removeItem('record.matchFilters')
     sessionStorage.removeItem('record.focusGameId')
+    resetRecordPagination()
     Object.defineProperty(Element.prototype, 'scrollIntoView', {
       value: vi.fn(),
       writable: true,
@@ -434,74 +433,48 @@ describe('MatchHistory v2 宽屏单源（P0 状态收敛）', () => {
     })
   })
 
-  it('v2 宽屏：卡片点击单选上抛 open（再点取消 null），不内嵌展开', async () => {
+  it('行卡点击就地展开并同步上抛 open（选中单源），再点收起上抛 null', async () => {
     const { wrapper } = await mountWithData()
     const MatchDetailInline = (await import('../MatchDetailInline.vue')).default
-    await wrapper.setProps({ v2Wide: true })
     const card = wrapper.findAllComponents({ name: 'RecordCard' })[0]
     card.vm.$emit('open-detail')
     await flushPromises()
+    expect(wrapper.findComponent(MatchDetailInline).exists()).toBe(true)
     expect((wrapper.emitted('open')!.at(-1)![0] as { gameId: number }).gameId).toBe(1000)
-    // 宽屏详情走右栏：列表内不再就地展开
-    expect(wrapper.findComponent(MatchDetailInline).exists()).toBe(false)
-    // 模拟父级（Record）回写 openGameId 后再次点选 = 取消
-    await wrapper.setProps({ openGameId: 1000 })
     card.vm.$emit('open-detail')
     await flushPromises()
+    expect(wrapper.findComponent(MatchDetailInline).exists()).toBe(false)
     expect(wrapper.emitted('open')!.at(-1)).toEqual([null])
     wrapper.unmount()
   })
 
-  it('v2 宽屏：不渲染「展开全部」，命令兜底 no-op', async () => {
+  it('「展开全部/收起全部」恒显（不再随断点隐藏）', async () => {
     const { wrapper } = await mountWithData()
-    const MatchDetailInline = (await import('../MatchDetailInline.vue')).default
-    await wrapper.setProps({ v2Wide: true })
-    expect(wrapper.find('.toolbar-expand-all').exists()).toBe(false)
-    // 即使命令位误入（如旧组件缓存），内嵌集合也不被批量写入
-    ;(wrapper.vm as unknown as { toggleExpandAll: () => void }).toggleExpandAll()
-    await flushPromises()
-    expect(wrapper.findAllComponents(MatchDetailInline)).toHaveLength(0)
+    expect(wrapper.find('.toolbar-expand-all').text()).toContain('展开全部')
     wrapper.unmount()
   })
 
-  it('v2 宽屏：focusGameId 命令改走右栏单源（emit open），不着内嵌', async () => {
+  it('openGameId 承接：未展开的目标对局定位所在页并就地展开', async () => {
     const { wrapper } = await mountWithData()
     const MatchDetailInline = (await import('../MatchDetailInline.vue')).default
-    await wrapper.setProps({ v2Wide: true, focusGameId: 1049 })
+    await wrapper.setProps({ openGameId: 1049 })
     await flushPromises()
-    expect((wrapper.emitted('open')!.at(-1)![0] as { gameId: number }).gameId).toBe(1049)
-    expect(wrapper.emitted('focus-handled')).toBeTruthy()
-    expect(wrapper.text()).toContain('5/5')
-    expect(wrapper.findComponent(MatchDetailInline).exists()).toBe(false)
-    wrapper.unmount()
-  })
-
-  it('跨断点承接：宽屏打开的详情切窄屏后转为内嵌展开', async () => {
-    const { wrapper } = await mountWithData()
-    const MatchDetailInline = (await import('../MatchDetailInline.vue')).default
-    await wrapper.setProps({ v2Wide: true, openGameId: 1049 })
-    await flushPromises()
-    // 窄屏：v2Wide=false 触发承接 watcher → focusGame 定位到第 5 页就地展开
-    await wrapper.setProps({ v2Wide: false })
-    await flushPromises()
-    expect(wrapper.text()).toContain('5/5')
+    expect(recordPagination.page).toBe(5)
     const detail = wrapper.findComponent(MatchDetailInline)
     expect(detail.exists()).toBe(true)
     expect(detail.props('game')?.gameId).toBe(1049)
     wrapper.unmount()
   })
 
-  it('窄屏已在展开集合的对局，resize 抖动不重复触发 focusGame 命令', async () => {
+  it('openGameId 指向已在展开集合的对局：守卫生效，不重复翻页/展开命令', async () => {
     const { wrapper } = await mountWithData()
     const MatchDetailInline = (await import('../MatchDetailInline.vue')).default
-    // 手动窄屏展开第一张卡（1000），再叠加 openGameId 指向它，不应重复 resetFilter/翻页
     const card = wrapper.findAllComponents({ name: 'RecordCard' })[0]
     card.vm.$emit('open-detail')
     await flushPromises()
     await wrapper.setProps({ openGameId: 1000 })
     await flushPromises()
-    // 仍在第 1 页（未因承接 focusGame 翻页），且详情保留
-    expect(wrapper.text()).toContain('1/5')
+    expect(recordPagination.page).toBe(1)
     const detail = wrapper.findComponent(MatchDetailInline)
     expect(detail.exists()).toBe(true)
     expect(detail.props('game')?.gameId).toBe(1000)
