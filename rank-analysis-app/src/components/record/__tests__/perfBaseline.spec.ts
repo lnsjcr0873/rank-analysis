@@ -1,22 +1,18 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+﻿import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import type { Game, Participant, ParticipantStats } from '@renderer/types/domain/match'
+import type { Game, MatchPlayerIdentity, Participant, ParticipantStats } from '@renderer/types/domain/match'
 import { filterMatches, type MatchFilterState } from '../matchFilters'
 import { aggregateChampionPool } from '../championPool'
 import RecordCard from '../RecordCard.vue'
 import { recordAssetsKey } from '@renderer/composables/recordAssetsKey'
 
 /**
- * P0 性能基线（可复现测量夹具）：
- * 该 spec 不设断言阈值（CI 抖动），只把数字打到 console，由
- * design/PERF-BASELINE.md 人工落盘成基线快照；后续阶段（P1 卡片密度、
- * P3 分页、P4 左栏按当前页重算）跑同一夹具对比，作为"是否回归"的依据。
- *
- * 本文件保持自包含：自定义 makeGame/genGames 夹具 + 纯函数 + 折叠态单卡
- * 节点锚（40 节点）。宽档双方 10 人阵容列请见 RecordCard.spec（wide 档）。
- *
- * 运行：npx vitest run src/components/record/__tests__/perfBaseline.spec.ts
+ * P0 鎬ц兘鍩虹嚎锛堝彲澶嶇幇娴嬮噺澶瑰叿锛夛細
+ * 璇?spec 涓嶈鏂█闃堝€硷紙CI 鎶栧姩锛夛紝鍙妸鏁板瓧鎵撳埌 console锛岀敱
+ * design/PERF-BASELINE.md 浜哄伐钀界洏鎴愬熀绾垮揩鐓э紱鍚庣画闃舵锛圥1 鍗＄墖瀵嗗害銆? * P3 鍒嗛〉銆丳4 宸︽爮鎸夊綋鍓嶉〉閲嶇畻锛夎窇鍚屼竴澶瑰叿瀵规瘮锛屼綔涓?鏄惁鍥炲綊"鐨勪緷鎹€? *
+ * 鏈枃浠朵繚鎸佽嚜鍖呭惈锛氳嚜瀹氫箟 makeGame/genGames 澶瑰叿 + 绾嚱鏁?+ 鎶樺彔鎬佸崟鍗? * 鑺傜偣閿氾紙40 鑺傜偣锛夈€傚妗ｅ弻鏂?10 浜洪樀瀹瑰垪璇疯 RecordCard.spec锛坵ide 妗ｏ級銆? *
+ * 杩愯锛歯px vitest run src/components/record/__tests__/perfBaseline.spec.ts
  */
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(async () => [])
@@ -84,7 +80,6 @@ function makeGame(
   return {
     ...overrides,
     gameId: overrides.gameId ?? 1,
-    championId: overrides.championId ?? 1,
     queueId: overrides.queueId ?? 420,
     gameMode: overrides.gameMode ?? 'MATCHED_GAME',
     gameType: overrides.gameType ?? 'MATCHED_GAME',
@@ -93,8 +88,13 @@ function makeGame(
     mapId: overrides.mapId ?? 11,
     platformId: overrides.platformId ?? 'NA1',
     queueName: overrides.queueName ?? 'Ranked Solo',
-    mvp: overrides.mvp ?? 0,
-    win: stats.win,
+    mvp: overrides.mvp ?? '',
+    gameDetail: {
+      endOfGameResult: '',
+      participantIdentities: [],
+      participants: [participant]
+    },
+    participantIdentities: [] as MatchPlayerIdentity[],
     participants: [participant]
   }
 }
@@ -114,7 +114,7 @@ function genGames(count: number): Game[] {
   return out
 }
 
-/** 与 MatchHistory 内 trendFilteredOf 同构的轻量映射（列表/趋势条同源的锚点） */
+/** 涓?MatchHistory 鍐?trendFilteredOf 鍚屾瀯鐨勮交閲忔槧灏勶紙鍒楄〃/瓒嬪娍鏉″悓婧愮殑閿氱偣锛?*/
 function trendFilteredOf(games: Game[]) {
   return games.map(g => {
     const s = g.participants[0]?.stats
@@ -144,12 +144,12 @@ function log(label: string, value: number, unit = 'ms') {
   console.log(`BASELINE ${label} ${value.toFixed(2)} ${unit}`)
 }
 
-describe('P0 性能基线快照', () => {
+describe('P0 鎬ц兘鍩虹嚎蹇収', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
   })
 
-  it('纯函数耗时（500 / 1000 场）', async () => {
+  it('绾嚱鏁拌€楁椂锛?00 / 1000 鍦猴級', async () => {
     const g500 = genGames(500)
     const g1000 = genGames(1000)
     const noFilter: MatchFilterState = {
@@ -193,12 +193,11 @@ describe('P0 性能基线快照', () => {
     const trend1000 = ms(() => trendFilteredOf(g1000))
     log('trendFilteredOf.1000', trend1000, 'ms(1x)')
 
-    // 断言仅用于让 spec 可"绿"；阈值不锁死（对比看 PERF-BASELINE.md）
-    expect(filterMatches(g500, winFilter).length).toBeGreaterThan(0)
+    // 鏂█浠呯敤浜庤 spec 鍙?缁?锛涢槇鍊间笉閿佹锛堝姣旂湅 PERF-BASELINE.md锛?    expect(filterMatches(g500, winFilter).length).toBeGreaterThan(0)
     expect(aggregateChampionPool(g500).length).toBeGreaterThan(0)
   })
 
-  it('RecordCard 折叠态单卡节点数（40 节点锚）', () => {
+  it('RecordCard 鎶樺彔鎬佸崟鍗¤妭鐐规暟锛?0 鑺傜偣閿氾級', () => {
     const assetsStub = { srcOf: () => '', detailOf: () => null, preload: () => undefined }
     const game = genGames(1)[0]
     const nodes: number[] = []
@@ -221,7 +220,6 @@ describe('P0 性能基线快照', () => {
       nodes.reduce((a, b) => a + b, 0) / nodes.length,
       'nodes'
     )
-    // 40 节点锚（折叠态）：不锁死阈值，仅保证可测
-    expect(nodes[0]).toBeGreaterThan(0)
+    // 40 鑺傜偣閿氾紙鎶樺彔鎬侊級锛氫笉閿佹闃堝€硷紝浠呬繚璇佸彲娴?    expect(nodes[0]).toBeGreaterThan(0)
   })
 })
