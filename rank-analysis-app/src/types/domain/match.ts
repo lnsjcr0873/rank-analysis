@@ -26,6 +26,14 @@ export interface ParticipantStats {
   perk0: number
   perkPrimaryStyle: number
   perkSubStyle: number
+  /** 平铺完整符文页（LCU match-details 的 `stats.perk1..5`，与完整 `perks` 数组同构）：
+   *  perk1..3=主系 3 小符文、perk4..5=副系 2 小符文。旧缓存数据可能缺失，
+   *  消费方需 `?? 0` 兜底；`perks` 数组缺失时据此重建完整符文页。 */
+  perk1?: number
+  perk2?: number
+  perk3?: number
+  perk4?: number
+  perk5?: number
   playerAugment1: number
   playerAugment2: number
   playerAugment3: number

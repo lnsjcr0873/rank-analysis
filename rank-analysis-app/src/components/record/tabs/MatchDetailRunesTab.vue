@@ -1,7 +1,7 @@
 <template>
   <!-- 符文 tab：每人一张卡片——完整符文页（主系 3 符文 + 副系 2 符文 + 属性碎片）。
-       数据源 = LCU match-details `participants[].perks`（跨区 SGP match-v5 同构透传）；
-       旧缓存无 perks 时回退扁平 perk0/perkPrimaryStyle/perkSubStyle -->
+     数据源 = LCU match-details `participants[].perks`（跨区 SGP match-v5 同构透传）；
+     旧缓存无 perks 数组时用 LCU 平铺 `stats.perk0..5` 重建完整符文页；两者皆缺才提示缺失 -->
   <div class="match-detail-runes-tab">
     <div v-if="ctx.usesAugments.value" class="match-detail-runes-hint">
       本局为海克斯/斗魂模式，无传统符文页（以海克斯强化代替）。
@@ -156,38 +156,16 @@
               </div>
             </template>
 
-            <!-- 回退：无完整 perks（旧缓存/异常数据）时只显示 LCU 扁平三字段 -->
+            <!-- 回退：无 perks 数组且无 LCU 平铺符文数据（异常/残缺）时提示缺失 -->
             <template v-else>
               <div class="match-detail-runes-slot">
                 <span class="match-detail-runes-slot-label">主系</span>
+                <span class="match-detail-runes-more">符文页数据缺失</span>
                 <n-tooltip trigger="hover" placement="top">
                   <template #trigger>
-                    <img
-                      v-if="perkSrc(player.stats.perk0)"
-                      :src="perkSrc(player.stats.perk0)"
-                      class="match-detail-runes-keystone"
-                      alt="perk"
-                      loading="lazy"
-                      decoding="async"
-                    />
+                    <span class="match-detail-runes-question">?</span>
                   </template>
-                  {{ perkName(player.stats.perk0) }}
-                </n-tooltip>
-                <span class="match-detail-runes-style">
-                  {{ styleName(player.stats.perkPrimaryStyle) }}
-                </span>
-              </div>
-
-              <div class="match-detail-runes-slot">
-                <span class="match-detail-runes-slot-label">副系</span>
-                <span class="match-detail-runes-style">
-                  {{ styleName(player.stats.perkSubStyle) }}
-                </span>
-                <n-tooltip trigger="hover" placement="top">
-                  <template #trigger>
-                    <span class="match-detail-runes-more">符文页数据缺失</span>
-                  </template>
-                  旧缓存/异常数据未携带完整符文页，仅显示主系基石与主/副系风格
+                  对局数据未携带完整符文页（无 perks 数组亦无 LCU 平铺符文字段），无法展示
                 </n-tooltip>
               </div>
             </template>
@@ -208,7 +186,7 @@ import { NTag, NTooltip } from 'naive-ui'
 import { searchSummoner } from '@renderer/utils/navigation'
 import { assetPrefix } from '@renderer/services/http'
 import LazyImg from '@renderer/components/common/LazyImg.vue'
-import type { GamePerks, GamePerkSelection } from '@renderer/types/domain/match'
+import type { GamePerks, GamePerkSelection, ParticipantStats } from '@renderer/types/domain/match'
 import { matchDetailContextKey } from '../matchDetailContext'
 import { fillPerkDescription } from './runesTable'
 
@@ -239,15 +217,36 @@ function perkDesc(perkId: number, selection?: GamePerkSelection) {
 const styleName = (styleId: number) =>
   styleId <= 0 ? '未选择' : (ctx.assets.detailOf('perk', styleId)?.name ?? `风格 #${styleId}`)
 
-/** 完整符文页切分：主系（styles[0]，基石在 selections[0]）/ 副系（styles[1]）/ 属性碎片 */
-function perksOf(player: { perks?: GamePerks }) {
+/** 完整符文页切分：主系（styles[0]，基石在 selections[0]）/ 副系（styles[1]）/ 属性碎片。
+ *  无 `perks` 数组时回退用 LCU 平铺字段重建（对照 Akari mapLcuDataToPerks：perk0=基石、
+ *  perk1..3=主系小符文、perk4..5=副系小符文），旧缓存因此也能出完整符文页（仅缺属性碎片）。 */
+function perksOf(player: { perks?: GamePerks; stats: ParticipantStats }) {
   const p = player.perks
-  const primary = p?.styles?.[0]
-  const sub = p?.styles?.[1]
+  const page = p ?? rebuildFromFlat(player.stats)
+  const primary = page?.styles?.[0]
+  const sub = page?.styles?.[1]
   return {
     primary,
     sub,
-    statIds: p?.statPerks ? [p.statPerks.offense, p.statPerks.flex, p.statPerks.defense] : []
+    statIds: page?.statPerks
+      ? [page.statPerks.offense, page.statPerks.flex, page.statPerks.defense]
+      : []
+  }
+}
+
+/** 从 LCU 平铺 `stats.perk0..5` + 主/副系风格重建符文页结构；无任何符文数据时返回 undefined */
+function rebuildFromFlat(stats: ParticipantStats): GamePerks | undefined {
+  const flat = [stats.perk0, stats.perk1, stats.perk2, stats.perk3, stats.perk4, stats.perk5]
+  if (flat.every(id => (id ?? 0) <= 0)) return undefined
+  const sel = (id?: number): GamePerkSelection => ({ perk: id ?? 0, var1: 0, var2: 0, var3: 0 })
+  return {
+    styles: [
+      {
+        style: stats.perkPrimaryStyle,
+        selections: [sel(stats.perk0), sel(stats.perk1), sel(stats.perk2), sel(stats.perk3)]
+      },
+      { style: stats.perkSubStyle, selections: [sel(stats.perk4), sel(stats.perk5)] }
+    ]
   }
 }
 
@@ -436,6 +435,20 @@ function perkImgAttrs(perkId: number) {
   color: var(--text-tertiary);
   cursor: help;
   margin-left: auto;
+}
+
+.match-detail-runes-question {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-tertiary);
+  font-size: var(--font-size-2xs);
+  cursor: help;
+  flex-shrink: 0;
 }
 
 .match-detail-runes-empty {

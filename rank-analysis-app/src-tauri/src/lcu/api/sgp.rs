@@ -693,11 +693,20 @@ fn map_participant(p: &Value) -> Participant {
             .and_then(|s| s.get("style"))
             .and_then(Value::as_i64)
             .unwrap_or(0) as i32;
-        stats.perk0 = styles
-            .first()
-            .and_then(|s| s.pointer("/selections/0/perk"))
-            .and_then(Value::as_i64)
-            .unwrap_or(0) as i32;
+        // 平铺完整符文页：styles[0]=基石+主系3小，styles[1]=副系2小，
+        // 与 LCU 的 perk0..perk5 一一对应（前端据此重建完整符文页）。
+        let sel = |style: Option<&Value>, idx: usize| -> i32 {
+            style
+                .and_then(|s| s.pointer(&format!("/selections/{idx}/perk")))
+                .and_then(Value::as_i64)
+                .unwrap_or(0) as i32
+        };
+        stats.perk0 = sel(styles.first(), 0);
+        stats.perk1 = sel(styles.first(), 1);
+        stats.perk2 = sel(styles.first(), 2);
+        stats.perk3 = sel(styles.first(), 3);
+        stats.perk4 = sel(styles.get(1), 0);
+        stats.perk5 = sel(styles.get(1), 1);
     }
     Participant {
         participant_id: i32_at(p, "participantId"),

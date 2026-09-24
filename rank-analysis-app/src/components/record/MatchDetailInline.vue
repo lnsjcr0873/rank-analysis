@@ -385,11 +385,28 @@ function loadAssetsIfNeeded() {
 /**
  * 完整符文图标集合：扁平三字段（SummaryTab 用）+ 完整符文页（RunesTab 用：
  * styles 全量 selections + 风格 + statPerks 属性碎片）。
+ * 无 `perks` 数组时退为 LCU 扁平 `stats.perk0..5` + 风格 id（RunesTab 据以重建）。
  */
 function perkIdsOf(player: DetailPlayer): number[] {
   const ids = new Set<number>(displayedPerkIds(player.stats))
   const perks = player.perks
-  if (!perks) return [...ids]
+  if (!perks) {
+    // 无完整 perks（旧缓存 LCU 平铺）：补上 RunesTab 据以重建完整符文页的扁平符文 id
+    const s = player.stats
+    for (const id of [
+      s.perk0,
+      s.perk1,
+      s.perk2,
+      s.perk3,
+      s.perk4,
+      s.perk5,
+      s.perkPrimaryStyle,
+      s.perkSubStyle
+    ]) {
+      if (id && id > 0) ids.add(id)
+    }
+    return [...ids]
+  }
   for (const style of perks.styles) {
     if (style.style > 0) ids.add(style.style)
     for (const sel of style.selections) if (sel.perk > 0) ids.add(sel.perk)

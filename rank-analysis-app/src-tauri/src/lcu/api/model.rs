@@ -134,6 +134,19 @@ pub struct Stats {
     pub perk_sub_style: i32,
     #[serde(rename = "perk0", default)]
     pub perk0: i32,
+    // 平铺完整符文页：perk1..3 = 主系 3 个小符文，perk4..5 = 副系 2 个小符文。
+    // LCU match-details 与 SGP match-v5（回填）都会落全；旧缓存无 perks 数组时
+    // 前端（MatchDetailRunesTab）据此重建完整符文页，不再只显示基石+主/副系风格。
+    #[serde(rename = "perk1", default)]
+    pub perk1: i32,
+    #[serde(rename = "perk2", default)]
+    pub perk2: i32,
+    #[serde(rename = "perk3", default)]
+    pub perk3: i32,
+    #[serde(rename = "perk4", default)]
+    pub perk4: i32,
+    #[serde(rename = "perk5", default)]
+    pub perk5: i32,
     #[serde(rename = "playerAugment1", default)]
     pub player_augment1: i32,
     #[serde(rename = "playerAugment2", default)]

@@ -3,7 +3,8 @@
  *
  * 验证（本次修复 D-P3 相关 SGP 依赖）：
  * - RunesTab 完整符文页：perks 存在时渲染主系 3 符文 + 副系 2 符文 + 属性碎片，不再出现「需 SGP」
- * - RunesTab 回退：无 perks 时显示扁平三字段布局 + 「符文页数据缺失」提示
+ * - RunesTab 重建：无 perks 数组但有 LCU 平铺 `stats.perk0..5` 时重建完整符文页（旧缓存回春）
+ * - RunesTab 真实缺失：无 perks 且无平铺数据时显示「符文页数据缺失」
  * - TimelineTab 错误态：status=error 显示「帧数据拉取失败」+ 重试按钮，点击触发 loadSgpDetail
  * - TimelineTab 成功但无帧：显示「本局无逐分钟数据」，不再出现「LCU 战绩无 participantFrames」误导句
  */
@@ -103,8 +104,10 @@ function playerOf(participantId: number, full: boolean): DetailPlayer {
   }
 }
 
-function makeContext(overrides: Partial<MatchDetailContext> = {}): MatchDetailContext {
-  const players = [playerOf(1, true), playerOf(2, false)]
+function makeContext(
+  overrides: Partial<MatchDetailContext> = {},
+  players: DetailPlayer[] = [playerOf(1, true), playerOf(2, false)]
+): MatchDetailContext {
   return {
     game: ref(null),
     region: ref(''),
@@ -174,12 +177,43 @@ describe('MatchDetailRunesTab 完整符文页', () => {
     expect(wrapper.text()).not.toContain('需 SGP')
   })
 
-  it('无 perks 时回退扁平三字段布局 + 「符文页数据缺失」提示', () => {
+  it('无 perks 数组但有 LCU 平铺符文字段时重建完整符文页（旧缓存回春）', () => {
+    const base = playerOf(2, false)
+    const flatPlayer = {
+      ...base,
+      stats: {
+        ...base.stats,
+        perk0: 8112,
+        perk1: 9111,
+        perk2: 9112,
+        perk3: 9113,
+        perk4: 8275,
+        perk5: 8347,
+        perkPrimaryStyle: 8100,
+        perkSubStyle: 8000
+      }
+    }
+    const ctx = makeContext({}, [playerOf(1, true), flatPlayer])
+    const wrapper = mount(MatchDetailRunesTab, {
+      global: { provide: { [matchDetailContextKey as symbol]: ctx }, stubs }
+    })
+    // 玩家1 完整页 7 小图标 + 基石；玩家2 重建：主系 3 小符文 + 副系 2 小符文 + 基石
+    const imgs = wrapper.findAll('img.match-detail-runes-perk')
+    expect(imgs).toHaveLength(12)
+    expect(wrapper.findAll('img.match-detail-runes-keystone')).toHaveLength(2)
+    expect(imgs.map(i => i.attributes('src'))).toContain('/perk/9111.png')
+    expect(imgs.map(i => i.attributes('src'))).toContain('/perk/8347.png')
+    expect(wrapper.text()).toContain('主系')
+    expect(wrapper.text()).toContain('副系')
+    expect(wrapper.text()).not.toContain('符文页数据缺失')
+  })
+
+  it('无 perks 且无平铺数据时提示「符文页数据缺失」', () => {
     const ctx = makeContext()
     const wrapper = mount(MatchDetailRunesTab, {
       global: { provide: { [matchDetailContextKey as symbol]: ctx }, stubs }
     })
-    // 两张卡：玩家1（完整页）有 1 个基石；玩家2（无 perks）回退显示主/副系风格名
+    // 两张卡：玩家1（完整页）有 1 个基石；玩家2（无 perks 也无平铺）显示缺失提示
     const text = wrapper.text()
     expect(text).toContain('符文页数据缺失')
     expect(text).toContain('主系')
