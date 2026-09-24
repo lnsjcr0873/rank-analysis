@@ -18,7 +18,7 @@ import { recordAssetsKey } from '@renderer/composables/recordAssetsKey'
  * design/PERF-BASELINE.md 人工落盘成基线快照；后续阶段（Akari 116px 重组、
  * 就地展开、分页双点位）跑同一夹具对比，作为"是否回归"的依据。
  * 本文件保持自包含：自定义 makeGame/genGames 夹具 + 纯函数 + 折叠态单卡
- * 节点锚（51 节点，116px Akari 重组后）。宽档 10 人阵容列请见 RecordCard.spec。
+ * 节点锚（61 节点，头部统计并入收起卡后）。宽档 10 人阵容列请见 RecordCard.spec。
  * 运行：npx vitest run src/components/record/__tests__/perfBaseline.spec.ts
  */
 vi.mock('@tauri-apps/api/core', () => ({
@@ -204,7 +204,7 @@ describe('性能基线快照', () => {
     expect(aggregateChampionPool(g500).length).toBeGreaterThan(0)
   })
 
-  it('RecordCard 折叠态单卡节点数（51 节点锚）', () => {
+  it('RecordCard 折叠态单卡节点数（61 节点锚）', () => {
     const assetsStub = { srcOf: () => '', detailOf: () => null, preload: () => undefined }
     const game = genGames(1)[0]
     const nodes: number[] = []
@@ -227,7 +227,7 @@ describe('性能基线快照', () => {
       nodes.reduce((a, b) => a + b, 0) / nodes.length,
       'nodes'
     )
-    // 51 节点锚（折叠态，116px Akari 重组）：不锁死阈值，仅保证可测
+    // 61 节点锚（折叠态，116px + 头部统计并入）：不锁死阈值，仅保证可测
     expect(nodes[0]).toBeGreaterThan(0)
   })
 })

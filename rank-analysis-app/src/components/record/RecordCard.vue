@@ -293,6 +293,25 @@
             >
               {{ Math.round(games.participants[0].stats?.groupRate ?? 0) }}%参团
             </span>
+
+            <!-- 展开头部唯一内容并入收起卡右侧空白（与卡上已有 KDA/输出/日期/队列去重后）：
+                 昵称 · KDA 比值 · 金币 · 补兵 · 承伤 · 推塔 -->
+            <div class="record-card-extra-stats">
+              <span v-if="playerNameText" class="record-card-extra-name">{{ playerNameText }}</span>
+              <span class="record-card-extra-item font-number">{{ kdaRatioText }}</span>
+              <span class="record-card-extra-item"
+                ><span class="font-number">{{ goldText }}</span> 金币</span
+              >
+              <span class="record-card-extra-item"
+                ><span class="font-number">{{ csCountText }}</span> 补兵</span
+              >
+              <span class="record-card-extra-item"
+                >承伤 <span class="font-number">{{ takenText }}</span></span
+              >
+              <span class="record-card-extra-item"
+                >推塔 <span class="font-number">{{ turretsText }}</span></span
+              >
+            </div>
           </div>
 
           <div class="record-card-bottom">
@@ -673,6 +692,45 @@ const rate = (key: 'damageDealtToChampionsRate' | 'damageTakenRate' | 'healRate'
   Math.max(0, Math.min(100, props.games.participants[0].stats?.[key] ?? 0))
 
 const minibarSegWidth = (value: number) => (value >= 1 ? value : 0)
+
+/** 本局玩家昵称（gameName#tagLine，缺 tag 时退 summonerName；无身份数据为空串隐藏） */
+const playerNameText = computed(() => {
+  const self = props.games.participants[0]
+  if (!self) return ''
+  // participantIdentities 按 participantId 顺序排列（与 lineup identityAt 同口径）
+  const player = props.games.participantIdentities[self.participantId - 1]?.player
+  if (!player) return ''
+  if (player.gameName) {
+    return player.tagLine ? `${player.gameName}#${player.tagLine}` : player.gameName
+  }
+  return player.summonerName ?? ''
+})
+
+/** KDA 比值 (K+A)/D，死亡 0 时按 1 计——与展开详情头部同口径 */
+const kdaRatioText = computed(() => {
+  const s = props.games.participants[0]?.stats
+  if (!s) return ''
+  return `${((s.kills + s.assists) / Math.max(1, s.deaths)).toFixed(1)} KDA`
+})
+
+const goldText = computed(() =>
+  formatCompactNumber(props.games.participants[0]?.stats?.goldEarned ?? 0)
+)
+
+/** 总补刀（含野怪），与 csText（每分钟速率）互补不重复 */
+const csCountText = computed(() => {
+  const s = props.games.participants[0]?.stats
+  if (!s) return '0'
+  return String((s.totalMinionsKilled ?? 0) + (s.neutralMinionsKilled ?? 0))
+})
+
+const takenText = computed(() =>
+  formatCompactNumber(props.games.participants[0]?.stats?.totalDamageTaken ?? 0)
+)
+
+const turretsText = computed(() =>
+  formatCompactNumber(props.games.participants[0]?.stats?.damageDealtToTurrets ?? 0)
+)
 
 const { isDark } = useTheme()
 
@@ -1255,6 +1313,38 @@ function openDetail() {
 
 .record-card-group-rate.bad {
   color: var(--semantic-loss);
+}
+
+/* 展开头部并入的统计簇：顶行右侧空白，常显（昵称/KDA 比值/金币/补兵/承伤/推塔） */
+.record-card-extra-stats {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  margin-left: auto;
+  min-width: 0;
+  flex-shrink: 1;
+  overflow: hidden;
+  font-size: var(--font-size-2xs);
+  font-weight: 600;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.record-card-extra-name {
+  color: var(--text-secondary);
+  font-weight: 650;
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.record-card-extra-item {
+  flex-shrink: 0;
+}
+
+.record-card-extra-item .font-number {
+  color: var(--text-secondary);
 }
 
 /* 装备 / augment 槽（v2 卡内 22px 槽 + 空槽补齐至 7） */

@@ -17,15 +17,15 @@ npx vitest run src/components/record/__tests__/perfBaseline.spec.ts
 跑分环境：jsdom（非真实浏览器/用户机器），单位毫秒，越短越好；500/1000 场数量级
 对照"全量收集"边界（SGP 全量收集可达数百场）。
 
-| 指标 | 500 场 | 1000 场 |
-| --- | --- | --- |
-| `filterMatches` 无筛选 | 0.31 ms | — |
-| `filterMatches` 英雄 103 | 0.12 ms | — |
-| `filterMatches` 仅看胜 | 0.06 ms | 0.28 ms |
-| `filterMatches` 模式 420 | 0.14 ms | — |
-| `filterMatches` 时间窗 24h | 0.35 ms | — |
-| `aggregateChampionPool` | 0.09 ms | 0.16 ms |
-| `trendFiltered` 轻量映射 | 0.09 ms | 0.14 ms |
+| 指标                       | 500 场  | 1000 场 |
+| -------------------------- | ------- | ------- |
+| `filterMatches` 无筛选     | 0.31 ms | —       |
+| `filterMatches` 英雄 103   | 0.12 ms | —       |
+| `filterMatches` 仅看胜     | 0.06 ms | 0.28 ms |
+| `filterMatches` 模式 420   | 0.14 ms | —       |
+| `filterMatches` 时间窗 24h | 0.35 ms | —       |
+| `aggregateChampionPool`    | 0.09 ms | 0.16 ms |
+| `trendFiltered` 轻量映射   | 0.09 ms | 0.14 ms |
 
 结论：计算侧全量收集级（500~1000 场）也在亚毫秒级，CPU 非瓶颈；布局改动不得让
 这些纯函数掉出亚毫秒量级（新增组合筛选/近期表现卡聚合需复用同一批纯函数，勿引入
@@ -33,15 +33,21 @@ npx vitest run src/components/record/__tests__/perfBaseline.spec.ts
 
 ## 2. RecordCard 单卡 DOM 密度（折叠态 116px）
 
-| 指标 | 值 |
-| --- | --- |
-| 折叠态单卡 DOM 节点数（`querySelectorAll('*').length` 3 次均值） | **51 nodes** |
-| 既往快照（2026-09-23，旧卡 40px 高） | 39~40 nodes |
+| 指标                                                             | 值                                        |
+| ---------------------------------------------------------------- | ----------------------------------------- |
+| 折叠态单卡 DOM 节点数（`querySelectorAll('*').length` 3 次均值） | **61 nodes**（2026-09-24 头部统计并入后） |
+| 既往快照（2026-09-24，Akari 116px 重组、头部未并入）             | 51 nodes                                  |
+| 既往快照（2026-09-23，旧卡 40px 高）                             | 39~40 nodes                               |
 
 对照意义：
+
 - Akari 116px 重组（44px 头像 + MVP + 召唤师技能 + 基石/副系符文 + 迷你 KDA +
   伤害条 + 参团率 + 结果 + 装备 + 元信息行 + 阵容列 + chevron 轨）使折叠卡从 40 节点
   升到 51 节点：+11 节点全部承载"更多一屏可读信息"，是主动换取的信息密度而非回退。
+- 展开详情大头像头部按"统计进卡、按钮进页签行"合并删除后，唯一统计（昵称/KDA 比值/
+  金币/补兵/承伤/推塔）并入收起卡顶行右侧空白：+10 节点（51→61）；同时整份展开头部
+  （头像/结果/日期/队列/KDA 行/统计条/按钮容器）删除，列表级总 DOM 净减少；重复项
+  （胜利/日期/队列/头像/KDA/输出）不再渲染两遍。
 - 挂载耗时在 jsdom 中无绝对意义，列表级滚动卡顿回归用真实客户端（Tauri + 15 场/屏）
   人工走查。
 

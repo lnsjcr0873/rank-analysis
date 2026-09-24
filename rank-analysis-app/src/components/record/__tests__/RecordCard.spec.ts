@@ -206,6 +206,51 @@ describe('RecordCard 行卡增强（CS/模式/技能/日期）', () => {
     expect(wrapper.find('.record-card-group-rate').text()).toBe('55%参团')
   })
 
+  it('展开头部并入统计：KDA 比值/金币/补兵/承伤/推塔 渲染且与卡上已有项去重', () => {
+    const wrapper = mountCard(gameOf())
+    const extra = wrapper.find('.record-card-extra-stats')
+    expect(extra.exists()).toBe(true)
+    const text = extra.text()
+    // K=6 D=3 A=8 → (6+8)/3 = 4.7 KDA
+    expect(text).toContain('4.7 KDA')
+    expect(text).toContain('金币')
+    expect(text).toContain('补兵')
+    expect(text).toContain('承伤')
+    expect(text).toContain('推塔')
+    // 补兵为总数 210（180+30），与 csText 速率互补
+    expect(text).toContain('210')
+    // 去重：胜利/日期/队列/头像/KDA 行/输出不进统计簇（卡上已有）
+    expect(text).not.toContain('胜利')
+    expect(text).not.toContain('输出')
+    expect(wrapper.find('.record-card-extra-name').exists()).toBe(false)
+  })
+
+  it('有身份数据时统计簇展示昵称 gameName#tagLine', () => {
+    const wrapper = mountCard(
+      gameOf({
+        participantIdentities: [
+          {
+            player: {
+              accountId: 1,
+              platformId: 'TJ100',
+              gameName: 'QzzLrr',
+              tagLine: '24983',
+              summonerName: '旧名',
+              summonerId: 1
+            }
+          }
+        ]
+      })
+    )
+    expect(wrapper.find('.record-card-extra-name').text()).toBe('QzzLrr#24983')
+  })
+
+  it('无身份数据时昵称隐藏，其余统计仍渲染', () => {
+    const wrapper = mountCard(gameOf())
+    expect(wrapper.find('.record-card-extra-name').exists()).toBe(false)
+    expect(wrapper.find('.record-card-extra-stats').text()).toContain('4.7 KDA')
+  })
+
   it('CHERRY 局名次标签优先（第 N 名）', () => {
     const wrapper = mountCard(
       gameOf({

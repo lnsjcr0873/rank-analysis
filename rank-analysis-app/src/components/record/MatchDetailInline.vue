@@ -3,99 +3,44 @@
     <div class="match-detail-page">
       <div class="match-detail-modal">
         <div class="match-detail-shell">
-          <!-- Header -->
-          <div
-            class="match-detail-header"
-            :class="mySummary.win ? 'match-detail-header--win' : 'match-detail-header--loss'"
-          >
-            <!-- 氛围底图：本局英雄放大重模糊，向右渐隐——赛后战报的环境感 -->
-            <img
-              class="match-detail-header-ambient"
-              :src="assetPrefix + '/champion/' + mySummary.championId"
-              alt=""
-              aria-hidden="true"
-            />
-            <div class="match-detail-header-main">
-              <div class="match-detail-title-row">
+          <!-- Tab 栏：主组（概览/统计/符文/出装/时间线）+ 次组（事件/评分/回测，
+               视觉弱化并加分隔——低频分析不与高频页签抢宽度，KeepAlive 保活 + 懒加载）。
+               右侧操作区承接原展开头部的按钮（SGP 标/回放/AI/收起）——头部已按
+               "统计进收起卡、按钮进页签行"合并去重删除。 -->
+          <div class="match-detail-tabs">
+            <div class="match-detail-tab-list" role="tablist">
+              <template v-for="(tab, i) in tabs" :key="tab.key">
                 <span
-                  class="match-detail-result-pill"
-                  :class="
-                    mySummary.win
-                      ? 'match-detail-result-pill--win'
-                      : 'match-detail-result-pill--loss'
-                  "
+                  v-if="tab.minor && !(tabs[i - 1] && tabs[i - 1].minor)"
+                  class="match-detail-tab-divider"
+                  aria-hidden="true"
+                ></span>
+                <button
+                  type="button"
+                  role="tab"
+                  class="match-detail-tab"
+                  :class="{
+                    'match-detail-tab--active': activeTab === tab.key,
+                    'match-detail-tab--minor': tab.minor
+                  }"
+                  :aria-selected="activeTab === tab.key"
+                  @click="activeTab = tab.key"
                 >
-                  {{ mySummary.win ? '胜利' : '失败' }}
-                </span>
-                <span class="match-detail-queue">{{ game.queueName }}</span>
-                <span class="match-detail-meta">{{ formattedDate }} · {{ durationLabel }}</span>
-                <n-tooltip v-if="dataSource.isCrossSgp" trigger="hover" placement="bottom">
-                  <template #trigger>
-                    <span class="match-detail-source-pill">跨区 · SGP</span>
-                  </template>
-                  <span v-if="dataSource.missingGameVersion"
-                    >本局目标区未返回版本号，回放可用性自动放行。</span
-                  >
-                  部分字段（如完整符文页、版本号）缺失时，相关子 Tab 均展示缺省提示，不会抛错。
-                </n-tooltip>
-              </div>
-              <div class="match-detail-player-row">
-                <LazyImg
-                  class="match-detail-hero"
-                  :class="mySummary.win ? 'match-detail-hero--win' : 'match-detail-hero--loss'"
-                  :src="assetPrefix + '/champion/' + mySummary.championId"
-                  alt="champion"
-                />
-                <div class="match-detail-player-copy">
-                  <div class="match-detail-player-name">{{ mySummary.displayName }}</div>
-                  <div class="match-detail-player-kda">
-                    <span class="font-number">{{ mySummary.stats.kills }}</span>
-                    <span>/</span>
-                    <span
-                      class="font-number"
-                      :style="{ color: deathsColor(mySummary.stats.deaths, isDark) }"
-                      >{{ mySummary.stats.deaths }}</span
-                    >
-                    <span>/</span>
-                    <span class="font-number">{{ mySummary.stats.assists }}</span>
-                    <span
-                      class="font-number match-detail-kda-ratio"
-                      :style="{ color: kdaColor(kdaRatio(mySummary.stats), isDark) }"
-                    >
-                      {{ kdaRatioLabel(mySummary.stats) }}
-                    </span>
-                    <span class="match-detail-meta"
-                      >{{ formatCompactNumber(mySummary.stats.goldEarned) }} 金币</span
-                    >
-                    <span class="match-detail-meta">{{ totalCs(mySummary.stats) }} 补兵</span>
-                  </div>
-                </div>
-              </div>
+                  {{ tab.label }}
+                </button>
+              </template>
             </div>
 
-            <div class="match-detail-summary-side">
-              <div class="match-detail-stats-strip">
-                <div class="match-detail-stat">
-                  <span class="match-detail-stat-label">输出</span>
-                  <span class="match-detail-stat-value font-number">
-                    {{ formatCompactNumber(mySummary.stats.totalDamageDealtToChampions) }}
-                  </span>
-                </div>
-                <span class="match-detail-stat-divider" />
-                <div class="match-detail-stat">
-                  <span class="match-detail-stat-label">承伤</span>
-                  <span class="match-detail-stat-value font-number">
-                    {{ formatCompactNumber(mySummary.stats.totalDamageTaken) }}
-                  </span>
-                </div>
-                <span class="match-detail-stat-divider" />
-                <div class="match-detail-stat">
-                  <span class="match-detail-stat-label">推塔</span>
-                  <span class="match-detail-stat-value font-number">
-                    {{ formatCompactNumber(mySummary.stats.damageDealtToTurrets) }}
-                  </span>
-                </div>
-              </div>
+            <div class="match-detail-tab-actions">
+              <n-tooltip v-if="dataSource.isCrossSgp" trigger="hover" placement="bottom-end">
+                <template #trigger>
+                  <span class="match-detail-source-pill">跨区 · SGP</span>
+                </template>
+                <span v-if="dataSource.missingGameVersion"
+                  >本局目标区未返回版本号，回放可用性自动放行。</span
+                >
+                部分字段（如完整符文页、版本号）缺失时，相关子 Tab 均展示缺省提示，不会抛错。
+              </n-tooltip>
 
               <n-tooltip trigger="hover" placement="bottom-end">
                 <template #trigger>
@@ -165,31 +110,6 @@
             </div>
           </div>
 
-          <!-- Tab 栏：主组（概览/统计/符文/出装/时间线）+ 次组（事件/评分/回测，
-               视觉弱化并加分隔——低频分析不与高频页签抢宽度，KeepAlive 保活 + 懒加载 -->
-          <div class="match-detail-tabs" role="tablist">
-            <template v-for="(tab, i) in tabs" :key="tab.key">
-              <span
-                v-if="tab.minor && !(tabs[i - 1] && tabs[i - 1].minor)"
-                class="match-detail-tab-divider"
-                aria-hidden="true"
-              ></span>
-              <button
-                type="button"
-                role="tab"
-                class="match-detail-tab"
-                :class="{
-                  'match-detail-tab--active': activeTab === tab.key,
-                  'match-detail-tab--minor': tab.minor
-                }"
-                :aria-selected="activeTab === tab.key"
-                @click="activeTab = tab.key"
-              >
-                {{ tab.label }}
-              </button>
-            </template>
-          </div>
-
           <div class="match-detail-tab-pane">
             <KeepAlive :max="2">
               <component :is="activeTabComponent" />
@@ -225,13 +145,9 @@ import { invoke } from '@tauri-apps/api/core'
 import { useCopy } from '@renderer/composables/useCopy'
 
 import { useTheme } from '@renderer/composables/useTheme'
-import { assetPrefix } from '@renderer/services/http'
 import type { Game, ParticipantStats } from '@renderer/types/domain/match'
 import type { Summoner } from '@renderer/types/domain/player'
 import MatchAIPanel from './MatchAIPanel.vue'
-import LazyImg from '@renderer/components/common/LazyImg.vue'
-import { deathsColor, kdaColor } from '@renderer/utils/colors'
-import { formatCompactNumber, formatGameDate } from '@renderer/utils/format'
 import { useRecordAssets } from '@renderer/composables/useRecordAssets'
 import { useMatchDetailPlayers } from '@renderer/composables/useMatchDetailPlayers'
 import { useMatchAIAnalysis } from '@renderer/composables/useMatchAIAnalysis'
@@ -286,15 +202,6 @@ const ranks = useMatchPlayerRanks(
   () => props.region
 )
 
-function totalCs(stats: ParticipantStats) {
-  return stats.totalMinionsKilled + stats.neutralMinionsKilled
-}
-function kdaRatio(stats: ParticipantStats) {
-  return (stats.kills + stats.assists) / Math.max(1, stats.deaths)
-}
-function kdaRatioLabel(stats: ParticipantStats) {
-  return `${kdaRatio(stats).toFixed(1)} KDA`
-}
 function itemIds(stats: ParticipantStats) {
   return [stats.item0, stats.item1, stats.item2, stats.item3, stats.item4, stats.item5, stats.item6]
 }
@@ -308,11 +215,6 @@ function playerAugmentIds(stats: ParticipantStats) {
     stats.playerAugment6
   ].filter(id => id > 0)
 }
-
-const formattedDate = computed(() => {
-  if (!props.game) return ''
-  return formatGameDate(props.game.gameCreationDate)
-})
 
 /**
  * 由某玩家 + 当前对局拼出一条"遇见记录"（{@link OneGamePlayer}），
@@ -338,13 +240,6 @@ function buildEncounter(player: DetailPlayer): OneGamePlayer | undefined {
     queueIdCn: g.queueName ?? ''
   }
 }
-
-const durationLabel = computed(() => {
-  if (!props.game) return ''
-  const minutes = Math.floor(props.game.gameDuration / 60)
-  const seconds = props.game.gameDuration % 60
-  return `${minutes}分${seconds.toString().padStart(2, '0')}秒`
-})
 
 const usesAugments = computed(() => {
   if (!props.game) return false
@@ -585,115 +480,6 @@ onUnmounted(() => {
   flex-direction: column;
 }
 
-.match-detail-header {
-  --hdr-color: var(--semantic-win);
-  position: relative;
-  overflow: hidden;
-  /* 头部是固定内容区，绝不参与压缩：它是 .match-detail-shell（flex column, height:100%）
-     的子项，默认 flex-shrink:1 会在窗口高度不足时被挤扁。一旦挤扁，比左栏更高的右侧
-     按钮列（统计条 + 观看回放 + AI 整局复盘）就会超出头部，被上面的 overflow:hidden
-     裁掉底部——表现为「AI 整局复盘」按钮缺一截。窗口越矮越明显。
-     该滚动的是下面的正文区，不是头部。 */
-  flex-shrink: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--space-8);
-  padding: var(--space-10) var(--space-12);
-  border-bottom: 1px solid var(--border-subtle);
-  /* 头部单独一层极轻的表面色，与正文区分层次 */
-  background: linear-gradient(180deg, var(--glass-bg-low), transparent);
-}
-
-.match-detail-header--win {
-  --hdr-color: var(--semantic-win);
-}
-
-.match-detail-header--loss {
-  --hdr-color: var(--semantic-loss);
-}
-
-/* 胜负环境光：左上角一团结果色的径向光晕——不依赖英雄图明暗，始终可见且克制 */
-.match-detail-header::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(
-    120% 190% at 7% 18%,
-    color-mix(in srgb, var(--hdr-color) 17%, transparent),
-    transparent 56%
-  );
-  pointer-events: none;
-}
-
-/* 氛围底图：英雄图放大重模糊、向右渐隐——页面级环境光，非组件毛玻璃 */
-.match-detail-header-ambient {
-  /* 源图仅 128px：重模糊会糊成看不见的色雾。改为"幽灵浮雕"——
-     大尺寸 + 轻模糊保留轮廓 + 径向渐隐，英雄的脸若隐若现衬在标题后 */
-  position: absolute;
-  left: -36px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 300px;
-  height: 300px;
-  object-fit: cover;
-  filter: blur(2px) brightness(1.3) saturate(1.15);
-  opacity: 0.3;
-  pointer-events: none;
-  -webkit-mask-image: radial-gradient(circle at 34% 50%, rgba(0, 0, 0, 0.9) 22%, transparent 68%);
-  mask-image: radial-gradient(circle at 34% 50%, rgba(0, 0, 0, 0.9) 22%, transparent 68%);
-}
-
-.theme-light .match-detail-header-ambient {
-  opacity: 0.1;
-}
-
-.match-detail-header-main,
-.match-detail-summary-side {
-  position: relative;
-  z-index: 1;
-}
-
-/* 结果徽章：奥术金工切角印章 */
-.match-detail-result-pill {
-  --result-color: var(--semantic-win);
-  padding: 2px 10px;
-  clip-path: var(--clip-notch);
-  font-size: var(--font-size-sm);
-  font-weight: 800;
-  font-family: 'Space Mono', 'Bahnschrift', monospace;
-  letter-spacing: 0.08em;
-  color: var(--result-color);
-  background: color-mix(in srgb, var(--result-color) 16%, transparent);
-  border: 1px solid color-mix(in srgb, var(--result-color) 45%, transparent);
-}
-
-.match-detail-result-pill--win {
-  --result-color: var(--win-bright);
-}
-
-.match-detail-result-pill--loss {
-  --result-color: var(--loss-bright);
-}
-
-.match-detail-title-row {
-  display: flex;
-  align-items: center;
-  gap: 5px; /* 标签之间紧凑间距,介于 4 和 6 */
-  margin-bottom: var(--space-4);
-}
-
-.match-detail-queue {
-  font-size: var(--font-size-xl);
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
-.match-detail-meta {
-  color: var(--text-secondary);
-  font-size: var(--font-size-xs);
-}
-
 .match-detail-source-pill {
   padding: 1px 7px;
   font-size: var(--font-size-2xs);
@@ -706,117 +492,36 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
-.match-detail-player-row {
-  display: flex;
-  align-items: center;
-  gap: 7px; /* 头像与文字间距,介于 6 和 8 */
-}
-
-.match-detail-hero {
-  /* 48→60px 随 viewport (1100→2200)——头部主视觉，比正文头像大一档 */
-  width: clamp(48px, calc(48px + (100vw - 1100px) * 12 / 1100), 60px);
-  height: clamp(48px, calc(48px + (100vw - 1100px) * 12 / 1100), 60px);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border-subtle);
-  display: block;
-}
-
-/* 胜负色环：双层描边（内深外发光），头部一眼读出结果 */
-.match-detail-hero--win {
-  border-color: color-mix(in srgb, var(--semantic-win) 55%, transparent);
-  box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--semantic-win) 25%, transparent),
-    0 0 14px color-mix(in srgb, var(--semantic-win) 22%, transparent);
-}
-
-.match-detail-hero--loss {
-  border-color: color-mix(in srgb, var(--semantic-loss) 50%, transparent);
-  box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--semantic-loss) 22%, transparent),
-    0 0 14px color-mix(in srgb, var(--semantic-loss) 18%, transparent);
-}
-
-.match-detail-player-copy {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.match-detail-player-name {
-  /* 15→19px 随 viewport (1100→2200) */
-  font-size: clamp(15px, calc(15px + (100vw - 1100px) * 4 / 1100), 19px);
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
-.match-detail-player-kda {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  flex-wrap: wrap;
-  font-size: var(--font-size-sm);
-  color: var(--text-primary);
-}
-
-.match-detail-kda-ratio {
-  margin-left: var(--space-4);
-  font-size: var(--font-size-xs);
-  font-weight: 600;
-}
-
-/* 头部右侧：一条无边框统计带 + 一颗 AI 主按钮（替代旧的两层边框盒子） */
-.match-detail-summary-side {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: var(--space-6);
-}
-
-.match-detail-stats-strip {
-  display: flex;
-  align-items: center;
-  gap: var(--space-10);
-}
-
-.match-detail-stat {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 1px;
-}
-
-.match-detail-stat-label {
-  color: var(--text-tertiary);
-  font-size: var(--font-size-2xs);
-  letter-spacing: 0.06em;
-}
-
-.match-detail-stat-value {
-  font-size: var(--font-size-md);
-  font-weight: 700;
-  color: var(--text-primary);
-  font-variant-numeric: tabular-nums;
-}
-
-.match-detail-stat-divider {
-  width: 1px;
-  height: 22px;
-  background: var(--border-subtle);
-}
-
 .match-detail-ai-button,
 .match-detail-replay-button {
   -webkit-app-region: no-drag;
 }
 
-/* Tab 栏：胶囊切换条，概览默认激活 */
+/* Tab 栏：胶囊切换条 + 右侧操作区（原头部按钮合并位），概览默认激活 */
 .match-detail-tabs {
   display: flex;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-8);
   padding: var(--space-6) var(--space-12) 0;
   border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
+}
+
+.match-detail-tab-list {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.match-detail-tab-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  margin-left: auto;
+  flex-shrink: 0;
+  padding-bottom: var(--space-2);
 }
 
 /* 次组页签：弱化 + 前置细分隔（R6：低频 tab 不与高频抢宽度） */
@@ -873,15 +578,5 @@ onUnmounted(() => {
 .match-detail-tab-pane {
   display: flex;
   flex-direction: column;
-}
-
-@media (max-width: 1100px) {
-  .match-detail-header {
-    grid-template-columns: 1fr;
-  }
-
-  .match-detail-summary-side {
-    align-items: flex-start;
-  }
 }
 </style>
