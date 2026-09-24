@@ -485,9 +485,9 @@ onUnmounted(() => {
   font-size: var(--font-size-2xs);
   font-weight: 600;
   letter-spacing: 0.04em;
-  color: var(--accent-gold-deep);
-  background: color-mix(in srgb, var(--accent-gold-deep) 12%, transparent);
-  border: 1px solid color-mix(in srgb, var(--accent-gold-deep) 35%, transparent);
+  color: var(--brand);
+  background: var(--brand-soft);
+  border: 1px solid var(--brand-border);
   border-radius: var(--radius-sm);
   white-space: nowrap;
 }
@@ -497,7 +497,7 @@ onUnmounted(() => {
   -webkit-app-region: no-drag;
 }
 
-/* Tab 栏：胶囊切换条 + 右侧操作区（原头部按钮合并位），概览默认激活 */
+/* Tab 栏：金工 mtab 范式（底部描边切换条）+ 右侧操作区（原头部按钮合并位），概览默认激活 */
 .match-detail-tabs {
   display: flex;
   align-items: center;
@@ -539,9 +539,9 @@ onUnmounted(() => {
 .match-detail-tab {
   appearance: none;
   border: none;
+  border-bottom: 2px solid transparent;
   background: transparent;
   padding: var(--space-6) var(--space-10);
-  border-radius: var(--radius-md) var(--radius-md) 0 0;
   font-size: var(--font-size-sm);
   font-weight: 600;
   color: var(--text-secondary);
@@ -549,29 +549,17 @@ onUnmounted(() => {
   position: relative;
   transition:
     color var(--dur-fast) var(--ease-expo),
-    background var(--dur-fast) var(--ease-expo);
+    border-color var(--dur-fast) var(--ease-expo);
 }
 
 .match-detail-tab:hover {
   color: var(--text-primary);
-  background: var(--glass-bg-low);
 }
 
 .match-detail-tab--active {
   color: var(--text-primary);
   font-weight: 700;
-}
-
-.match-detail-tab--active::after {
-  content: '';
-  position: absolute;
-  left: var(--space-6);
-  right: var(--space-6);
-  bottom: -1px;
-  height: 2px;
-  border-radius: 2px 2px 0 0;
-  background: var(--accent-gold);
-  box-shadow: 0 0 10px rgba(245, 158, 11, 0.55);
+  border-bottom-color: var(--brand-border);
 }
 
 /* tab 内容区：KeepAlive 组件挂载点 */

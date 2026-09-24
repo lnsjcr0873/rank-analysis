@@ -51,12 +51,12 @@ const props = withDefaults(defineProps<{ floating?: boolean }>(), { floating: fa
 .mhp-btn {
   padding: var(--space-2) var(--space-6);
   color: var(--text-secondary);
-  border-color: var(--glass-border);
+  border-color: var(--border-strong);
 }
 
 .mhp-btn:hover:not(:disabled) {
-  color: var(--accent-gold-deep);
-  border-color: var(--accent-gold-deep);
+  color: var(--brand);
+  border-color: var(--brand-border);
 }
 
 .mhp-btn:disabled {

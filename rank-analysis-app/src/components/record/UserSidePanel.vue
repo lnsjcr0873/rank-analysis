@@ -352,7 +352,7 @@ function onPoolClick(championId: number) {
 }
 
 .theme-light .hero-pool-row:hover {
-  background: linear-gradient(180deg, #f7f4ed, #ebe5d8);
+  background: var(--bg-hover);
   border-color: var(--brand-border);
 }
 

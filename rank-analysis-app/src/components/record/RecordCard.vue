@@ -745,8 +745,8 @@ function openDetail() {
   position: relative;
   cursor: pointer;
   height: 116px;
-  background: linear-gradient(180deg, rgba(21, 29, 41, 0.75), rgba(12, 16, 24, 0.85));
-  border: 1px solid var(--border-subtle);
+  background: linear-gradient(180deg, var(--bg-raised), var(--bg-sunken));
+  border: 1px solid var(--border-strong);
   clip-path: var(--clip-corner-sm);
   transition: all var(--dur-fast) var(--ease-expo);
 }
@@ -761,9 +761,9 @@ function openDetail() {
 }
 
 .theme-light .record-card {
-  background: linear-gradient(180deg, #f7f4ed 0%, #ebe5d8 100%);
-  border: 1px solid rgba(168, 146, 112, 0.35);
-  box-shadow: 0 1px 3px rgba(60, 50, 30, 0.08);
+  background: linear-gradient(180deg, var(--bg-raised), var(--bg-sunken));
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-1);
 }
 
 /* 键盘可达性（R22-3）：焦点环仅键盘触发时出现，不干扰鼠标点击 */
@@ -773,13 +773,13 @@ function openDetail() {
 }
 
 .record-card:hover {
-  border-color: rgba(212, 165, 72, 0.45);
+  border-color: var(--brand-border);
   transform: translateX(2px);
-  background: linear-gradient(180deg, rgba(28, 38, 54, 0.85), rgba(16, 22, 32, 0.95));
+  background: var(--bg-raised);
 }
 
 .theme-light .record-card:hover {
-  background: linear-gradient(180deg, #fffdf8 0%, #f0ebd9 100%);
+  background: var(--bg-raised);
   border-color: var(--brand-border);
 }
 
@@ -1085,30 +1085,30 @@ function openDetail() {
 
 .record-card-result-badge.is-win {
   color: var(--win-bright);
-  background: linear-gradient(135deg, rgba(63, 191, 143, 0.28), rgba(20, 80, 55, 0.5));
-  border: 1px solid rgba(63, 191, 143, 0.6);
-  box-shadow: inset 0 0 6px rgba(63, 191, 143, 0.3);
-  text-shadow: 0 0 8px rgba(92, 217, 171, 0.4);
+  background: var(--win-soft);
+  border: 1px solid var(--win-border);
+  box-shadow: inset 0 0 6px color-mix(in srgb, var(--win) 30%, transparent);
+  text-shadow: 0 0 8px color-mix(in srgb, var(--win-bright) 40%, transparent);
 }
 
 .record-card-result-badge.is-loss {
   color: var(--loss-bright);
-  background: linear-gradient(135deg, rgba(224, 92, 92, 0.22), rgba(100, 30, 30, 0.45));
-  border: 1px solid rgba(224, 92, 92, 0.55);
-  box-shadow: inset 0 0 6px rgba(224, 92, 92, 0.25);
+  background: var(--loss-soft);
+  border: 1px solid var(--loss-border);
+  box-shadow: inset 0 0 6px color-mix(in srgb, var(--loss) 25%, transparent);
 }
 
 .theme-light .record-card-result-badge.is-win {
-  color: #1f6e52;
-  background: linear-gradient(135deg, rgba(46, 143, 108, 0.18), rgba(46, 143, 108, 0.3));
-  border: 1px solid rgba(46, 143, 108, 0.55);
+  color: color-mix(in srgb, var(--win) 75%, black);
+  background: var(--win-soft);
+  border: 1px solid var(--win-border);
   text-shadow: none;
 }
 
 .theme-light .record-card-result-badge.is-loss {
-  color: #9c2e2e;
-  background: linear-gradient(135deg, rgba(192, 68, 68, 0.16), rgba(192, 68, 68, 0.28));
-  border: 1px solid rgba(192, 68, 68, 0.5);
+  color: color-mix(in srgb, var(--loss) 75%, black);
+  background: var(--loss-soft);
+  border: 1px solid var(--loss-border);
   text-shadow: none;
 }
 
@@ -1193,18 +1193,19 @@ function openDetail() {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
 }
 
+/* MVP 金银徽章：金工 v3 色系（金=brand 家族 / 银=text 家族），保留数据语义 */
 .record-card-mvp-gold {
-  color: #fbbf24;
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.35), rgba(180, 83, 9, 0.6));
-  border: 1px solid rgba(245, 158, 11, 0.7);
-  box-shadow: 0 0 6px rgba(245, 158, 11, 0.4);
+  color: var(--brand);
+  background: var(--brand-soft);
+  border: 1px solid var(--brand-border);
+  box-shadow: 0 0 6px var(--glow-brand);
 }
 
 .record-card-mvp-silver {
-  color: #cbd5e1;
-  background: linear-gradient(135deg, rgba(148, 163, 184, 0.3), rgba(71, 85, 105, 0.5));
-  border: 1px solid rgba(148, 163, 184, 0.6);
-  box-shadow: 0 0 4px rgba(148, 163, 184, 0.25);
+  color: var(--text-secondary);
+  background: var(--bg-hover);
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 0 4px color-mix(in srgb, var(--text-secondary) 25%, transparent);
 }
 
 /* 英雄名（legacy 网格用） */
@@ -1281,15 +1282,15 @@ function openDetail() {
 }
 
 .record-card-minibar-dmg {
-  background: linear-gradient(90deg, #f59e0b, #f97316);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--warn) 90%, white), var(--warn));
 }
 
 .record-card-minibar-taken {
-  background: linear-gradient(90deg, #60a5fa, #3b82f6);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--info) 90%, white), var(--info));
 }
 
 .record-card-minibar-heal {
-  background: linear-gradient(90deg, #4ade80, #22c55e);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--win) 90%, white), var(--win));
 }
 
 .record-card-damage-value {

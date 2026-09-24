@@ -1069,11 +1069,11 @@ watch(
   0%,
   55% {
     box-shadow:
-      0 0 0 2px color-mix(in srgb, var(--accent-gold-deep) 65%, transparent),
-      var(--shadow-md);
+      0 0 0 2px color-mix(in srgb, var(--brand) 65%, transparent),
+      var(--shadow-2);
   }
   100% {
-    box-shadow: var(--shadow-sm);
+    box-shadow: var(--shadow-1);
   }
 }
 
@@ -1146,8 +1146,8 @@ watch(
 .toolbar-more {
   margin-left: auto;
   font-size: var(--font-size-2xs);
-  background: var(--glass-bg-low) !important;
-  border: 1px solid var(--glass-border) !important;
+  background: transparent !important;
+  border: 1px solid var(--border-strong) !important;
   color: var(--text-secondary);
 }
 
@@ -1169,8 +1169,8 @@ watch(
 
 .toolbar-expand-all {
   font-size: var(--font-size-2xs);
-  background: var(--glass-bg-low) !important;
-  border: 1px solid var(--glass-border) !important;
+  background: transparent !important;
+  border: 1px solid var(--border-strong) !important;
   color: var(--text-secondary);
   transition:
     color var(--dur-fast) var(--ease-expo),
@@ -1179,12 +1179,12 @@ watch(
 
 .toolbar-expand-all:hover {
   color: var(--text-primary);
-  border-color: var(--accent-gold-deep) !important;
+  border-color: var(--brand-border) !important;
 }
 
 .toolbar-more:hover {
   color: var(--text-primary);
-  background: var(--glass-bg-mid) !important;
+  background: var(--bg-hover) !important;
 }
 
 .filter-select :deep(.n-input),
@@ -1199,12 +1199,12 @@ watch(
 }
 
 .filter-select :deep(.n-base-selection) {
-  background: var(--glass-bg-low) !important;
-  border-color: var(--glass-border) !important;
+  background: var(--bg-hover) !important;
+  border-color: var(--border-strong) !important;
   transition: border-color var(--dur-fast) var(--ease-expo) !important;
 }
 .filter-select :deep(.n-base-selection:hover) {
-  border-color: var(--glass-bg-high) !important;
+  border-color: var(--brand-border) !important;
 }
 
 .toolbar-reset {
@@ -1238,8 +1238,8 @@ watch(
 }
 
 .pagination :deep(.n-button) {
-  background: var(--glass-bg-low) !important;
-  border: 1px solid var(--glass-border) !important;
+  background: var(--bg-hover) !important;
+  border: 1px solid var(--border-strong) !important;
 }
 
 .export-path-bar {

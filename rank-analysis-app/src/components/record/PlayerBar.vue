@@ -162,16 +162,16 @@ const copyName = () => {
   gap: var(--space-16);
   min-height: 112px;
   padding: var(--space-12) var(--space-16);
-  background: linear-gradient(180deg, rgba(21, 29, 41, 0.75), rgba(12, 16, 24, 0.85));
-  border: 1px solid var(--border-subtle);
+  background: linear-gradient(180deg, var(--bg-raised), var(--bg-sunken));
+  border: 1px solid var(--border-strong);
   clip-path: var(--clip-corner-sm);
   backdrop-filter: blur(10px);
 }
 
 .theme-light .player-bar {
-  background: linear-gradient(180deg, #f7f4ed 0%, #ebe5d8 100%);
-  border: 1px solid rgba(168, 146, 112, 0.35);
-  box-shadow: 0 1px 3px rgba(60, 50, 30, 0.08);
+  background: linear-gradient(180deg, var(--bg-raised), var(--bg-sunken));
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-1);
 }
 
 .player-bar-identity {
@@ -187,11 +187,11 @@ const copyName = () => {
 }
 
 .player-bar-avatar {
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-2);
 }
 
 .player-bar-avatar :deep(img) {
-  border: 2px solid color-mix(in srgb, var(--accent-gold-deep) 45%, var(--border-subtle));
+  border: 2px solid var(--brand-border);
 }
 
 .player-bar-level {
@@ -199,7 +199,7 @@ const copyName = () => {
   bottom: -4px;
   left: 50%;
   transform: translateX(-50%);
-  background: var(--bg-elevated);
+  background: var(--bg-raised);
   border: 1px solid var(--border-subtle);
   padding: 0 var(--space-6);
   height: 18px;
@@ -309,7 +309,7 @@ const copyName = () => {
 }
 
 .player-bar-refresh:hover {
-  color: var(--accent-gold-deep);
+  color: var(--brand);
 }
 
 .player-bar-tags {

@@ -57,6 +57,9 @@
   --bg-sunken: var(--hx-ink-950);
   --bg-hover: rgba(255, 255, 255, 0.05);
   --bg-active: rgba(255, 255, 255, 0.08);
+  /* 半透卡片面（Mayhem 曾以 var(--surface-card, rgba(128,128,128,0.06)) 落地，现转正） */
+  --surface-card: rgba(128, 128, 128, 0.06);
+  --surface-raised: rgba(255, 255, 255, 0.08);
 
   /* 品牌（金）——只用于结论/激活/关键强调，禁止当胜负色用 */
   --brand: var(--hx-gold-300);
@@ -181,6 +184,8 @@
   --bg-sunken: var(--hx-paper-300);
   --bg-hover: rgba(35, 40, 46, 0.04);
   --bg-active: rgba(35, 40, 46, 0.07);
+  --surface-card: rgba(35, 40, 46, 0.045);
+  --surface-raised: rgba(255, 255, 255, 0.6);
 
   --brand: var(--hx-gold-700);
   --brand-strong: #75541b;

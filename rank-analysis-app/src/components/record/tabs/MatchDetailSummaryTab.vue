@@ -788,17 +788,17 @@ function playerTier(player: DetailPlayer) {
 }
 
 .match-detail-mvp-chip--mvp {
-  color: #fbbf24;
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.25), rgba(180, 83, 9, 0.38));
-  border: 1px solid rgba(245, 158, 11, 0.6);
-  box-shadow: 0 0 8px rgba(245, 158, 11, 0.3);
+  color: var(--brand);
+  background: var(--brand-soft);
+  border: 1px solid var(--brand-border);
+  box-shadow: 0 0 8px var(--glow-brand);
 }
 
 .match-detail-mvp-chip--svp {
-  color: #cbd5e1;
-  background: linear-gradient(135deg, rgba(148, 163, 184, 0.2), rgba(71, 85, 105, 0.3));
-  border: 1px solid rgba(148, 163, 184, 0.5);
-  box-shadow: 0 0 6px rgba(148, 163, 184, 0.2);
+  color: var(--text-secondary);
+  background: var(--bg-hover);
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--text-secondary) 20%, transparent);
 }
 
 .match-detail-player-text-row :deep(.n-tag) {

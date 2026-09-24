@@ -277,11 +277,11 @@ const builds = computed<BuildCollection>(() => collectBuildEvents(ctx.sgpDetail.
 }
 
 .match-detail-builds-card {
-  border: 1px solid color-mix(in srgb, var(--border-subtle) 90%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-strong) 85%, transparent);
   border-radius: var(--radius-lg);
-  background: rgba(18, 22, 28, 0.45);
+  background: color-mix(in srgb, var(--bg-raised) 85%, transparent);
   backdrop-filter: blur(10px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--shadow-2);
   padding: var(--space-10);
   display: flex;
   flex-direction: column;
@@ -290,20 +290,20 @@ const builds = computed<BuildCollection>(() => collectBuildEvents(ctx.sgpDetail.
 }
 
 .match-detail-builds-card:hover {
-  background: var(--glass-bg-mid);
+  background: var(--bg-raised);
   transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-3);
 }
 
 .theme-light .match-detail-builds-card {
-  background: var(--bg-elevated);
+  background: var(--surface-card);
 }
 
 .match-detail-builds-card--me {
-  border-color: color-mix(in srgb, var(--semantic-win) 50%, transparent);
+  border-color: var(--win-border);
   box-shadow:
-    inset 3px 0 0 0 var(--semantic-win),
-    0 4px 16px rgba(16, 185, 129, 0.1);
+    inset 3px 0 0 0 var(--win),
+    var(--shadow-2);
 }
 
 .match-detail-builds-card-head {
@@ -409,22 +409,22 @@ const builds = computed<BuildCollection>(() => collectBuildEvents(ctx.sgpDetail.
 }
 
 .match-detail-builds-skill-badge--s2 {
-  background: color-mix(in srgb, var(--semantic-win) 22%, transparent);
-  color: var(--semantic-win-bright);
+  background: var(--win-soft);
+  color: var(--win-bright);
 }
 
 .match-detail-builds-skill-badge--s3 {
-  background: color-mix(in srgb, var(--semantic-loss) 22%, transparent);
-  color: var(--semantic-loss-bright, #e2686c);
+  background: var(--loss-soft);
+  color: var(--loss-bright);
 }
 
 .match-detail-builds-skill-badge--s4 {
-  background: color-mix(in srgb, var(--accent-gold) 22%, transparent);
-  color: var(--accent-gold);
+  background: var(--brand-soft);
+  color: var(--brand);
 }
 
 .match-detail-builds-skill-badge--evolve {
-  box-shadow: inset 0 0 0 2px var(--semantic-loss);
+  box-shadow: inset 0 0 0 2px var(--loss);
 }
 
 .match-detail-builds-skill-badge-level {

@@ -48,16 +48,16 @@ const badgeClass = computed(() => {
 <style scoped>
 .rank-card {
   padding: var(--space-10) var(--space-12);
-  background: linear-gradient(180deg, rgba(20, 26, 36, 0.7), rgba(12, 16, 22, 0.8));
-  border: 1px solid var(--border-subtle);
+  background: linear-gradient(180deg, var(--bg-raised), var(--bg-sunken));
+  border: 1px solid var(--border-strong);
   clip-path: var(--clip-corner-sm);
   transition: all var(--dur-fast) var(--ease-expo);
 }
 
 .theme-light .rank-card {
-  background: linear-gradient(180deg, #f7f4ed, #ebe5d8);
-  border: 1px solid rgba(168, 146, 112, 0.35);
-  box-shadow: 0 1px 3px rgba(60, 50, 30, 0.08);
+  background: linear-gradient(180deg, var(--bg-raised), var(--bg-sunken));
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-1);
 }
 
 .rank-card-content {
@@ -128,14 +128,14 @@ const badgeClass = computed(() => {
 
 .rank-card-win-badge.good {
   color: var(--win-bright);
-  background: linear-gradient(135deg, rgba(63, 191, 143, 0.22), rgba(20, 80, 55, 0.4));
-  border-color: rgba(63, 191, 143, 0.55);
+  background: var(--win-soft);
+  border-color: var(--win-border);
 }
 
 .rank-card-win-badge.bad {
   color: var(--loss-bright);
-  background: linear-gradient(135deg, rgba(224, 92, 92, 0.2), rgba(100, 30, 30, 0.4));
-  border-color: rgba(224, 92, 92, 0.5);
+  background: var(--loss-soft);
+  border-color: var(--loss-border);
 }
 
 .rank-card-win-badge.normal {
@@ -143,14 +143,14 @@ const badgeClass = computed(() => {
 }
 
 .theme-light .rank-card-win-badge.good {
-  color: #1f6e52;
-  background: rgba(46, 143, 108, 0.16);
-  border-color: rgba(46, 143, 108, 0.45);
+  color: color-mix(in srgb, var(--win) 75%, black);
+  background: var(--win-soft);
+  border-color: var(--win-border);
 }
 
 .theme-light .rank-card-win-badge.bad {
-  color: #9c2e2e;
-  background: rgba(192, 68, 68, 0.14);
-  border-color: rgba(192, 68, 68, 0.4);
+  color: color-mix(in srgb, var(--loss) 75%, black);
+  background: var(--loss-soft);
+  border-color: var(--loss-border);
 }
 </style>

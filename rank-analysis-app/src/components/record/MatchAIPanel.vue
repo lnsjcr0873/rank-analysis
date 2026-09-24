@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <n-modal
     :show="show"
     preset="card"
@@ -220,11 +220,11 @@ function nameOf(participantId: number): string {
 }
 
 .match-detail-ai-verdict-badge--win {
-  background: var(--semantic-win);
+  background: var(--win);
 }
 
 .match-detail-ai-verdict-badge--loss {
-  background: var(--semantic-loss);
+  background: var(--loss);
 }
 
 .match-detail-ai-verdict-badge--neutral {
@@ -250,18 +250,18 @@ function nameOf(participantId: number): string {
 }
 
 .match-detail-ai-section--mvps .match-detail-ai-section-title {
-  border-left-color: var(--semantic-win);
-  color: var(--semantic-win);
+  border-left-color: var(--win);
+  color: var(--win);
 }
 
 .match-detail-ai-section--blame .match-detail-ai-section-title {
-  border-left-color: var(--semantic-loss);
-  color: var(--semantic-loss);
+  border-left-color: var(--loss);
+  color: var(--loss);
 }
 
 .match-detail-ai-section--crushed .match-detail-ai-section-title {
-  border-left-color: var(--semantic-warn);
-  color: var(--semantic-warn);
+  border-left-color: var(--warn);
+  color: var(--warn);
 }
 
 .match-detail-ai-roster,
@@ -279,19 +279,19 @@ function nameOf(participantId: number): string {
   padding: var(--space-6) var(--space-12);
   border-left: 2px solid var(--border-subtle);
   border-radius: var(--radius-sm);
-  background: var(--glass-bg-low);
+  background: var(--bg-hover);
 }
 
 .match-detail-ai-section--mvps li {
-  border-left-color: var(--semantic-win);
+  border-left-color: var(--win);
 }
 
 .match-detail-ai-section--blame li {
-  border-left-color: var(--semantic-loss);
+  border-left-color: var(--loss);
 }
 
 .match-detail-ai-section--crushed li {
-  border-left-color: var(--semantic-warn);
+  border-left-color: var(--warn);
 }
 
 .match-detail-ai-improvements {
@@ -308,10 +308,10 @@ function nameOf(participantId: number): string {
   flex-direction: column;
   gap: var(--space-4);
   padding: var(--space-8) var(--space-12);
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid color-mix(in srgb, var(--border-subtle) 80%, transparent);
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-1);
 }
 
 .match-detail-ai-improvement-evidence {
@@ -328,7 +328,7 @@ function nameOf(participantId: number): string {
 .match-detail-ai-rating-score {
   font-size: var(--font-size-3xl);
   font-weight: var(--font-weight-bold);
-  color: var(--semantic-win);
+  color: var(--win);
 }
 
 .match-detail-ai-rating-max {

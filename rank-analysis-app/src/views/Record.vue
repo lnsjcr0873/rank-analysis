@@ -268,6 +268,32 @@ watch(championPool, pool => {
   --font-size-md: clamp(14px, calc(14px + (100vw - 1100px) * 4 / 1100), 18px);
   --font-size-lg: clamp(16px, calc(16px + (100vw - 1100px) * 4 / 1100), 20px);
   --font-size-xl: clamp(18px, calc(18px + (100vw - 1100px) * 5 / 1100), 23px);
+
+  /* ===== 金工 2.0 迁移桥：旧 token 名 → 奥术金工 token（var() 引用使深浅主题自动跟随） =====
+     让整块战绩模块（含子组件的 scoped 样式）在不逐文件改的前提下，
+     语义色/表面/边框/阴影统一落入 v3「Hextech Forge」语言：灰中性表面、
+     金工描边、金橙强调，替换旧玻璃白 + 亮橙。 */
+  --semantic-win: var(--win);
+  --semantic-loss: var(--loss);
+  --semantic-warn: var(--warn);
+  --semantic-win-bright: var(--win-bright);
+  --semantic-loss-bright: var(--loss-bright);
+  --accent-gold: var(--brand);
+  --accent-gold-deep: var(--brand-strong);
+  --accent-blue: var(--info);
+  --accent-sky: var(--info);
+  --bg-elevated: var(--bg-raised);
+  --glass-bg-low: var(--bg-hover);
+  --glass-bg-mid: var(--surface-card);
+  --glass-bg-high: var(--bg-active);
+  --glass-border: var(--border-strong);
+  --glass-highlight: none;
+  --shadow-sm: var(--shadow-1);
+  --shadow-md: var(--shadow-2);
+  --shadow-lg: var(--shadow-3);
+  --win-bar-gradient: linear-gradient(180deg, var(--win-bright), var(--win));
+  --loss-bar-gradient: linear-gradient(180deg, var(--loss-bright), var(--loss));
+
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -318,12 +344,12 @@ watch(championPool, pool => {
   border-bottom: 1px solid var(--border-subtle);
 }
 
-/* 窄窗抽屉触发按钮：内容区左上角悬浮，hover 高亮 */
+/* 窄窗抽屉触发按钮：内容区左上角悬浮，hover 金工描边 */
 .record-side-trigger {
   color: var(--text-secondary);
-  background: var(--glass-bg-mid);
-  border: 1px solid var(--glass-border);
-  box-shadow: var(--shadow-sm), var(--glass-highlight);
+  background: var(--bg-hover);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-1);
   transition:
     color var(--dur-fast) var(--ease-expo),
     border-color var(--dur-fast) var(--ease-expo),
@@ -332,7 +358,7 @@ watch(championPool, pool => {
 
 .record-side-trigger:hover {
   color: var(--text-primary);
-  border-color: var(--accent-gold-deep);
+  border-color: var(--brand-border);
   transform: scale(1.05);
 }
 
@@ -342,19 +368,20 @@ watch(championPool, pool => {
 }
 
 .record-side-drawer :deep(.n-drawer-content-wrapper) {
-  background: color-mix(in srgb, var(--bg-base) 96%, transparent);
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border-strong);
 }
 
-/* 回到顶部 FAB：右下角悬浮，glass 视觉与抽屉触发钮一致 */
+/* 回到顶部 FAB：右下角悬浮，raised 面与抽屉触发钮同风格 */
 .record-back-top {
   position: absolute;
   right: var(--space-8);
   bottom: var(--space-16);
   z-index: var(--z-dock); /* debug6:禁ad-hoc 30，dock档 */
   color: var(--text-secondary);
-  background: var(--glass-bg-mid);
-  border: 1px solid var(--glass-border);
-  box-shadow: var(--shadow-md), var(--glass-highlight);
+  background: var(--bg-hover);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-2);
   transition:
     color var(--dur-fast) var(--ease-expo),
     border-color var(--dur-fast) var(--ease-expo),
@@ -363,7 +390,7 @@ watch(championPool, pool => {
 
 .record-back-top:hover {
   color: var(--text-primary);
-  border-color: var(--accent-gold-deep);
+  border-color: var(--brand-border);
   transform: translateY(-2px);
 }
 

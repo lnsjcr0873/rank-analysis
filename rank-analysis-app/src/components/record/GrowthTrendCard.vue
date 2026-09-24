@@ -324,15 +324,15 @@ function polyPoints(values: number[]): string {
 }
 
 .curve-label-cs {
-  color: var(--semantic-win, #18a058);
+  color: var(--win);
 }
 
 .curve-label-death {
-  color: var(--semantic-loss, #d03050);
+  color: var(--loss);
 }
 
 .curve-label-fight {
-  color: var(--semantic-warn, #d08770);
+  color: var(--warn);
 }
 
 .curve-svg {
@@ -348,15 +348,15 @@ function polyPoints(values: number[]): string {
 }
 
 .curve-line-cs {
-  stroke: var(--semantic-win, #18a058);
+  stroke: var(--win);
 }
 
 .curve-line-death {
-  stroke: var(--semantic-loss, #d03050);
+  stroke: var(--loss);
 }
 
 .curve-line-fight {
-  stroke: var(--semantic-warn, #d08770);
+  stroke: var(--warn);
 }
 
 .curve-source {
