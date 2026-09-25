@@ -5,7 +5,7 @@ name: Patch Notes Data
 # 详细设计: docs/superpowers/specs/2026-07-18-cn-patch-notes-ai-pipeline-design.md
 on:
   schedule:
-    - cron: '0 */6 * * *' # 每 6 小时对一次 docid，未变则零成本跳过
+    - cron: "0 */6 * * *" # 每 6 小时对一次 docid，未变则零成本跳过
   workflow_dispatch:
 
 permissions:
@@ -31,7 +31,11 @@ jobs:
       - name: Run pipeline tests
         run: node --test scripts/patch-notes/*.test.mjs
 
+      # 仅主仓库有 GitHub Models 读取权限：fork 上 callModel 必然返回非 JSON
+      # （2026-09 起 fork 每 6h 定时失败噪音）。守卫跳过生成与推送，
+      # 但 pipeline 测试保留——无网络/模型依赖，fork 仍可自证脚本健康。
       - name: Generate patch notes data
+        if: github.repository == 'wnzzer/rank-analysis'
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/patch-notes/run.mjs
