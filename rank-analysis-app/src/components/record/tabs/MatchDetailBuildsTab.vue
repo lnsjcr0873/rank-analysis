@@ -435,7 +435,7 @@ const builds = computed<BuildCollection>(() => collectBuildEvents(ctx.sgpDetail.
   height: 12px;
   padding: 0 1px;
   border-radius: var(--radius-pill);
-  background: var(--bg-overlay-strong, rgba(0, 0, 0, 0.72));
+  background: var(--bg-sunken);
   color: var(--text-primary);
   font-size: var(--font-size-2xs); /* debug6:禁8px，10px起步 */
   line-height: 12px;

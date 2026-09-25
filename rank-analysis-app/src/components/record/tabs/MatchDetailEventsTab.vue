@@ -604,7 +604,7 @@ const visibleEvents = computed(() => {
 }
 
 .match-detail-events-stats-chip--kill {
-  color: var(--semantic-loss-bright, #e2686c);
+  color: var(--loss-bright);
   border-color: color-mix(in srgb, var(--semantic-loss) 45%, transparent);
 }
 
@@ -803,9 +803,9 @@ const visibleEvents = computed(() => {
   flex-direction: column;
   gap: var(--space-4);
   min-width: 0;
-  background: rgba(18, 22, 28, 0.45);
+  background: var(--surface-card);
   backdrop-filter: blur(8px);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-1);
 }
 
 .match-detail-events-card-head {

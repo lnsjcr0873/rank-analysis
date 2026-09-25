@@ -216,7 +216,7 @@ function nameOf(participantId: number): string {
   border-radius: var(--radius-sm);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
-  color: #fff;
+  color: var(--text-on-win);
 }
 
 .match-detail-ai-verdict-badge--win {
@@ -225,6 +225,7 @@ function nameOf(participantId: number): string {
 
 .match-detail-ai-verdict-badge--loss {
   background: var(--loss);
+  color: var(--text-on-loss);
 }
 
 .match-detail-ai-verdict-badge--neutral {

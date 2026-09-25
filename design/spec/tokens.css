@@ -93,6 +93,10 @@
   --text-secondary: rgba(232, 236, 242, 0.64);
   --text-tertiary: rgba(232, 236, 242, 0.44);
   --text-on-brand: #241a05;
+  /* 实心语义徽章（win/loss/warn 底）上的文字：两主题下底均为中深色，统一用近白 */
+  --text-on-win: #f4fbf8;
+  --text-on-loss: #fdf2f2;
+  --text-on-warn: #2a1604;
 
   /* 描边 */
   --border-subtle: rgba(255, 255, 255, 0.07);
@@ -215,6 +219,10 @@
   --text-secondary: rgba(35, 40, 46, 0.64);
   --text-tertiary: rgba(35, 40, 46, 0.45);
   --text-on-brand: #fffdf8;
+  /* 实心语义徽章底上的文字：浅色下 win/loss 为深色，warn 为铜棕，统一近白/浅色 */
+  --text-on-win: #fbfdfc;
+  --text-on-loss: #fbf5f5;
+  --text-on-warn: #fdf6ec;
 
   --border-subtle: rgba(60, 50, 30, 0.1);
   --border-strong: rgba(60, 50, 30, 0.2);

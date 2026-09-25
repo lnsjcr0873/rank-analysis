@@ -34,22 +34,22 @@
   content: '🎯';
 }
 .ai-report h2.ai-section--effort {
-  border-left-color: var(--semantic-win);
-  color: var(--semantic-win);
+  border-left-color: var(--win);
+  color: var(--win);
 }
 .ai-report h2.ai-section--effort::before {
   content: '💪';
 }
 .ai-report h2.ai-section--blame {
-  border-left-color: var(--semantic-loss);
-  color: var(--semantic-loss);
+  border-left-color: var(--loss);
+  color: var(--loss);
 }
 .ai-report h2.ai-section--blame::before {
   content: '⚠';
 }
 .ai-report h2.ai-section--crushed {
-  border-left-color: var(--semantic-warn);
-  color: var(--semantic-warn);
+  border-left-color: var(--warn);
+  color: var(--warn);
 }
 .ai-report h2.ai-section--crushed::before {
   content: '🩹';
@@ -66,8 +66,8 @@
 .ai-report h2.ai-section--verdict + p {
   margin: var(--space-8) 0 0;
   padding: var(--space-12) var(--space-16);
-  background: var(--glass-bg-mid);
-  border: 1px solid var(--border-subtle);
+  background: var(--surface-card);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
   font-size: var(--font-size-lg);
   font-weight: var(--font-weight-medium);
@@ -85,19 +85,19 @@
 .ai-report li {
   margin: var(--space-6) 0;
   padding: var(--space-6) var(--space-12);
-  border-left: 2px solid var(--border-subtle);
+  border-left: 2px solid var(--border-strong);
   border-radius: var(--radius-sm);
-  background: var(--glass-bg-low);
+  background: var(--bg-hover);
 }
 
 .ai-report h2.ai-section--effort + ul li {
-  border-left-color: var(--semantic-win);
+  border-left-color: var(--win);
 }
 .ai-report h2.ai-section--blame + ul li {
-  border-left-color: var(--semantic-loss);
+  border-left-color: var(--loss);
 }
 .ai-report h2.ai-section--crushed + ul li {
-  border-left-color: var(--semantic-warn);
+  border-left-color: var(--warn);
 }
 .ai-report h2.ai-section--evidence + ul li {
   border-left-color: var(--text-tertiary);
@@ -111,7 +111,7 @@
 .ai-report .ai-num {
   padding: 0 var(--space-4);
   border-radius: var(--radius-xs);
-  background: var(--glass-bg-high);
+  background: var(--bg-active);
   font-weight: var(--font-weight-semibold);
   color: var(--text-primary);
 }
@@ -125,8 +125,8 @@
 .ai-report blockquote {
   margin: var(--space-8) 0;
   padding: var(--space-8) var(--space-12);
-  border-left: 3px solid var(--semantic-warn);
-  background: var(--glass-bg-low);
+  border-left: 3px solid var(--warn);
+  background: var(--bg-hover);
   color: var(--text-secondary);
   font-size: var(--font-size-sm);
 }

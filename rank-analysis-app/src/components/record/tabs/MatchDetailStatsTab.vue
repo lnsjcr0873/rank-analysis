@@ -441,9 +441,9 @@ onMounted(() => {
   overflow-x: auto;
   border: 1px solid color-mix(in srgb, var(--border-subtle) 90%, transparent);
   border-radius: var(--radius-lg);
-  background: rgba(18, 22, 28, 0.45);
+  background: var(--surface-card);
   backdrop-filter: blur(10px);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-2);
 }
 
 .theme-light .match-detail-stats-scroll {
@@ -467,7 +467,7 @@ onMounted(() => {
   font-weight: 700;
   letter-spacing: 0.08em;
   color: var(--accent-gold);
-  background: rgba(245, 158, 11, 0.08);
+  background: var(--brand-soft);
   border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 60%, transparent);
 }
 
@@ -495,7 +495,7 @@ onMounted(() => {
   flex-shrink: 0;
   width: 140px;
   padding: var(--space-6) var(--space-12);
-  background: rgba(22, 27, 34, 0.95);
+  background: var(--bg-sunken);
   backdrop-filter: blur(8px);
   border-right: 1px solid var(--border-subtle);
 }

@@ -492,14 +492,14 @@ function playerTier(player: DetailPlayer) {
   border: 1px solid color-mix(in srgb, var(--border-subtle) 90%, transparent);
   border-radius: var(--radius-lg);
   overflow: hidden;
-  background: rgba(18, 22, 28, 0.45);
+  background: var(--surface-card);
   backdrop-filter: blur(10px);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-2);
 }
 
 .theme-light .match-detail-team-card {
   background: var(--bg-elevated);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow-1);
 }
 
 /* 队伍标签行：色点 + 色字 + 数据胶囊 */
@@ -1066,18 +1066,18 @@ function playerTier(player: DetailPlayer) {
 
 /* 三色与旧图标底色同系：输出琥珀 / 承伤蓝 / 治疗绿 */
 .match-detail-bar-fill--damage {
-  background: linear-gradient(90deg, #f59e0b, #ef4444);
-  box-shadow: 0 0 6px rgba(239, 68, 68, 0.35);
+  background: linear-gradient(90deg, var(--warn), var(--loss));
+  box-shadow: 0 0 6px var(--loss-border);
 }
 
 .match-detail-bar-fill--taken {
-  background: linear-gradient(90deg, #3b82f6, #6366f1);
-  box-shadow: 0 0 6px rgba(99, 102, 241, 0.35);
+  background: linear-gradient(90deg, var(--info), var(--info-strong));
+  box-shadow: 0 0 6px var(--info-border);
 }
 
 .match-detail-bar-fill--heal {
-  background: linear-gradient(90deg, #10b981, #059669);
-  box-shadow: 0 0 6px rgba(16, 185, 129, 0.35);
+  background: linear-gradient(90deg, var(--win), var(--win-bright));
+  box-shadow: 0 0 6px var(--win-border);
 }
 
 @media (max-width: 1100px) {

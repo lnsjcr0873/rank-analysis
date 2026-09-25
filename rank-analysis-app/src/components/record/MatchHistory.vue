@@ -1040,6 +1040,23 @@ watch(
 }
 .mt-group--data .toolbar-collect {
   font-weight: var(--font-weight-semibold);
+  color: var(--text-on-brand);
+  background: var(--brand-gradient) !important;
+  border-color: transparent !important;
+
+  /* 回归安全网：无 transition 时点击态立即生效，不依赖过渡时长 */
+  transition:
+    filter var(--dur-fast) var(--ease-expo),
+    box-shadow var(--dur-fast) var(--ease-expo);
+}
+
+.mt-group--data .toolbar-collect:hover:not(:disabled) {
+  filter: brightness(1.08);
+  box-shadow: 0 0 12px var(--glow-brand);
+}
+
+.mt-group--data .toolbar-collect:disabled {
+  opacity: 0.45;
 }
 
 .match-history-list {

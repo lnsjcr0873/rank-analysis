@@ -51,7 +51,7 @@ const props = withDefaults(
     tooltip: '',
     shortLabel: '',
     value: '--',
-    iconBackground: 'rgba(0, 0, 0, 0.08)',
+    iconBackground: 'var(--bg-hover)',
     iconSize: 11,
     compact: false
   }
@@ -107,7 +107,7 @@ const iconStyle = computed<CSSProperties>(() => ({
 
 .theme-light .stat-dot {
   /* 冷墨基调，避免纯黑 alpha 在彩色卡面上发灰发脏 */
-  background: rgba(20, 30, 35, 0.2);
+  background: var(--bg-hover);
 }
 
 .stat-dot-filled {

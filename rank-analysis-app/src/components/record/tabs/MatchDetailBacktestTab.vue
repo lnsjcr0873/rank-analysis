@@ -193,8 +193,8 @@ function deltaClass(v: number): string {
 .match-detail-backtest-stats {
   padding: 8px 10px;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--surface-card);
+  border: 1px solid var(--border-strong);
 }
 .match-detail-backtest-stats-title {
   font-size: 11px;
@@ -203,7 +203,7 @@ function deltaClass(v: number): string {
 }
 .match-detail-backtest-pending {
   font-size: 11px;
-  color: #d9b36a;
+  color: var(--brand);
   margin-bottom: 6px;
 }
 .match-detail-backtest-stats-rows {
@@ -232,7 +232,7 @@ function deltaClass(v: number): string {
   gap: 12px;
   padding: 10px 14px;
   border-radius: var(--radius-lg);
-  background: rgba(18, 22, 28, 0.45);
+  background: var(--surface-card);
   border: 1px solid color-mix(in srgb, var(--border-subtle) 90%, transparent);
   backdrop-filter: blur(8px);
 }
@@ -271,24 +271,24 @@ function deltaClass(v: number): string {
   border-radius: var(--radius-pill);
 }
 .match-detail-backtest-badge.is-adopted {
-  background: rgba(99, 226, 183, 0.16);
-  color: #57d9a3;
-  border: 1px solid rgba(87, 217, 163, 0.35);
+  background: var(--win-soft);
+  color: var(--win-bright);
+  border: 1px solid var(--win-border);
 }
 .match-detail-backtest-badge.is-skipped {
-  background: rgba(224, 122, 122, 0.14);
-  color: #e07a7a;
-  border: 1px solid rgba(224, 122, 122, 0.35);
+  background: var(--loss-soft);
+  color: var(--loss-bright);
+  border: 1px solid var(--loss-border);
 }
 .match-detail-backtest-win {
   font-size: 12px;
   font-weight: 600;
 }
 .match-detail-backtest-win.is-win {
-  color: #57d9a3;
+  color: var(--win-bright);
 }
 .match-detail-backtest-win.is-lose {
-  color: #e07a7a;
+  color: var(--loss-bright);
 }
 .match-detail-backtest-metrics {
   display: flex;
@@ -296,7 +296,7 @@ function deltaClass(v: number): string {
   gap: 6px;
   padding: 10px 14px;
   border-radius: var(--radius-lg);
-  background: rgba(18, 22, 28, 0.45);
+  background: var(--surface-card);
   border: 1px solid color-mix(in srgb, var(--border-subtle) 90%, transparent);
   backdrop-filter: blur(8px);
 }
@@ -313,10 +313,10 @@ function deltaClass(v: number): string {
   color: var(--n-text-color-2, #ccc);
 }
 .match-detail-backtest-metric-value.is-pos {
-  color: #57d9a3;
+  color: var(--win-bright);
 }
 .match-detail-backtest-metric-value.is-neg {
-  color: #e07a7a;
+  color: var(--loss-bright);
 }
 .match-detail-backtest-caveats {
   list-style: none;

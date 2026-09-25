@@ -307,20 +307,20 @@ function scoreLevel(total: number) {
 .match-detail-score-team {
   border-radius: var(--radius-lg);
   padding: 10px 14px;
-  background: rgba(18, 22, 28, 0.45);
+  background: var(--surface-card);
   border: 1px solid color-mix(in srgb, var(--border-subtle) 90%, transparent);
   backdrop-filter: blur(10px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--shadow-2);
 }
 .match-detail-score-team--win {
   box-shadow:
     inset 3px 0 0 var(--semantic-win),
-    0 4px 16px rgba(16, 185, 129, 0.1);
+    0 4px 16px var(--win-soft);
 }
 .match-detail-score-team--lose {
   box-shadow:
     inset 3px 0 0 var(--semantic-loss),
-    0 4px 16px rgba(239, 68, 68, 0.1);
+    0 4px 16px var(--loss-soft);
 }
 .match-detail-score-team-header {
   display: flex;
@@ -349,14 +349,14 @@ function scoreLevel(total: number) {
   align-items: center;
   gap: 8px;
   padding: 5px 0;
-  border-bottom: 1px dashed rgba(255, 255, 255, 0.06);
+  border-bottom: 1px dashed var(--border-strong);
   cursor: pointer;
 }
 .match-detail-score-row:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--bg-hover);
 }
 .match-detail-score-row--open {
-  background: rgba(99, 226, 183, 0.06);
+  background: var(--win-soft);
 }
 .match-detail-score-row:last-child {
   border-bottom: none;
@@ -379,8 +379,8 @@ function scoreLevel(total: number) {
 .match-detail-score-drilldown {
   margin: 2px 0 8px 24px;
   padding: 6px 10px;
-  border-left: 2px solid rgba(245, 158, 11, 0.5);
-  background: rgba(255, 255, 255, 0.02);
+  border-left: 2px solid var(--brand-border);
+  background: var(--surface-card);
   border-radius: 0 6px 6px 0;
 }
 .match-detail-score-drilldown-note {
@@ -417,10 +417,10 @@ function scoreLevel(total: number) {
   text-align: right;
 }
 .match-detail-score-drilldown-delta.is-neg {
-  color: #e07a7a;
+  color: var(--loss-bright);
 }
 .match-detail-score-drilldown-delta.is-pos {
-  color: #57d9a3;
+  color: var(--win-bright);
 }
 .match-detail-score-rank {
   width: 16px;
@@ -431,18 +431,18 @@ function scoreLevel(total: number) {
   font-size: 10px;
   padding: 1px 6px;
   border-radius: 4px;
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.3), rgba(180, 83, 9, 0.5));
-  border: 1px solid rgba(245, 158, 11, 0.6);
-  color: #fbbf24;
+  background: var(--brand-gradient);
+  border: 1px solid var(--brand-border);
+  color: var(--brand);
   font-weight: 800;
   font-style: italic;
   letter-spacing: 0.04em;
-  box-shadow: 0 0 8px rgba(245, 158, 11, 0.35);
+  box-shadow: 0 0 8px var(--glow-brand);
 }
 .match-detail-score-mvp.is-svp {
-  background: linear-gradient(135deg, rgba(148, 163, 184, 0.25), rgba(71, 85, 105, 0.4));
-  border: 1px solid rgba(148, 163, 184, 0.5);
-  color: #cbd5e1;
+  background: linear-gradient(135deg, var(--surface-card), var(--bg-hover));
+  border: 1px solid var(--border-strong);
+  color: var(--text-secondary);
   box-shadow: none;
 }
 .match-detail-score-player {
@@ -463,13 +463,13 @@ function scoreLevel(total: number) {
   font-family: 'Space Mono', 'Bahnschrift', monospace;
 }
 .match-detail-score-total--s {
-  color: #ffd76b;
+  color: var(--brand);
 }
 .match-detail-score-total--a {
-  color: #57d9a3;
+  color: var(--win-bright);
 }
 .match-detail-score-total--b {
-  color: #e8c06583;
+  color: var(--brand);
 }
 .match-detail-score-total--c {
   color: var(--n-text-color-3, #999);
@@ -494,7 +494,7 @@ function scoreLevel(total: number) {
 .match-detail-score-bar-track {
   height: 4px;
   border-radius: 2px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--bg-active);
   overflow: hidden;
 }
 .match-detail-score-bar-fill {

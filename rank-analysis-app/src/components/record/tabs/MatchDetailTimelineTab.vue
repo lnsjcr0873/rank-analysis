@@ -423,9 +423,9 @@ const gridLines = computed(() => {
   display: block;
   border: 1px solid color-mix(in srgb, var(--border-subtle) 90%, transparent);
   border-radius: var(--radius-lg);
-  background: rgba(18, 22, 28, 0.45);
+  background: var(--surface-card);
   backdrop-filter: blur(10px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--shadow-2);
 }
 
 .match-detail-timeline-grid {
