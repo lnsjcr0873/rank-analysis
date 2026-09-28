@@ -16,6 +16,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { useSessionSync } from './useSessionSync'
 import { gameSummoner } from './useGameState'
 import { getSharedAssistScheduler } from '@renderer/features/mayhem/trigger'
+import { prewarmMayhemOcr } from '@renderer/features/mayhem/services/mayhemOcr'
 import { getNextActions, type NextAction } from '@renderer/services/nextAction'
 import type { SessionData } from '@renderer/types/domain/gaming'
 import { getConfigByIpc } from '@renderer/services/ipc'
@@ -91,16 +92,35 @@ async function pollNextActions(sessionData: SessionData): Promise<void> {
   }
 }
 
+/**
+ * 海克斯大乱斗队列 ID 集合。
+ *
+ * 与 `command/mayhem.rs::mayhem_draft_context` 的 `[2400, 2410, 2450]` 口径一致。
+ * 旧代码只认 2400，变体队列（2410 / 2450）进大乱斗时监听根本不会启动。
+ */
+const MAYHEM_QUEUE_IDS = [2400, 2410, 2450]
+
+/** 是否大乱斗队列 */
+export function isMayhemQueue(queueId: number): boolean {
+  return MAYHEM_QUEUE_IDS.includes(queueId)
+}
+
 async function startMayhemAssistIfNeeded(queueId: number): Promise<void> {
-  if (queueId === 2400) {
-    if (await isMayhemAssistEnabled()) {
-      const s = getSharedAssistScheduler()
-      if (!s.running) {
-        s.start()
-      }
-    } else {
-      stopMayhemAssist()
-    }
+  if (!isMayhemQueue(queueId)) {
+    stopMayhemAssist()
+    return
+  }
+  if (!(await isMayhemAssistEnabled())) {
+    stopMayhemAssist()
+    return
+  }
+  const s = getSharedAssistScheduler()
+  if (!s.running) {
+    s.start()
+    // 全局自动启动路径此前**不预热 OCR**：`assist_tick` 用
+    // `ModelDownloadMode::Never`，模型没就绪只会一直返回 ocr-warming-up，
+    // 表现为进大乱斗后推荐永不出现。预热必须与启动监听同路径。
+    void prewarmMayhemOcr()
   }
 }
 
@@ -143,10 +163,11 @@ export function setLiveGamePollDisabled(disabled: boolean): void {
 /** 动态响应设置变更：禁用/启用大乱斗 3 选 1 推荐 */
 export function setMayhemAssistEnabled(enabled: boolean): void {
   if (enabled) {
-    if (currentSessionData?.phase === 'InProgress' && currentSessionData.queueId === 2400) {
+    if (currentSessionData?.phase === 'InProgress' && isMayhemQueue(currentSessionData.queueId)) {
       const s = getSharedAssistScheduler()
       if (!s.running) {
         s.start()
+        void prewarmMayhemOcr()
       }
     }
   } else {
@@ -179,11 +200,7 @@ function ensureInGameLoop(sessionData: SessionData): void {
         }
       }
       // 仅在已开启大乱斗 3 选 1 推荐时启动调度器
-      if (queueId === 2400) {
-        await startMayhemAssistIfNeeded(queueId)
-      } else {
-        stopMayhemAssist()
-      }
+      await startMayhemAssistIfNeeded(queueId)
       // AI 搭子桥：对局进行中按需启动
       startLiveBridge()
     } else {

@@ -19,6 +19,7 @@
 pub mod capture;
 pub mod client;
 pub mod db;
+pub mod detector;
 #[cfg(feature = "ocr-rapid")]
 pub mod engine_rapid;
 pub mod ocr;

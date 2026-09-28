@@ -16,7 +16,8 @@ import {
   type MyAugmentStat,
   type ChampionDetailEntry
 } from '../services/mayhemData'
-import { getSharedAssistScheduler, type AssistTick } from '../trigger'
+import { getSharedAssistScheduler, onSharedAssistTick, type AssistTick } from '../trigger'
+import { prewarmMayhemOcr } from '../services/mayhemOcr'
 import { setOverlayClickThrough } from '@renderer/features/overlay/panels'
 import { putConfigByIpc } from '@renderer/services/ipc'
 import { CONFIG_KEYS } from '@renderer/services/configKeys'
@@ -183,6 +184,17 @@ export const useMayhemStore = defineStore('mayhem', () => {
   const assistRunning = ref(false)
   const lastAssistTick = ref<AssistTick | null>(null)
 
+  /**
+   * 把共享调度器的每轮状态写进 store。
+   *
+   * 此前 `lastAssistTick` 只有声明、没有任何写入点，诊断台恒为「未开始」——
+   * 三选一不弹时用户拿不到任何原因（note / reason / 各带 z 分数）。订阅后
+   * Mayhem 页能实时显示判定依据，标定不再靠猜。
+   */
+  onSharedAssistTick(tick => {
+    lastAssistTick.value = tick
+  })
+
   /** OCR 模型预热中（下载 rec 模型 + 建 session）。assist_tick 快路径永不下载，预热必须提前。 */
   const ocrWarmingUp = ref(false)
 
@@ -191,11 +203,13 @@ export const useMayhemStore = defineStore('mayhem', () => {
     if (!s.running) {
       void setOverlayClickThrough(true).catch(() => {})
       s.start()
-      assistRunning.value = true
       // OCR 预热提前到监听启动时：后台下载，不阻塞首轮 tick。
       // fire-and-forget：失败由 tick 的 ocr-warming-up 兜底展示。
       void prewarmOcr()
     }
+    // 全局自动启动路径（useInGameServices）可能已经把它跑起来了，
+    // 按钮状态必须以调度器真实状态为准，否则会出现「已在监听却显示未开启」。
+    assistRunning.value = true
   }
 
   /**
@@ -203,23 +217,9 @@ export const useMayhemStore = defineStore('mayhem', () => {
    */
   async function prewarmOcr(): Promise<void> {
     if (ocrWarmingUp.value) return
-    try {
-      const { invoke } = await import('@tauri-apps/api/core')
-      const status = (await invoke('mayhem_ocr_status')) as { ready?: boolean }
-      if (status.ready) return
-    } catch {
-      // 未编译 OCR 的构建无此命令：直接跳过，不影响手动三选一
-      return
-    }
-    ocrWarmingUp.value = true
-    try {
-      const { invoke } = await import('@tauri-apps/api/core')
-      await invoke('mayhem_ocr_prewarm')
-    } catch (e) {
-      console.warn('[mayhemStore] OCR 预热失败（tick 会报 ocr-warming-up，可重试）:', e)
-    } finally {
-      ocrWarmingUp.value = false
-    }
+    await prewarmMayhemOcr(w => {
+      ocrWarmingUp.value = w
+    })
   }
 
   function stopAssist(): void {

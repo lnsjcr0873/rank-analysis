@@ -40,6 +40,16 @@
       </template>
     </PageStage>
 
+    <div v-if="lastTick" class="m-tick" :class="`m-tick--${lastTick.mode}`">
+      <span class="m-tick__note">{{ lastTick.note }}</span>
+      <span class="m-tick__meta">
+        第 {{ lastTick.currentRound }}/4 轮 · 等级 {{ lastTick.level ?? '--' }} · 活跃卡位
+        {{ lastTick.activeSlots }}/3 · 最大 z {{ lastTick.maxScore?.toFixed(2) ?? '--' }} ·
+        {{ lastTick.ready ? '基线已就绪' : '基线学习中' }}
+        <template v-if="lastTick.reason"> · {{ lastTick.reason }}</template>
+      </span>
+    </div>
+
     <div class="m-body">
       <div v-if="changeBanner" class="m-changes">
         <span>

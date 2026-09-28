@@ -47,6 +47,18 @@ pub struct BandStat {
     pub rect: Rect,
     /// 亮度标准差（0-255）：纯色≈0，文字/图标内容显著更高
     pub stddev: f64,
+    /// 平均亮度（0-255）
+    pub mean: f64,
+    /// 近白像素占比（0-1）：UI 文字/描边的特征，游戏地形很少达到
+    pub white: f64,
+    /// 自校准基线差分判定：当前是否判为「三选一卡片在画面上」
+    pub active: bool,
+    /// 该卡位的最大稳健 z 分数（>= [`crate::mayhem::detector::SCORE_MIN`] 即 active）
+    pub score: f64,
+    /// stddev 自身的滚动中位数基线（未成熟时为 null），供 UI 观测标定
+    pub baseline: Option<f64>,
+    /// 基线是否已成熟到可以下判定
+    pub ready: bool,
 }
 
 /// RGBA 缓冲的亮度标准差（Rec.601 亮度）。
@@ -69,9 +81,58 @@ pub fn luma_stddev(rgba: &[u8]) -> f64 {
     variance.max(0.0).sqrt()
 }
 
+/// 单个卡位的原始观测量（[`crate::mayhem::detector`] 的输入）。
+///
+/// 只描述「这一小块画面长什么样」，不含任何时间/判定逻辑，因此可单测。
+#[derive(Debug, Clone, Copy, PartialEq, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BandFeatures {
+    /// 亮度标准差
+    pub stddev: f64,
+    /// 平均亮度
+    pub mean: f64,
+    /// 近白像素占比
+    pub white: f64,
+}
+
+/// 提取单带的原始观测量。
+///
+/// `white` 取「三通道最小值 ≥ [`WHITE_LEVEL`]」的像素占比：三选一卡片的标题字与
+/// 发光描边是纯白系 UI 元素，而游戏地形/特效极少出现整像素接近纯白。
+pub fn band_features(rgba: &[u8]) -> BandFeatures {
+    let n = rgba.len() / 4;
+    if n == 0 {
+        return BandFeatures::default();
+    }
+    let mut sum = 0f64;
+    let mut sq = 0f64;
+    let mut white = 0usize;
+    for px in rgba.as_chunks::<4>().0 {
+        let l = 0.299 * px[0] as f64 + 0.587 * px[1] as f64 + 0.114 * px[2] as f64;
+        sum += l;
+        sq += l * l;
+        if px[0] >= WHITE_LEVEL && px[1] >= WHITE_LEVEL && px[2] >= WHITE_LEVEL {
+            white += 1;
+        }
+    }
+    let mean = sum / n as f64;
+    let variance = ((sq / n as f64) - mean * mean).max(0.0);
+    BandFeatures {
+        stddev: variance.sqrt(),
+        mean,
+        white: white as f64 / n as f64,
+    }
+}
+
+/// 近白判定阈值（三通道最小值）。
+pub const WHITE_LEVEL: u8 = 235;
+
 /// 抓取并分析三张卡的标题带。
 ///
 /// `grab` 为注入的截屏函数（生产传 GDI，测试传合成缓冲），使本层完全可测。
+///
+/// 只算原始观测量，**不**做活跃判定——判定属于 [`crate::mayhem::detector`]
+/// （需要跨帧基线，纯函数层无法承担）。
 pub fn analyze_bands(
     screen: (i32, i32),
     grab: &dyn Fn(i32, i32, i32, i32) -> Result<Vec<u8>, String>,
@@ -81,10 +142,17 @@ pub fn analyze_bands(
         .enumerate()
         .map(|(i, r)| {
             let rgba = grab(r.x, r.y, r.w, r.h)?;
+            let f = band_features(&rgba);
             Ok(BandStat {
                 slot: i as u8,
                 rect: *r,
-                stddev: luma_stddev(&rgba),
+                stddev: f.stddev,
+                mean: f.mean,
+                white: f.white,
+                active: false,
+                score: 0.0,
+                baseline: None,
+                ready: false,
             })
         })
         .collect()

@@ -270,6 +270,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             command::mayhem::mayhem_slot_band_rects,
             command::mayhem::mayhem_score_preview,
             command::mayhem::mayhem_capture_band_stats,
+            command::mayhem::mayhem_detector_reset,
             command::mayhem::mayhem_capture_band_dump,
             command::mayhem::mayhem_gameflow_phase,
             command::mayhem::mayhem_capabilities,

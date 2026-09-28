@@ -4,16 +4,18 @@
 //! `assist_tick`。OCR 引擎尚未接入时，tick 返回 `pushed:false` 与明确原因——
 //! 前端调度器据此只报告不推送；引擎落地后仅需替换 [`recognize_bands`] 的实现。
 //!
-//! 检测阈值常量在此定义（Rust 侧权威）；前端 trigger.ts 的同名常量仅用于
-//! UI 展示，两者需保持一致。
+//! 「三选一是否出现」的判定已迁至 [`super::detector`]（自校准基线差分）：
+//! 本模块不再持有任何绝对亮度阈值——旧的 `BAND_ACTIVE_THRESHOLD = 18` 在真实
+//! 游戏画面上恒成立，等于没有判定。前端 trigger.ts 同理，只消费后端给出的
+//! `active` / `present`，不再自行比较数值。
 
 use serde::Serialize;
 use serde_json::Value;
 
-/// 标题带亮度标准差阈值（0-255）。与前端 BAND_ACTIVE_THRESHOLD 保持一致。
-pub const BAND_ACTIVE_THRESHOLD: f64 = 18.0;
-/// 判定「三选一出现」所需的活跃标题带数。与前端 ACTIVE_SLOTS_REQUIRED 一致。
-pub const ACTIVE_SLOTS_REQUIRED: usize = 2;
+/// 判定「三选一出现」所需的活跃卡位数（三选一恒为 3 张卡）。
+///
+/// 权威定义在 [`super::detector::REQUIRED_SLOTS`]，此处仅为调用方引用方便。
+pub use super::detector::REQUIRED_SLOTS as ACTIVE_SLOTS_REQUIRED;
 
 /// 一次 assist tick 的结果（前端据此决定是否推送面板）。
 #[derive(Debug, Serialize)]
@@ -28,15 +30,6 @@ pub struct TickOutcome {
     /// 推送成功时的三选一面板负载（契约见 features/overlay/panels.ts）
     #[serde(skip_serializing_if = "Option::is_none")]
     pub payload: Option<Value>,
-}
-
-/// 由标题带统计做检测判定（纯函数）。
-pub fn detect_from_stats(stats: &[super::capture::BandStat]) -> bool {
-    stats
-        .iter()
-        .filter(|s| s.stddev.is_finite() && s.stddev >= BAND_ACTIVE_THRESHOLD)
-        .count()
-        >= ACTIVE_SLOTS_REQUIRED
 }
 
 /// 对三个卡位的文本跑「词表匹配 → 打分」并组装面板负载。
@@ -88,7 +81,7 @@ mod tests {
     use super::*;
     use crate::mayhem::capture::{BandStat, Rect};
 
-    fn band(slot: u8, stddev: f64) -> BandStat {
+    fn band(slot: u8, active: bool) -> BandStat {
         BandStat {
             slot,
             rect: Rect {
@@ -97,27 +90,32 @@ mod tests {
                 w: 10,
                 h: 10,
             },
-            stddev,
+            stddev: 88.0,
+            mean: 200.0,
+            white: 0.01,
+            active,
+            score: if active { 4.0 } else { 0.2 },
+            baseline: Some(80.0),
+            ready: true,
         }
     }
 
+    /// 判定只看后端给出的 `active`，且三选一恒为 3 张卡 → 必须 3/3 成立。
     #[test]
-    fn detection_should_require_two_active_bands() {
-        assert!(!detect_from_stats(&[
-            band(0, 30.0),
-            band(1, 5.0),
-            band(2, 4.0)
-        ]));
-        assert!(detect_from_stats(&[
-            band(0, BAND_ACTIVE_THRESHOLD),
-            band(1, 99.0),
-            band(2, 0.0)
-        ]));
-        // 阈值边界：恰好等于阈值算活跃
-        assert!(detect_from_stats(&[
-            band(0, BAND_ACTIVE_THRESHOLD),
-            band(1, BAND_ACTIVE_THRESHOLD)
-        ]));
-        assert!(!detect_from_stats(&[]));
+    fn detection_requires_all_three_slots() {
+        let count = |v: [bool; 3]| v.iter().filter(|a| **a).count();
+        assert!(count([true, true, true]) >= ACTIVE_SLOTS_REQUIRED);
+        // 旧口径（≥2 带）在这里会误判：普通游戏画面三带 stddev 高达 88
+        assert!(count([true, true, false]) < ACTIVE_SLOTS_REQUIRED);
+        assert!(count([true, false, false]) < ACTIVE_SLOTS_REQUIRED);
+        assert_eq!(ACTIVE_SLOTS_REQUIRED, 3);
+    }
+
+    #[test]
+    fn band_stat_carries_detector_verdict_not_threshold_math() {
+        // 高 stddev 本身不再意味着 active：判定权归 detector
+        let s = band(0, false);
+        assert!(s.stddev > 18.0);
+        assert!(!s.active);
     }
 }

@@ -315,10 +315,11 @@ pub fn mayhem_slot_band_rects() -> Result<Vec<crate::mayhem::capture::Rect>, Str
     Ok(rects.to_vec())
 }
 
-/// 抓取三张卡的标题带并计算亮度标准差（A3 触发时机启发式）。
+/// 抓取三张卡的标题带观测量，并给出**自校准基线差分**的活跃判定。
 ///
-/// 纯色画面 stddev≈0；出现强化卡文字/图标后显著升高。OCR 引擎接入前，
-/// 这是判断「三选一是否出现」的唯一信号源（阈值由前端 trigger 层持有）。
+/// 判定口径在 [`crate::mayhem::detector`]：不再有「stddev ≥ 18」这种绝对阈值
+/// （实测无面板时游戏画面就有 42~88，等于恒真）。返回的 `active` / `score` /
+/// `baseline` / `ready` 让前端与诊断台直接看到判定依据，标定不再靠猜。
 #[tauri::command]
 pub async fn mayhem_capture_band_stats() -> Result<Vec<crate::mayhem::capture::BandStat>, String> {
     if let Ok(v) = crate::config::get_config("settings.mayhem.captureEnabled").await {
@@ -333,26 +334,41 @@ pub async fn mayhem_capture_band_stats() -> Result<Vec<crate::mayhem::capture::B
     {
         // 优先走 DXGI 硬件直通 + 500ms 时间阀门抓包围盒，必要时回退 GDI
         use crate::mayhem::capture::{
-            capture_screen_region, luma_stddev, slice_union_sub, slot_band_union_rect,
+            capture_screen_region, slice_union_sub, slot_band_union_rect,
         };
         let screen = crate::mayhem::capture::gdi::primary_screen_size();
         let (union_rect, rects) = slot_band_union_rect(screen);
         let full = capture_screen_region(union_rect.x, union_rect.y, union_rect.w, union_rect.h)?;
-        Ok(rects
+        let mut feats = [crate::mayhem::capture::BandFeatures::default(); 3];
+        for (i, r) in rects.iter().enumerate() {
+            feats[i] =
+                crate::mayhem::capture::band_features(&slice_union_sub(&full.rgba, union_rect, *r));
+        }
+        let det = crate::mayhem::detector::observe_shared(feats);
+        Ok(det
+            .bands
             .iter()
-            .enumerate()
-            .map(|(i, r)| {
-                let sub = slice_union_sub(&full.rgba, union_rect, *r);
-                crate::mayhem::capture::BandStat {
-                    slot: i as u8,
-                    rect: *r,
-                    stddev: luma_stddev(&sub),
-                }
+            .map(|b| crate::mayhem::capture::BandStat {
+                slot: b.slot,
+                rect: rects[b.slot as usize],
+                stddev: b.features.stddev,
+                mean: b.features.mean,
+                white: b.features.white,
+                active: b.active,
+                score: b.score,
+                baseline: det.ready.then_some(b.baseline[0]),
+                ready: det.ready,
             })
             .collect())
     }
     #[cfg(not(windows))]
     Err("屏幕捕获仅支持 Windows".to_string())
+}
+
+/// 重置自校准基线（换局 / 每轮强化推进后调用，清掉上一轮的滚动基线）。
+#[tauri::command]
+pub fn mayhem_detector_reset() {
+    crate::mayhem::detector::reset_shared();
 }
 
 /// 选人期上下文（A2）：队列 ID + 我方阵容 + bench 候选。
@@ -586,7 +602,7 @@ pub async fn mayhem_assist_tick(
     #[cfg(all(windows, feature = "ocr-rapid"))]
     let out: Result<Value, String> = {
         use crate::mayhem::capture::{
-            capture_screen_region, luma_stddev, slice_union_sub, slot_band_union_rect,
+            capture_screen_region, slice_union_sub, slot_band_union_rect,
         };
 
         // 快路径永不下载：模型没下好直接报预热中，不抓屏不推理，
@@ -602,11 +618,10 @@ pub async fn mayhem_assist_tick(
         let screen = crate::mayhem::capture::gdi::primary_screen_size();
         let (union_rect, rects) = slot_band_union_rect(screen);
         let full = capture_screen_region(union_rect.x, union_rect.y, union_rect.w, union_rect.h)?;
-        // 两阶段：先对三槽做低成本 luma 门控，无画面直接返回（0 OCR）；
-        // 确认有画面后，只对 active 的槽跑推理，inactive 槽保持 None。
+        // 先切出三卡子带（纯内存，无系统调用），再交给自校准基线差分检测器判定
+        // 「三选一面板是否真的在场」——不再拿绝对亮度阈值当判据。
         let mut subs: [Option<Vec<u8>>; 3] = [None, None, None];
-        let mut slot_active = [false; 3];
-        let mut active_slots = 0usize;
+        let mut feats = [crate::mayhem::capture::BandFeatures::default(); 3];
 
         for (i, r) in rects.iter().enumerate() {
             let sub_rgba = slice_union_sub(&full.rgba, union_rect, *r);
@@ -614,14 +629,26 @@ pub async fn mayhem_assist_tick(
                 log::warn!("[assist] 卡位 {i} 切片为空，跳过");
                 continue;
             }
-            if luma_stddev(&sub_rgba) >= crate::mayhem::pipeline::BAND_ACTIVE_THRESHOLD {
-                active_slots += 1;
-                slot_active[i] = true;
-            }
+            feats[i] = crate::mayhem::capture::band_features(&sub_rgba);
             subs[i] = Some(sub_rgba);
         }
 
-        if active_slots < crate::mayhem::pipeline::ACTIVE_SLOTS_REQUIRED {
+        let det = crate::mayhem::detector::observe_shared(feats);
+        let active_slots = det.active_slots();
+        let mut slot_active = [false; 3];
+        for b in &det.bands {
+            if b.active {
+                slot_active[b.slot as usize] = true;
+            }
+        }
+
+        if !det.ready {
+            return Ok(serde_json::json!({
+                "phase": phase, "pushed": false,
+                "reason": "detector-baseline-warming", "activeSlots": active_slots
+            }));
+        }
+        if !det.present {
             return Ok(serde_json::json!({
                 "phase": phase, "pushed": false,
                 "reason": "no-augment-ui", "activeSlots": active_slots
@@ -694,10 +721,10 @@ pub async fn mayhem_assist_tick(
     let out: Result<Value, String> = {
         // 参数仅在 ocr-rapid 全管线里消费；该降级臂显式吞掉避免 -Dwarnings
         let _ = (champion_id, rerolls_left);
-        // 同主臂：单次 BitBlt 抓包围盒 + 纯内存切片（3 次 → 1 次）。
-        use crate::mayhem::capture::{
-            luma_stddev, slice_union_sub, slot_band_union_rect, BandStat,
-        };
+        // 同主臂：单次 BitBlt 抓包围盒 + 纯内存切片（3 次 → 1 次），判定同样
+        // 走自校准基线差分，保证「检测通过但没编 OCR」这条降级路径的判定口径
+        // 与正式构建完全一致。
+        use crate::mayhem::capture::{band_features, slice_union_sub, slot_band_union_rect};
         let screen = crate::mayhem::capture::gdi::primary_screen_size();
         let (union_rect, rects) = slot_band_union_rect(screen);
         let full = crate::mayhem::capture::gdi::capture_region_rgba(
@@ -706,23 +733,19 @@ pub async fn mayhem_assist_tick(
             union_rect.w,
             union_rect.h,
         )?;
-        let stats: Vec<BandStat> = rects
-            .iter()
-            .enumerate()
-            .map(|(i, r)| {
-                let sub = slice_union_sub(&full.rgba, union_rect, *r);
-                BandStat {
-                    slot: i as u8,
-                    rect: *r,
-                    stddev: luma_stddev(&sub),
-                }
-            })
-            .collect();
-        let active_slots = stats
-            .iter()
-            .filter(|s| s.stddev >= crate::mayhem::pipeline::BAND_ACTIVE_THRESHOLD)
-            .count();
-        if !crate::mayhem::pipeline::detect_from_stats(&stats) {
+        let mut feats = [crate::mayhem::capture::BandFeatures::default(); 3];
+        for (i, r) in rects.iter().enumerate() {
+            feats[i] = band_features(&slice_union_sub(&full.rgba, union_rect, *r));
+        }
+        let det = crate::mayhem::detector::observe_shared(feats);
+        let active_slots = det.active_slots();
+        if !det.ready {
+            return Ok(serde_json::json!({
+                "phase": phase, "pushed": false,
+                "reason": "detector-baseline-warming", "activeSlots": active_slots
+            }));
+        }
+        if !det.present {
             return Ok(serde_json::json!({
                 "phase": phase, "pushed": false,
                 "reason": "no-augment-ui", "activeSlots": active_slots

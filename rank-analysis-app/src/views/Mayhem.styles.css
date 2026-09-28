@@ -63,6 +63,41 @@
   margin-bottom: var(--space-12);
 }
 
+.m-tick {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-raised, rgba(255, 255, 255, 0.04));
+  padding: var(--space-8) var(--space-12);
+  margin-bottom: var(--space-12);
+  font-size: var(--font-size-xs);
+  line-height: 1.5;
+}
+
+.m-tick__note {
+  color: var(--text-primary);
+}
+
+.m-tick__meta {
+  color: var(--text-secondary, rgba(255, 255, 255, 0.6));
+  font-family: var(--font-mono, monospace);
+  font-size: var(--font-size-2xs, 11px);
+}
+
+/* 已推送/等待选择：绿边；正在检测：琥珀边；全部完成：中性 */
+.m-tick--pushed_waiting_choice {
+  border-color: rgba(96, 220, 140, 0.45);
+}
+
+.m-tick--burst_detecting {
+  border-color: rgba(255, 196, 84, 0.4);
+}
+
+.m-tick--all_completed {
+  opacity: 0.7;
+}
+
 .m-alert {
   background: var(--surface-raised, rgba(255, 96, 96, 0.08));
   border: 1px solid rgba(255, 96, 96, 0.35);
