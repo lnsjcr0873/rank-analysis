@@ -154,8 +154,8 @@ impl PanelDetector {
         let ready = (0..3).all(|s| self.samples(s) >= BASELINE_MIN_SAMPLES);
 
         let mut bands = Vec::with_capacity(3);
-        for slot in 0..3 {
-            let cur = [feats[slot].stddev, feats[slot].mean, feats[slot].white];
+        for (slot, feat) in feats.iter().enumerate() {
+            let cur = [feat.stddev, feat.mean, feat.white];
             let mut baseline = [0.0f64; 3];
             let mut sigma = [0.0f64; 3];
             let mut score = 0.0f64;
@@ -191,7 +191,7 @@ impl PanelDetector {
 
             bands.push(BandVerdict {
                 slot: slot as u8,
-                features: feats[slot],
+                features: *feat,
                 baseline,
                 sigma,
                 score,
@@ -209,15 +209,15 @@ impl PanelDetector {
             self.suppress = true;
         }
         if !self.suppress {
-            for slot in 0..3 {
-                let is_active = bands[slot].active;
-                if is_active {
+            for (slot, feat) in feats.iter().enumerate() {
+                // 判为激活的帧不入基线，否则面板画面会被学成「正常画面」
+                if bands[slot].active {
                     continue;
                 }
                 for (f, v) in [
-                    (F_STDDEV, feats[slot].stddev),
-                    (F_MEAN, feats[slot].mean),
-                    (F_WHITE, feats[slot].white),
+                    (F_STDDEV, feat.stddev),
+                    (F_MEAN, feat.mean),
+                    (F_WHITE, feat.white),
                 ] {
                     let q = &mut self.history[slot][f];
                     if q.len() >= BASELINE_WINDOW {
