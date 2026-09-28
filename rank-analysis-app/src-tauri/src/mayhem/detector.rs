@@ -349,8 +349,13 @@ mod tests {
             assert!(!det.present);
             assert!(det.bands.iter().all(|b| !b.active));
         }
+        // ready 描述的是「**本帧判定所依据的**基线是否成熟」，在入队本帧之前求值。
+        // 所以样本刚好凑满 8 个的这一帧，判定仍基于 7 个样本 → ready 依旧为 false；
+        // 若改成入队后求值，调用方会拿到 ready=true 却配一个由未成熟基线算出的 active。
+        let filling = d.observe(scene(BASELINE_MIN_SAMPLES as u32 - 1));
+        assert!(!filling.ready, "本帧判定所用基线尚未成熟");
         let det = d.observe(scene(99));
-        assert!(det.ready);
+        assert!(det.ready, "下一帧起基线才可用于判定");
         assert!(!det.present);
     }
 
