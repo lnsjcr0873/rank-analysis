@@ -115,7 +115,7 @@ impl Detection {
 /// 自校准基线差分检测器。
 pub struct PanelDetector {
     /// 每卡位每特征的滚动样本（仅存判定为未激活的帧）
-    history: [VecDeque<f64>; 3],
+    history: [[VecDeque<f64>; 3]; 3],
     /// 每卡位连续成立帧数
     streak: [u8; 3],
     /// 面板确认存在后停止入队，等待调用方 reset
@@ -342,7 +342,8 @@ mod tests {
     #[test]
     fn baseline_is_not_ready_before_min_samples() {
         let mut d = PanelDetector::new();
-        for i in 0..(BASELINE_MIN_SAMPLES - 1) {
+        // 用 u32 显式收窄：BASELINE_MIN_SAMPLES 是 usize 常量，会把 i 推成 usize
+        for i in 0..(BASELINE_MIN_SAMPLES as u32 - 1) {
             let det = d.observe(scene(i));
             assert!(!det.ready, "第 {i} 帧基线不该成熟");
             assert!(!det.present);
