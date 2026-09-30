@@ -20,6 +20,8 @@ import {
   type MayhemAugmentsPayload,
   type OverlayPanelEnvelope
 } from '../features/overlay/panels'
+import { useOverlayDebug } from '../features/overlay/useOverlayDebug'
+import { useOverlayDebugStore } from '../features/overlay/stores/overlayDebugStore'
 
 const actions = ref<NextAction[]>([])
 const prefs = ref<OverlayPrefs>(loadOverlayPrefs())
@@ -62,6 +64,13 @@ let unlistenUpdate: UnlistenFn | null = null
 let unlistenConfig: UnlistenFn | null = null
 let unlistenPanel: UnlistenFn | null = null
 
+// 掉帧诊断：仅 ?debug=1 时挂 rAF，默认路径不注册任何计时器。
+// isContentEmpty 传入 computed 依赖，浮窗清空内容时读数会标「空内容」，
+// 用于区分「渲染负载」与「DWM 合成负载」。
+useOverlayDebug(() => !hasContent.value)
+
+const overlayDebug = useOverlayDebugStore()
+
 function applyPanelEnvelope(env: OverlayPanelEnvelope | null | undefined) {
   // null = 后端 clear_overlay_panel（选卡完成/对局结束）：立即清空残留面板，
   // hasContent 归零后 300ms 自动 hide，不等 TTL。
@@ -69,6 +78,9 @@ function applyPanelEnvelope(env: OverlayPanelEnvelope | null | undefined) {
     mayhemAugments.value = null
     return
   }
+  // 面板推送次数 = 助手「命中」代理指标：截屏嫌疑越强它涨得越快。
+  // 仅 ?debug=1 时计数，正常路径零开销。
+  if (overlayDebug.enabled) overlayDebug.notePanelPush()
   const { panel, payload } = env
   if (panel === 'mayhem-augments') {
     mayhemAugments.value = isMayhemAugmentsPayload(payload) ? payload : null
@@ -136,6 +148,11 @@ onUnmounted(() => {
 </script>
 
 <template>
+  <!-- 掉帧诊断读数：仅 ?debug=1 渲染，判读方法见 features/overlay/useOverlayDebug -->
+  <div v-if="overlayDebug.enabled && overlayDebug.label" class="overlay-debug">
+    {{ overlayDebug.label }}
+  </div>
+
   <div v-if="hasContent && !prefs.disabled" class="overlay-container">
     <div v-if="companionText" class="overlay-card overlay-bubble" :style="cardStyle">
       {{ companionText }}
@@ -189,6 +206,24 @@ body {
 </style>
 
 <style scoped>
+/* 掉帧诊断读数：故意用等宽字体 + 高对比，便于截图读数；pointer-events:none
+   保证不干扰鼠标穿透，也避免自己成为 hover 重绘源。 */
+.overlay-debug {
+  position: fixed;
+  top: 2px;
+  left: 2px;
+  z-index: 9999;
+  padding: 2px 6px;
+  font-family: 'Cascadia Mono', 'Consolas', monospace;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #7dffb2;
+  background: rgba(0, 0, 0, 0.8);
+  border: 1px solid rgba(125, 255, 178, 0.4);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
 .overlay-container {
   width: 100%;
   height: 100%;

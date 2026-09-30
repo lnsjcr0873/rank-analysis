@@ -273,6 +273,13 @@
             >
               测试并预览浮窗
             </n-button>
+            <!-- 掉帧诊断：浮窗 URL 由后端固定，无法附加 query，只能走 localStorage 开关。
+                 开启后浮窗左上角显示 fps / 帧抖动 / 内容状态 / 面板推送次数，
+                 配合「清空浮窗内容」「关三选一助手」两组 A/B 定位掉帧来源。
+                 判读方法见 features/overlay/useOverlayDebug.ts 顶部注释。 -->
+            <n-button size="tiny" quaternary @click="handleToggleOverlayDebug">
+              {{ overlayDebugOn ? '关闭掉帧诊断' : '掉帧诊断' }}
+            </n-button>
           </n-space>
           <n-text :depth="3" style="font-size: var(--font-size-sm)">
             {{
@@ -367,6 +374,11 @@ import { invoke } from '@tauri-apps/api/core'
 import { useMessage } from 'naive-ui'
 import { emit } from '@tauri-apps/api/event'
 import { loadOverlayPrefs, saveOverlayPrefs } from '@renderer/utils/overlayPrefs'
+import {
+  OVERLAY_DEBUG_KEY,
+  disableOverlayDebug,
+  enableOverlayDebug
+} from '@renderer/features/overlay/useOverlayDebug'
 import { applyOverlayHotkey } from '@renderer/features/overlay/hotkeys'
 
 const matchCount = ref(4)
@@ -472,6 +484,21 @@ async function handlePreviewOverlay() {
   } catch (e) {
     message.error(`预览失败: ${e}`)
   }
+}
+
+/** 浮窗掉帧诊断读数开关（localStorage，浮窗同源读取） */
+const overlayDebugOn = ref(localStorage.getItem(OVERLAY_DEBUG_KEY) === '1')
+
+function handleToggleOverlayDebug() {
+  if (overlayDebugOn.value) {
+    disableOverlayDebug()
+    overlayDebugOn.value = false
+    message.info('已关闭掉帧诊断，下次浮窗显示时生效')
+    return
+  }
+  enableOverlayDebug()
+  overlayDebugOn.value = true
+  message.success('已开启掉帧诊断，浮窗左上角会显示 fps / 抖动 / 内容状态 / 面板次数')
 }
 
 const overlayAnchorOptions = [

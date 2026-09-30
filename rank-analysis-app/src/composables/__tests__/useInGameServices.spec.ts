@@ -23,9 +23,17 @@ vi.mock('../useGameState', () => ({
   gameSummoner: { value: { puuid: 'test-puuid', gameName: 'tester' } }
 }))
 
+/**
+ * 调度器桩：`start`/`stop` 必须像真实实现一样改写 `running`，
+ * 否则断言「写回共享 running 是否等于调度器真实态」会永远失败。
+ */
 const mockScheduler = {
-  start: vi.fn(),
-  stop: vi.fn(),
+  start: vi.fn(() => {
+    mockScheduler.running = true
+  }),
+  stop: vi.fn(() => {
+    mockScheduler.running = false
+  }),
   running: false
 }
 
@@ -53,6 +61,7 @@ import {
 } from '../useInGameServices'
 import {
   mayhemAssistBlockedReason,
+  mayhemAssistRunning,
   ASSIST_BLOCKED_DISABLED
 } from '@renderer/features/mayhem/assistState'
 
@@ -113,10 +122,12 @@ describe('useInGameServices mayhem assist blocked reason', () => {
     vi.clearAllMocks()
     mockScheduler.running = false
     mayhemAssistBlockedReason.value = ''
+    mayhemAssistRunning.value = false
     mockGetConfig.mockResolvedValue(false)
   })
 
   it('setMayhemAssistEnabled(false) 记录「设置已关闭」原因', () => {
+    mockScheduler.running = true
     setMayhemAssistEnabled(false)
     expect(mayhemAssistBlockedReason.value).toBe(ASSIST_BLOCKED_DISABLED)
   })
@@ -125,5 +136,56 @@ describe('useInGameServices mayhem assist blocked reason', () => {
     mayhemAssistBlockedReason.value = ASSIST_BLOCKED_DISABLED
     setMayhemAssistEnabled(true)
     expect(mayhemAssistBlockedReason.value).toBe('')
+  })
+})
+
+/**
+ * 回归：共享 `running` 必须与调度器真实态一致。
+ *
+ * `mayhemAssistRunning` 原先是 store 私有 `ref(false)`，全局路径
+ * `startMayhemAssistIfNeeded` / `stopMayhemAssist` 只写 reason 不写 running，
+ * 于是 Mayhem 页按钮与横幅读到的是过期货：
+ * - 全局自动开启 → 按钮仍显示「启动对局监听」
+ * - 全局停掉 → 按钮仍显示绿色「已开启」，且横幅因
+ *   `assistBlocked && !assistRunning` 为 false 被吞掉，又变回静默失效。
+ */
+describe('useInGameServices mayhem assist running sync', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockScheduler.running = false
+    mayhemAssistBlockedReason.value = ''
+    mayhemAssistRunning.value = false
+  })
+
+  it('setMayhemAssistEnabled(true) 把运行态写回共享 ref', () => {
+    setMayhemAssistEnabled(true)
+    expect(mayhemAssistRunning.value).toBe(true)
+  })
+
+  it('setMayhemAssistEnabled(false) 同时清掉运行态，否则按钮永远显示已开启', () => {
+    setMayhemAssistEnabled(true)
+    expect(mayhemAssistRunning.value).toBe(true)
+
+    setMayhemAssistEnabled(false)
+    expect(mayhemAssistRunning.value).toBe(false)
+  })
+
+  it('停止后 reason 与 running 成对写入，横幅不会被 !running 吞掉', () => {
+    mockScheduler.running = true
+    mayhemAssistRunning.value = true
+
+    setMayhemAssistEnabled(false)
+
+    // 横幅渲染条件是 assistBlocked && !assistRunning，两者必须同时成立
+    expect(mayhemAssistBlockedReason.value).not.toBe('')
+    expect(mayhemAssistRunning.value).toBe(false)
+  })
+
+  it('运行态与调度器真实态始终一致（不靠推断）', () => {
+    setMayhemAssistEnabled(true)
+    expect(mayhemAssistRunning.value).toBe(mockScheduler.running)
+
+    setMayhemAssistEnabled(false)
+    expect(mayhemAssistRunning.value).toBe(mockScheduler.running)
   })
 })

@@ -19,6 +19,7 @@ import { getSharedAssistScheduler } from '@renderer/features/mayhem/trigger'
 import { prewarmMayhemOcr } from '@renderer/features/mayhem/services/mayhemOcr'
 import {
   mayhemAssistBlockedReason,
+  mayhemAssistRunning,
   ASSIST_BLOCKED_DISABLED,
   ASSIST_BLOCKED_NOT_MAYHEM
 } from '@renderer/features/mayhem/assistState'
@@ -118,6 +119,9 @@ async function startMayhemAssistIfNeeded(queueId: number): Promise<void> {
     // 表现为进大乱斗后推荐永不出现。预热必须与启动监听同路径。
     void prewarmMayhemOcr()
   }
+  // 必须写共享 running：Mayhem 页按钮读的是这个 ref，不写就是
+  // 「全局已自动开启但按钮仍显示未开启」。
+  mayhemAssistRunning.value = s.running
   mayhemAssistBlockedReason.value = ''
 }
 
@@ -131,6 +135,10 @@ function stopMayhemAssist(reason = ''): void {
   if (s.running) {
     s.stop()
   }
+  // running 与 reason 必须成对写：只写 reason 时 store 的 assistRunning 仍为
+  // true，横幅条件 `assistBlocked && !assistRunning` 为 false，提示被吞掉，
+  // 用户看到绿色「已开启」却早已停摆——比不提示更难排查。
+  mayhemAssistRunning.value = false
   mayhemAssistBlockedReason.value = reason
 }
 
@@ -172,6 +180,7 @@ export function setMayhemAssistEnabled(enabled: boolean): void {
         s.start()
         void prewarmMayhemOcr()
       }
+      mayhemAssistRunning.value = s.running
       mayhemAssistBlockedReason.value = ''
     }
   } else {

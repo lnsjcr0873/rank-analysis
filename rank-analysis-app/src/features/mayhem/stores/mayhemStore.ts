@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { mayhemAssistBlockedReason } from '../assistState'
+import { mayhemAssistBlockedReason, mayhemAssistRunning } from '../assistState'
 import {
   getMayhemChampions,
   getMayhemAugments,
@@ -182,14 +182,18 @@ export const useMayhemStore = defineStore('mayhem', () => {
   // -------------------------------------------------------------------------
   // 对局监听单例调度器（全局唯一，避免 Gaming 与 Mayhem 跨页双重轮询截屏）
   // -------------------------------------------------------------------------
-  const assistRunning = ref(false)
   const lastAssistTick = ref<AssistTick | null>(null)
   /**
-   * 助手未启动的**具体原因**，供 UI 直接展示。写入方是全局常驻服务
-   * `useInGameServices`，故用共享模块 ref 而非 store 私有 state，详见
-   * `features/mayhem/assistState.ts`。
+   * 助手未启动的**具体原因**与**真实运行态**，供 UI 直接展示。写入方是全局常驻
+   * 服务 `useInGameServices`，故用共享模块 ref 而非 store 私有 state——详见
+   * `features/mayhem/assistState.ts`（含为何不能用 store 的说明）。
+   *
+   * `assistRunning` 必须取共享 ref 而非 `ref(false)`：全局路径直接操作调度器，
+   * 用 store 私有 state 会出现「已在监听却显示未开启」，反向则是「已停却显示
+   * 已开启」且横幅被 `!assistRunning` 吞掉。
    */
   const assistBlockedReason = mayhemAssistBlockedReason
+  const assistRunning = mayhemAssistRunning
 
   /**
    * 把共享调度器的每轮状态写进 store。
@@ -257,22 +261,6 @@ export const useMayhemStore = defineStore('mayhem', () => {
     }
   }
 
-  /**
-   * 同步调度器的真实状态到 store，供跨页（全局自动启动）读取。
-   *
-   * 全局路径 `useInGameServices` 直接操作 `getSharedAssistScheduler()`，此前
-   * 完全不写 `assistRunning`，导致「全局已自动开启」时按钮仍显示未开启、
-   * 「全局已停」时按钮仍显示已开启。此处由全局路径单向写回，store 的
-   * toggle 仍是唯一的「用户主动」入口。
-   *
-   * @param running 调度器真实运行态
-   * @param blockedReason 非空表示因设置/构建等原因无法运行
-   */
-  function syncAssistState(running: boolean, blockedReason = ''): void {
-    assistRunning.value = running
-    assistBlockedReason.value = running ? '' : blockedReason
-  }
-
   return {
     champions,
     augments,
@@ -290,7 +278,6 @@ export const useMayhemStore = defineStore('mayhem', () => {
     ocrWarmingUp,
     prewarmOcr,
     lastAssistTick,
-    syncAssistState,
     init,
     loadChampions,
     loadAugments,
