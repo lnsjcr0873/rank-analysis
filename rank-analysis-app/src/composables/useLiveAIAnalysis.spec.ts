@@ -17,7 +17,7 @@ import { defineComponent, reactive, ref } from 'vue'
 import { mount, flushPromises } from '@vue/test-utils'
 import type { StreamCallbacks } from '@renderer/services/ai'
 import type { LiveGameSnapshot } from '@renderer/features/gaming/services/liveGame'
-import type { SessionData } from '@renderer/types/domain/gaming'
+import type { SessionData, SessionPhase } from '@renderer/types/domain/gaming'
 
 const messageStub = { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() }
 vi.mock('naive-ui', () => ({ useMessage: () => messageStub }))
@@ -109,7 +109,7 @@ function withSetup<T>(composable: () => T): { result: T; unmount: () => void } {
   return { result, unmount: () => wrapper.unmount() }
 }
 
-function setup(phase = 'InProgress') {
+function setup(phase: SessionPhase = 'InProgress') {
   const sessionData = reactive(JSON.parse(JSON.stringify(SESSION))) as SessionData
   sessionData.phase = phase
   const mySummoner = ref(ME)

@@ -141,7 +141,7 @@
 
 <script setup lang="ts">
 /**
- * 选人阶段英雄情报卡：无玩家身份时替代 PlayerCard。
+ * 选人阶段英雄情报卡：无玩家身份时替代成员名册行。
  * 展示英雄头像/名字 + OP.GG T级/胜率 + 对我方阵容的克制提示，
  * pick-state 驱动三态动画（intent 呼吸 / picking 边框脉冲 / locked 定格入场）。
  */

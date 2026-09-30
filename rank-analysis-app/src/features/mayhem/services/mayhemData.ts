@@ -420,7 +420,7 @@ let metaCachePromise: Promise<Map<number, MayhemChampionMetaEntry>> | null = nul
 /**
  * 幂等获取「英雄 id → T级/名字」映射（模块级缓存，进程内共享）。
  *
- * PlayerCard 等高频消费方通过动态导入调用：非大乱斗模式零开销；
+ * 名册行等高频消费方通过动态导入调用：非大乱斗模式零开销；
  * 失败时清空缓存允许下次重试。
  */
 export function ensureMayhemChampionMeta(): Promise<Map<number, MayhemChampionMetaEntry>> {

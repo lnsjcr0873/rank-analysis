@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   pickStateClass,
-  playerCardPickStateClass,
+  rosterPickStateClass,
   tierBadge,
   formatWinRate,
   isChampionSwap,
@@ -17,14 +17,14 @@ describe('championIntel helpers', () => {
     expect(pickStateClass(undefined)).toBe('intel-none')
     expect(pickStateClass('')).toBe('intel-none')
   })
-  it('playerCardPickStateClass 四态映射，none/空/未知值一律不加类', () => {
-    expect(playerCardPickStateClass('intent')).toBe('pc-intent')
-    expect(playerCardPickStateClass('picking')).toBe('pc-picking')
-    expect(playerCardPickStateClass('banning')).toBe('pc-banning')
-    expect(playerCardPickStateClass('locked')).toBe('pc-locked')
-    expect(playerCardPickStateClass('none')).toBe('')
-    expect(playerCardPickStateClass('')).toBe('')
-    expect(playerCardPickStateClass(undefined)).toBe('')
+  it('rosterPickStateClass 四态映射，none/空/未知值一律不加类', () => {
+    expect(rosterPickStateClass('intent')).toBe('rr-intent')
+    expect(rosterPickStateClass('picking')).toBe('rr-picking')
+    expect(rosterPickStateClass('banning')).toBe('rr-banning')
+    expect(rosterPickStateClass('locked')).toBe('rr-locked')
+    expect(rosterPickStateClass('none')).toBe('')
+    expect(rosterPickStateClass('')).toBe('')
+    expect(rosterPickStateClass(undefined)).toBe('')
   })
   it('tierBadge 边界', () => {
     expect(tierBadge(1).label).toBe('T1')

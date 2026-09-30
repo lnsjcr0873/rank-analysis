@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { mayhemAssistBlockedReason } from '../assistState'
 import {
   getMayhemChampions,
   getMayhemAugments,
@@ -183,6 +184,12 @@ export const useMayhemStore = defineStore('mayhem', () => {
   // -------------------------------------------------------------------------
   const assistRunning = ref(false)
   const lastAssistTick = ref<AssistTick | null>(null)
+  /**
+   * 助手未启动的**具体原因**，供 UI 直接展示。写入方是全局常驻服务
+   * `useInGameServices`，故用共享模块 ref 而非 store 私有 state，详见
+   * `features/mayhem/assistState.ts`。
+   */
+  const assistBlockedReason = mayhemAssistBlockedReason
 
   /**
    * 把共享调度器的每轮状态写进 store。
@@ -210,6 +217,21 @@ export const useMayhemStore = defineStore('mayhem', () => {
     // 全局自动启动路径（useInGameServices）可能已经把它跑起来了，
     // 按钮状态必须以调度器真实状态为准，否则会出现「已在监听却显示未开启」。
     assistRunning.value = true
+    assistBlockedReason.value = ''
+  }
+
+  /**
+   * 记录「为什么不跑」，并同步停掉调度器。
+   *
+   * @param reason 空字符串表示正常停止（非阻塞）；非空时界面据此提示。
+   */
+  function stopAssist(reason = ''): void {
+    const s = getSharedAssistScheduler()
+    if (s.running) {
+      s.stop()
+    }
+    assistRunning.value = false
+    assistBlockedReason.value = reason
   }
 
   /**
@@ -220,14 +242,6 @@ export const useMayhemStore = defineStore('mayhem', () => {
     await prewarmMayhemOcr(w => {
       ocrWarmingUp.value = w
     })
-  }
-
-  function stopAssist(): void {
-    const s = getSharedAssistScheduler()
-    if (s.running) {
-      s.stop()
-      assistRunning.value = false
-    }
   }
 
   function toggleAssist(): boolean {
@@ -243,6 +257,22 @@ export const useMayhemStore = defineStore('mayhem', () => {
     }
   }
 
+  /**
+   * 同步调度器的真实状态到 store，供跨页（全局自动启动）读取。
+   *
+   * 全局路径 `useInGameServices` 直接操作 `getSharedAssistScheduler()`，此前
+   * 完全不写 `assistRunning`，导致「全局已自动开启」时按钮仍显示未开启、
+   * 「全局已停」时按钮仍显示已开启。此处由全局路径单向写回，store 的
+   * toggle 仍是唯一的「用户主动」入口。
+   *
+   * @param running 调度器真实运行态
+   * @param blockedReason 非空表示因设置/构建等原因无法运行
+   */
+  function syncAssistState(running: boolean, blockedReason = ''): void {
+    assistRunning.value = running
+    assistBlockedReason.value = running ? '' : blockedReason
+  }
+
   return {
     champions,
     augments,
@@ -256,9 +286,11 @@ export const useMayhemStore = defineStore('mayhem', () => {
     selectedChampionId,
     isDataReady,
     assistRunning,
+    assistBlockedReason,
     ocrWarmingUp,
     prewarmOcr,
     lastAssistTick,
+    syncAssistState,
     init,
     loadChampions,
     loadAugments,

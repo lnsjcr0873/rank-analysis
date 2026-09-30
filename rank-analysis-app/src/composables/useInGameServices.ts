@@ -17,6 +17,12 @@ import { useSessionSync } from './useSessionSync'
 import { gameSummoner } from './useGameState'
 import { getSharedAssistScheduler } from '@renderer/features/mayhem/trigger'
 import { prewarmMayhemOcr } from '@renderer/features/mayhem/services/mayhemOcr'
+import {
+  mayhemAssistBlockedReason,
+  ASSIST_BLOCKED_DISABLED,
+  ASSIST_BLOCKED_NOT_MAYHEM
+} from '@renderer/features/mayhem/assistState'
+import { isMayhemQueue } from '@renderer/features/mayhem/queues'
 import { getNextActions, type NextAction } from '@renderer/services/nextAction'
 import type { SessionData } from '@renderer/types/domain/gaming'
 import { getConfigByIpc } from '@renderer/services/ipc'
@@ -92,26 +98,16 @@ async function pollNextActions(sessionData: SessionData): Promise<void> {
   }
 }
 
-/**
- * 海克斯大乱斗队列 ID 集合。
- *
- * 与 `command/mayhem.rs::mayhem_draft_context` 的 `[2400, 2410, 2450]` 口径一致。
- * 旧代码只认 2400，变体队列（2410 / 2450）进大乱斗时监听根本不会启动。
- */
-const MAYHEM_QUEUE_IDS = [2400, 2410, 2450]
-
-/** 是否大乱斗队列 */
-export function isMayhemQueue(queueId: number): boolean {
-  return MAYHEM_QUEUE_IDS.includes(queueId)
-}
-
 async function startMayhemAssistIfNeeded(queueId: number): Promise<void> {
   if (!isMayhemQueue(queueId)) {
-    stopMayhemAssist()
+    stopMayhemAssist(ASSIST_BLOCKED_NOT_MAYHEM)
     return
   }
   if (!(await isMayhemAssistEnabled())) {
-    stopMayhemAssist()
+    // 必须留下原因：此前这里静默 return，用户进大乱斗看不到任何推荐、
+    // 也没有 band-detect.jsonl，界面上却还显示「启动对局监听」，
+    // 完全无从判断是设置把它关了。
+    stopMayhemAssist(ASSIST_BLOCKED_DISABLED)
     return
   }
   const s = getSharedAssistScheduler()
@@ -122,13 +118,20 @@ async function startMayhemAssistIfNeeded(queueId: number): Promise<void> {
     // 表现为进大乱斗后推荐永不出现。预热必须与启动监听同路径。
     void prewarmMayhemOcr()
   }
+  mayhemAssistBlockedReason.value = ''
 }
 
-function stopMayhemAssist(): void {
+/**
+ * 停止调度器并记录**停止原因**。
+ *
+ * @param reason 非空时写入共享状态，供 Mayhem 页展示；正常停止传空字符串。
+ */
+function stopMayhemAssist(reason = ''): void {
   const s = getSharedAssistScheduler()
   if (s.running) {
     s.stop()
   }
+  mayhemAssistBlockedReason.value = reason
 }
 
 /** 动态响应设置变更：禁用/启用浮窗 */
@@ -169,9 +172,10 @@ export function setMayhemAssistEnabled(enabled: boolean): void {
         s.start()
         void prewarmMayhemOcr()
       }
+      mayhemAssistBlockedReason.value = ''
     }
   } else {
-    stopMayhemAssist()
+    stopMayhemAssist(ASSIST_BLOCKED_DISABLED)
   }
 }
 

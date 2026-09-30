@@ -1,5 +1,5 @@
 /**
- * ChampionIntelCard 纯逻辑辅助函数
+ * ChampionIntelCard 与 RosterRow 共用的纯逻辑辅助函数
  *
  * 与组件渲染解耦，便于单测覆盖 pick-state 分类、T 级徽章语义色、胜率格式化等纯计算。
  */
@@ -34,28 +34,30 @@ export function pickStateClass(state: string | undefined): string {
 }
 
 /**
- * pick 态 → PlayerCard 修饰类名（我方选人期四态动画）
- * 与 pickStateClass 的区别：PlayerCard 常驻对局中样式，非选人期（'none'/空/未知值）
- * 一律不加类，避免对局中卡片被误套选人态视觉。
+ * pick 态 → 名册行修饰类名（选人期四态动画）
+ *
+ * 与 {@link pickStateClass} 的区别：`RosterRow` 常驻对局中样式，非选人期
+ * （'none'/空/未知值）一律不加类，避免对局中行被误套选人态视觉。
+ *
  * @param state - pick 态字符串，缺省或未知值统一兜底为无类
- * @returns 'pc-intent' | 'pc-picking' | 'pc-banning' | 'pc-locked' | ''（无修饰）
+ * @returns `'rr-intent' | 'rr-picking' | 'rr-banning' | 'rr-locked' | ''`（无修饰）
  * @example
  * ```ts
- * playerCardPickStateClass('locked') // 'pc-locked'
- * playerCardPickStateClass('none') // ''
- * playerCardPickStateClass(undefined) // ''
+ * rosterPickStateClass('locked') // 'rr-locked'
+ * rosterPickStateClass('none') // ''
+ * rosterPickStateClass(undefined) // ''
  * ```
  */
-export function playerCardPickStateClass(state: string | undefined): string {
+export function rosterPickStateClass(state: string | undefined): string {
   switch (state) {
     case 'intent':
-      return 'pc-intent'
+      return 'rr-intent'
     case 'picking':
-      return 'pc-picking'
+      return 'rr-picking'
     case 'banning':
-      return 'pc-banning'
+      return 'rr-banning'
     case 'locked':
-      return 'pc-locked'
+      return 'rr-locked'
     default:
       return ''
   }
@@ -110,7 +112,7 @@ export function tierBadge(tier: number): { label: string; color: string; bg: str
 
 /**
  * 判断两次 championId 变化是否构成"真正的换人"（trade swap），而非首次亮出/清空。
- * ChampionIntelCard 与 PlayerCard 共用此判定来决定是否播放一次性换人闪烁动画。
+ * ChampionIntelCard 用此判定决定是否播放一次性换人闪烁动画。
  * @param oldId - 变化前的 championId
  * @param newId - 变化后的 championId
  * @returns 仅当 oldId、newId 均为正数且不相等时为 true（首次从 0/undefined 亮出英雄不算换人）
@@ -127,9 +129,9 @@ export function isChampionSwap(oldId: number | undefined, newId: number | undefi
 }
 
 /**
- * PlayerCard 标签区可见系统标签上限
+ * 名册行标签区可见系统标签上限
  *
- * 标签区（.profile-tags）是 flex-shrink:0 的硬占位，越宽越挤压中间信息列，
+ * 标签区是 flex-shrink:0 的硬占位，越宽越挤压中间信息列，
  * 信息列一窄 OP.GG 胜率 chip 就会从段位行被挤换行，卡片凭空高出一行。
  * 预组队/遇见过属于宽幅特殊 chip，各按 2 个系统标签名额折算：任一出现时
  * 系统标签（连败/连胜等）全部收进 +N popover，保住"信息列两行"结构。

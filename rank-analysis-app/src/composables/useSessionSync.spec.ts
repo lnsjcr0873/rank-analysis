@@ -99,7 +99,7 @@ describe('full 合并防闪烁与数据完整性', () => {
     expect(current[0].userTag?.recentData?.kda).toBe(3.2)
   })
 
-  it('同 puuid 更新应原位合并、保持对象身份（避免 PlayerCard 整卡重渲染）', () => {
+  it('同 puuid 更新应原位合并、保持对象身份（避免名册行整行重渲染）', () => {
     const before = player('p1')
     const current = [before]
     syncPlayers(current, [player('p1', 3.2)], 'full')

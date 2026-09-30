@@ -37,8 +37,8 @@
  *   换成受控的原生 <select>，与 Automation.tierSelect.spec.ts / BpSuggestModal.spec.ts
  *   同一约定。Gaming.vue 全篇只有这一个 <n-select>，无需像 Automation 那样按选项内容
  *   定位。
- * - session-basic-info 载荷的 subteams 留空数组：orderedSubteams 因此为空，
- *   SubteamCard 一次都不会挂载；bp.decision 初始为 null 且 get_bp_decision mock 返回
+ * - session-basic-info 载荷的 subteams 留空数组：名册因此为空，
+ *   名册行一次都不会挂载；bp.decision 初始为 null 且 get_bp_decision mock 返回
  *   null，BpDecisionBar 内部 `v-if="decision"` 不成立、不渲染任何内容。两个真正"重"的
  *   子组件天然不进入渲染路径，不需要额外 stub，也就不必在 stub 列表里维护它们。
  * - useGameState 用到的 `@tauri-apps/api/window`（getCurrentWindow）与 useSessionSync /

@@ -85,8 +85,8 @@ function findSubteam(subteams: Subteam[], subteamId: number): Subteam | undefine
 
 /**
  * 原位合并玩家数据：保持数组槽位里的对象身份不变。
- * 整体替换对象会让 PlayerCard 的 props 引用变化 → 内部 watcher（OP.GG chip 拉取等）
- * 全部重跑，选人期 pickState 高频变化时表现为卡片抖动/闪烁。
+ * 整体替换对象会让成员行的 props 引用变化 → 内部 watcher（OP.GG chip 拉取等）
+ * 全部重跑，选人期 pickState 高频变化时表现为名册行抖动/闪烁。
  * @param preserveLocalFields - 保留旧对象的 meetGames/preGroupMarkers
  *（session-player-update 单玩家事件不带这两个字段的有效值，由独立事件维护）
  */

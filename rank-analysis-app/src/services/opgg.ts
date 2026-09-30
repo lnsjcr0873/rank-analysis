@@ -7,6 +7,7 @@
 
 import { invoke } from '@tauri-apps/api/core'
 import { ref, type Ref } from 'vue'
+import { isMayhemQueue } from '@renderer/features/mayhem/queues'
 
 export type OpggMode = 'ranked' | 'aram'
 
@@ -113,13 +114,25 @@ export interface CounterHint {
   myWinRate: number
 }
 
+/** 极地大乱斗队列 ID。 */
+const ARAM_QUEUE_ID = 450
+
 /**
- * 将队列 ID 转换为 OP.GG 模式
- * @param queueId - 队列 ID (450=极地大乱斗, 2400=海克斯大乱斗, 其他=ranked)
- * @returns 'aram' 或 'ranked'
+ * 将队列 ID 转换为 OP.GG 模式。
+ *
+ * 大乱斗的判定复用 `features/mayhem/queues` 的单一事实来源：此前此处只硬编码了
+ * 450 与 2400，导致 2410 / 2450 两个大乱斗变体被误判为 `'ranked'`，进而让
+ * OP.GG 英雄 T 级/胜率走错数据集（分路推荐也会给出不适用的上单推荐）。
+ *
+ * @param queueId - 队列 ID
+ * @returns `'aram'` 或 `'ranked'`
+ * @example
+ * ```ts
+ * queueIdToOpggMode(2450) // 'aram'
+ * ```
  */
 export function queueIdToOpggMode(queueId: number): OpggMode {
-  return queueId === 450 || queueId === 2400 ? 'aram' : 'ranked'
+  return queueId === ARAM_QUEUE_ID || isMayhemQueue(queueId) ? 'aram' : 'ranked'
 }
 
 /**

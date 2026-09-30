@@ -204,8 +204,8 @@
   box-shadow: var(--shadow-card) !important;
 }
 
-/* 对局页队伍容器/玩家迷你战绩：同款纸面处理（组件侧无 !important，特异度即可覆盖） */
-.theme-light .subteam-card {
+/* 对局页名册：同款纸面处理（组件侧无 !important，特异度即可覆盖） */
+.theme-light .roster-group {
   background: var(--bg-surface);
   box-shadow: var(--shadow-card);
 }

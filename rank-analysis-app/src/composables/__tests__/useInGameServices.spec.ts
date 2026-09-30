@@ -43,6 +43,7 @@ vi.mock('@renderer/companion/bridge', () => ({
 }))
 
 import { invoke } from '@tauri-apps/api/core'
+import { getConfigByIpc } from '@renderer/services/ipc'
 import {
   useInGameServices,
   setOverlayDisabled,
@@ -50,10 +51,15 @@ import {
   setMayhemAssistEnabled,
   inGameNextActions
 } from '../useInGameServices'
+import {
+  mayhemAssistBlockedReason,
+  ASSIST_BLOCKED_DISABLED
+} from '@renderer/features/mayhem/assistState'
 
 import { type NextAction } from '@renderer/services/nextAction'
 
 const mockInvoke = vi.mocked(invoke)
+const mockGetConfig = vi.mocked(getConfigByIpc)
 
 describe('useInGameServices switches', () => {
   beforeEach(() => {
@@ -92,5 +98,32 @@ describe('useInGameServices switches', () => {
     mockScheduler.running = false
     setMayhemAssistEnabled(true)
     expect(mockScheduler.start).toHaveBeenCalled()
+  })
+})
+
+/**
+ * 回归：助手被设置关闭时必须留下**可见原因**。
+ *
+ * 此前 `startMayhemAssistIfNeeded` 在 `mayhemAssistEnabled === false` 时只
+ * `stopMayhemAssist()` 就 return，界面上按钮仍显示「启动对局监听」，
+ * 进大乱斗既无推荐也无 band-detect.jsonl，用户完全无从判断原因。
+ */
+describe('useInGameServices mayhem assist blocked reason', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockScheduler.running = false
+    mayhemAssistBlockedReason.value = ''
+    mockGetConfig.mockResolvedValue(false)
+  })
+
+  it('setMayhemAssistEnabled(false) 记录「设置已关闭」原因', () => {
+    setMayhemAssistEnabled(false)
+    expect(mayhemAssistBlockedReason.value).toBe(ASSIST_BLOCKED_DISABLED)
+  })
+
+  it('setMayhemAssistEnabled(true) 清除之前的阻塞原因', () => {
+    mayhemAssistBlockedReason.value = ASSIST_BLOCKED_DISABLED
+    setMayhemAssistEnabled(true)
+    expect(mayhemAssistBlockedReason.value).toBe('')
   })
 })

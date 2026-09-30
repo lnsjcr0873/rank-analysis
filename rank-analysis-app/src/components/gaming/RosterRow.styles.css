@@ -1,0 +1,251 @@
+/* 名册行样式：行间靠分隔线与悬停底色区分，不给每行套卡片壳——
+   这样连续 10 行能读成一张表，而不是 10 张互相竞争的卡片。 */
+
+.roster-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  padding: var(--space-4) var(--space-6);
+  border-bottom: 1px solid var(--border-subtle);
+  transition: background var(--dur-fast) var(--ease-expo);
+  animation: fade-up var(--dur-normal) var(--ease-expo) both;
+  animation-delay: calc(var(--stagger, 0.02s) * var(--stagger-i, 0));
+  min-height: 44px;
+}
+
+.roster-row:last-child {
+  border-bottom: none;
+}
+
+.roster-row:hover {
+  background: var(--glass-bg-low);
+}
+
+/* 阵营：左侧色条区分我方/敌方/其它小队 */
+.roster-row--mine {
+  box-shadow: inset 2px 0 0 var(--semantic-mine, #3b82f6);
+}
+
+.roster-row--enemy {
+  box-shadow: inset 2px 0 0 var(--semantic-enemy, #ef4444);
+}
+
+.roster-row--other {
+  box-shadow: inset 2px 0 0 var(--semantic-other, #a78bfa);
+}
+
+.roster-row--self {
+  background: color-mix(in srgb, var(--accent-gold) 8%, transparent);
+}
+
+.roster-row--loading {
+  opacity: 0.6;
+}
+
+.roster-row__main {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  flex: 1;
+  min-width: 0;
+}
+
+.roster-row__stats {
+  flex-shrink: 0;
+  width: 108px;
+}
+
+.roster-row__history {
+  flex-shrink: 0;
+  width: 300px;
+  min-width: 0;
+}
+
+/* 头像与等级 */
+.avatar-wrapper {
+  position: relative;
+  width: clamp(30px, 1.4vw + 12px, 40px);
+  flex-shrink: 0;
+}
+
+.champion-img {
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.level-badge {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 999px;
+  font-size: 9px;
+  line-height: 14px;
+  text-align: center;
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+  border: 1px solid var(--glass-border);
+}
+
+.info-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  flex: 1;
+  min-width: 0;
+}
+
+.name-row {
+  gap: var(--space-6);
+  min-width: 0;
+}
+
+.name-btn {
+  min-width: 0;
+  padding: 0;
+}
+
+.name-ellipsis {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  max-width: clamp(110px, 6vw, 200px);
+}
+
+.pos-tag {
+  font-size: 10px;
+  opacity: 0.85;
+}
+
+.copy-btn {
+  flex-shrink: 0;
+  cursor: pointer;
+  opacity: 0.45;
+  transition: opacity var(--dur-fast) var(--ease-expo);
+}
+
+.copy-btn:hover {
+  opacity: 1;
+}
+
+.tag-line {
+  font-size: var(--font-size-xs);
+  color: var(--text-tertiary);
+}
+
+.meta-row {
+  font-size: var(--font-size-xs);
+}
+
+.tier-row {
+  gap: var(--space-4);
+}
+
+.tier-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.tier-icon-placeholder {
+  display: inline-flex;
+  color: var(--text-tertiary);
+}
+
+.tier-text {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
+
+/* OP.GG T 级/胜率 chip */
+.opgg-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--font-size-2xs);
+  padding: 0 var(--space-6);
+  height: 18px;
+  line-height: 18px;
+  border-radius: 999px;
+  background: rgba(128, 128, 128, 0.12);
+}
+
+.opgg-chip-tier {
+  font-weight: 700;
+  padding: 0 4px;
+  border-radius: 999px;
+}
+
+.opgg-chip-rate {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+
+.opgg-chip-rate-good {
+  color: var(--semantic-win);
+  opacity: 1;
+  font-weight: 600;
+}
+
+.opgg-chip-rate-bad {
+  color: var(--semantic-loss);
+  opacity: 1;
+  font-weight: 600;
+}
+
+/* 大乱斗官方 T 级角标 */
+.mayhem-tier {
+  font-size: 10px;
+  font-weight: var(--font-weight-bold);
+  padding: 1px 6px;
+  letter-spacing: 0.04em;
+  color: #ffd76a;
+  border: 1px solid rgba(255, 215, 106, 0.5);
+  cursor: pointer;
+  transition:
+    transform 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.mayhem-tier:hover {
+  border-color: #ffd76a;
+  transform: translateY(-1px);
+}
+
+.tag-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-height: 18px;
+}
+
+/* ---- 选人四态：rr-* 修饰类由 rosterPickStateClass 输出 ---- */
+.roster-row.rr-intent .champion-img {
+  filter: saturate(0.85);
+}
+
+.roster-row.rr-picking .champion-img,
+.roster-row.rr-banning .champion-img {
+  filter: saturate(0.55) brightness(0.85);
+}
+
+.roster-row.rr-locked {
+  background: color-mix(in srgb, var(--semantic-win) 8%, transparent);
+}
+
+/* ---- 密度分层：minimal 只留身份行 ---- */
+.roster-row--density-minimal .roster-row__stats,
+.roster-row--density-minimal .roster-row__history,
+.roster-row--density-minimal .tag-row {
+  display: none;
+}
+
+.roster-row--density-minimal {
+  min-height: 36px;
+}
+
+/* 紧凑行把图标与字号收一档 */
+.roster-row--density-normal .avatar-wrapper {
+  width: clamp(26px, 1.1vw + 10px, 34px);
+}

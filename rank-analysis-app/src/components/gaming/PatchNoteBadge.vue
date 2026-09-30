@@ -71,7 +71,7 @@ async function load() {
   }
 }
 
-// 无内容级去重（不像 PlayerCard/ChampionIntelCard 有 lastRequestKey），
+// 无内容级去重（不像 ChampionIntelCard 有 lastRequestKey），
 // 段位切换只需把 opggRevision 加进依赖源即可触发重取；championId 不变时 load() 内部
 // 仍会用当前 championId 重新查 getChampionMeta，拿到新段位下的 tier/rank。
 watch(() => [props.championId, opggRevision.value] as const, load)

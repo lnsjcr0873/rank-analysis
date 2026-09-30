@@ -36,7 +36,7 @@ const ARAM_QUEUE_IDS = new Set([450, 2400])
 
 /**
  * 模块级缓存：同一 championId 的平衡性数据只请求一次
- * 多个 PlayerCard 在同一场对局中查同一英雄 / ChampSelect 反复切英雄的场景共享
+ * 多名成员在同一场对局中查同一英雄 / ChampSelect 反复切英雄的场景共享
  */
 const aramCache = new Map<number, Promise<AramBalanceData | null>>()
 

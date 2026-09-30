@@ -21,6 +21,12 @@
           <Radio class="btn-ico" />
           {{ assistBtnText }}
         </button>
+        <!-- 阻塞原因横幅：助手被设置关闭 / 构建不支持时明示，
+             不再让「按钮可点但永远不出推荐」变成静默故障 -->
+        <p v-if="assistBlocked && !assistRunning" class="assist-blocked">
+          <Info class="assist-blocked-ico" />
+          {{ assistBlocked }}
+        </p>
         <button class="btn gho sm" :disabled="previewing" @click="onPreviewPanel">
           <Eye class="btn-ico" />
           {{ previewing ? '推送中…' : '预览浮窗' }}
@@ -360,6 +366,7 @@ import {
   Eye,
   Grid2X2,
   Inbox,
+  Info,
   Keyboard,
   LayoutGrid,
   Radio,
@@ -468,6 +475,13 @@ const versionChanges = ref<MayhemVersionChange[]>([])
 const previewing = ref(false)
 const assistRunning = computed(() => mayhemStore.assistRunning)
 /**
+ * 助手未启动的原因（共享模块 ref，由全局 `useInGameServices` 写入）。
+ *
+ * 此前助手被设置关闭时全局服务只是静默 `stop()`，此处无任何提示，
+ * 用户看到「启动对局监听」按钮却拿不到推荐，无从判断原因。
+ */
+const assistBlocked = computed(() => mayhemStore.assistBlockedReason)
+/**
  * R10：后端能力查询结果。null = 尚未查到（按钮保持可用，待确认）；
  * false = 当前构建/平台不支持自动识别，只提供手动三选一。
  */
@@ -475,12 +489,15 @@ const autoAssistSupported = ref<boolean | null>(null)
 const assistBtnText = computed(() => {
   if (assistRunning.value) return '监听已开启'
   if (autoAssistSupported.value === false) return '自动监听不可用'
+  // 设置里被关掉时按钮文案直说原因，避免用户反复点按钮
+  if (assistBlocked.value) return '监听已被设置关闭'
   return '启动对局监听'
 })
 const assistTitle = computed(() => {
   if (assistRunning.value) return '对局监听已开启（游戏内出现三选一时自动弹出）'
   if (autoAssistSupported.value === false)
     return '当前版本不支持自动识别（需 OCR 构建），请用「手动三选一」'
+  if (assistBlocked.value) return assistBlocked.value
   return '点击启动对局监听'
 })
 const lastTick = computed(() => mayhemStore.lastAssistTick)

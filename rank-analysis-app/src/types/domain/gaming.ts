@@ -42,7 +42,9 @@ export interface SessionSummoner {
   pickState?: string
   /**
    * 本局官方分配分路（LCU 小写命名 top/jungle/middle/bottom/utility）；
-   * 仅选人期我方有值（敌方 LCU 恒为空），匹配/大乱斗等无分配模式为空
+   * **局内同样有效**——后端在 `assigned_position` 为空时回填 gameflow 的
+   * `selectedPosition`（见 command/session.rs）。仅选人期敌方 LCU 恒为空；
+   * 匹配/大乱斗等无分配模式的队列为空。
    */
   assignedPosition?: string
 }
@@ -65,8 +67,33 @@ export interface ChampSelect {
   theirBans: number[]
 }
 
+/**
+ * 会话阶段。
+ *
+ * 取值与后端 `command/session.rs` 的 `valid_phases` 白名单严格一致；不在白名单内
+ * 时后端返回全空的 `SessionData`（`phase: ''`），故 `''` 也是合法取值——表示
+ * 空闲/已重置。
+ *
+ * @example
+ * ```ts
+ * if (sessionData.phase === 'ChampSelect') { ... }
+ * ```
+ */
+export type SessionPhase =
+  '' | 'ChampSelect' | 'GameStart' | 'InProgress' | 'Reconnect' | 'PreEndOfGame' | 'EndOfGame'
+
+/** 选人期与非选人期的判定收敛到一处，避免各处散落字面量比较。 */
+export function isChampSelect(phase: SessionPhase): boolean {
+  return phase === 'ChampSelect'
+}
+
+/** 是否为「游戏已开打」的阶段（GameStart 与 InProgress 等价，见 useBpDecision）。 */
+export function isInGame(phase: SessionPhase): boolean {
+  return phase === 'InProgress' || phase === 'GameStart'
+}
+
 export interface SessionData {
-  phase: string
+  phase: SessionPhase
   type: string
   typeCn: string
   queueId: number

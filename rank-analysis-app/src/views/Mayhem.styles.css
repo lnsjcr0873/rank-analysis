@@ -9,6 +9,26 @@
   margin-right: var(--space-8);
 }
 
+/* 助手阻塞原因横幅：助手被设置关闭 / 构建不支持时明示，
+   取代此前「按钮可点但永不推荐」的静默失效 */
+.assist-blocked {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  margin: 0 0 var(--space-6);
+  padding: var(--space-6) var(--space-8);
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  background: var(--warning-bg, rgba(230, 162, 60, 0.12));
+  border: 1px solid var(--warning-border, rgba(230, 162, 60, 0.32));
+  border-radius: var(--radius-sm);
+}
+
+.assist-blocked-ico {
+  flex-shrink: 0;
+  color: var(--warning, #e6a23c);
+}
+
 .btn {
   display: inline-flex;
   align-items: center;

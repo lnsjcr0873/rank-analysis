@@ -48,6 +48,7 @@ import {
   type ChampMetaMap
 } from '@renderer/features/mayhem/draft'
 import { isBootItem } from '@renderer/utils/item'
+import { isMayhemQueue } from '@renderer/features/mayhem/queues'
 
 interface DraftContext {
   queueId: number | null
@@ -66,8 +67,6 @@ const props = defineProps<{
   myPuuid?: string
   myTeam?: SessionPlayerFallback[]
 }>()
-
-const MAYHEM_QUEUE_IDS = [2400, 2410, 2450]
 
 const router = useRouter()
 const message = useMessage()
@@ -92,9 +91,7 @@ const metaMap = computed<ChampMetaMap>(() => {
 })
 
 const isMayhem = computed(
-  () =>
-    MAYHEM_QUEUE_IDS.includes(ctx.value?.queueId ?? 0) ||
-    MAYHEM_QUEUE_IDS.includes(props.queueId ?? 0)
+  () => isMayhemQueue(ctx.value?.queueId ?? 0) || isMayhemQueue(props.queueId ?? 0)
 )
 
 const myHandChampionId = computed<number>(() => {

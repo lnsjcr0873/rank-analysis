@@ -120,15 +120,32 @@
 
       <!-- ================= 2400 狂暴大乱斗专属选人面板（替换峡谷 BP 情报舱） ================= -->
       <MayhemDraftPanel
-        v-if="isMayhemQueue"
+        v-if="isMayhem"
         :queue-id="sessionData.queueId"
         :my-puuid="mySummonerPuuid"
-        :my-team="sessionData.subteams[0]?.players"
+        :my-team="mySubteamPlayers"
       />
 
-      <!-- ================= 情报舱：结论区 → 阶段区 → 信号区（非狂暴大乱斗时展示） ================= -->
-      <div v-else class="intel-bay">
-        <!-- ① 结论区：VerdictBanner + 梯度选择（梯度影响推荐依据，就近放结论旁）；
+      <!-- ================= 情报舱：结论区 → 阶段区 → 信号区（非狂暴大乱斗时展示） =================
+           大乱斗走上面的 MayhemDraftPanel，但两者共用这一层外壳，名册始终在下方渲染，
+           避免「选人有面板、局内空一块」的两套页面结构。 -->
+      <div v-if="!isMayhem" class="intel-bay">
+        <!-- ① 最优应对推荐条：只在选人期且候选池就绪时出现，作为名册上方的结论补充 -->
+        <BestPicksPanel
+          v-if="showBestPicks && showBestPicksPanel"
+          :enemy-ids="enemyLockedIds"
+          :candidate-ids="bestPickCandidates"
+          :teammate-ids="teammatePickedIds"
+          :teammate-positions="teammatePositions"
+          :my-position="teammatesMyPosition"
+          :tier="opggTier"
+          :tier-loading="opggTierLoading"
+          :region="'global'"
+          :my-summoner-name="mySummonerName"
+          @switch-tier="onTierChange"
+        />
+
+        <!-- ② 结论区：VerdictBanner + 梯度选择（梯度影响推荐依据，就近放结论旁）；
              兜底态追加「存为规则」入口，把兜底转化为用户自己的规则 -->
         <div class="intel-bay__verdict">
           <VerdictBanner
@@ -160,7 +177,7 @@
           </button>
         </div>
 
-        <!-- ② 阶段区 -->
+        <!-- ③ 阶段区 -->
         <div class="intel-bay__stage">
           <div class="intel-stage-row">
             <!-- 阶段 stepper：预选/禁用/选人/确认，仅 stage 非空时展示 -->
@@ -224,7 +241,7 @@
           </div>
         </div>
 
-        <!-- ③ 信号区：tab 化，默认强度对比；有内容的 tab 挂数量角标 -->
+        <!-- ④ 信号区：tab 化，默认强度对比；有内容的 tab 挂数量角标 -->
         <div class="intel-sigs">
           <div class="intel-sigs__tabs" role="tablist">
             <button
@@ -295,37 +312,45 @@
         </div>
       </div>
 
-      <div class="gaming-grid" :class="{ 'gaming-grid-multi': sessionData.isMultiTeam }">
-        <div v-for="st of orderedSubteams" :key="`subteam-col-${st.subteamId}`" class="subteam-col">
-          <BestPicksPanel
-            v-if="showBestPicks && !isMayhemQueue && panelForColumn(st)"
-            :enemy-ids="enemyLockedIds"
-            :candidate-ids="bestPickCandidates"
-            :teammate-ids="teammatePickedIds"
-            :teammate-positions="teammatePositions"
-            :my-position="teammatesMyPosition"
-            :tier="opggTier"
-            :tier-loading="opggTierLoading"
-            :region="'global'"
-            :my-summoner-name="mySummonerName"
-            @switch-tier="onTierChange"
-          />
-          <SubteamCard
-            :subteam="st"
-            :is-mine="st.subteamId === sessionData.mySubteamId"
-            :expected-size="expectedSubteamSize"
-            :type-cn="sessionData.typeCn"
-            :mode-type="sessionData.type"
-            :queue-id="sessionData.queueId"
-            :tiers-by-subteam="tiersBySubteam"
-            :density="density"
-            :phase="sessionData.phase"
-            :opgg-mode="opggMode"
-            :my-champion-ids="myChampionIds"
-            :my-puuid="mySummonerPuuid"
-            :my-position="teammatesMyPosition"
-            :tier="opggTier"
-          />
+      <!-- ================= 名册：全模式共用同一外壳（选人期 / 局内 / 大乱斗） ================= -->
+      <div
+        class="roster"
+        :class="{ 'roster-multi': roster.isMultiTeam, 'roster-mayhem': isMayhem }"
+      >
+        <div v-for="group in roster.groups" :key="`roster-${group.subteamId}`" class="roster-group">
+          <div class="roster-group__head">
+            <span class="roster-group__label">{{ group.label }}</span>
+            <span class="roster-group__count"
+              >{{ group.members.length }}/{{ group.expectedSize }}</span
+            >
+          </div>
+          <div class="roster-group__body">
+            <RosterRow
+              v-for="(member, i) in group.members"
+              :key="member.key"
+              :member="member"
+              :index="i"
+              :side="rosterSideOf(group.subteamId)"
+              :is-self="member.isSelf"
+              :is-loading="member.isLoading"
+              :champ-select="roster.isChampSelect"
+              :density="rosterDensity"
+              :opgg-mode="opggMode"
+              :opgg-tier="opggTier"
+              :queue-id="sessionData.queueId"
+              :tier-icon-url="tierByMemberKey.get(member.key)?.imgUrl ?? ''"
+              :tier-cn="tierByMemberKey.get(member.key)?.tierCn ?? '无'"
+              :teammate-champion-ids="group.isMine ? myChampionIds : enemyLockedIds"
+              :style="{ '--stagger-i': i }"
+            />
+            <div
+              v-for="i in placeholderCount(group.members.length)"
+              :key="`placeholder-${group.subteamId}-${i}`"
+              class="roster-placeholder"
+            >
+              <span>{{ roster.isChampSelect ? '等待选人…' : '已离开' }}</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -333,7 +358,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { invoke } from '@tauri-apps/api/core'
 import { getConfigByIpc, putConfigByIpc } from '@renderer/services/ipc'
@@ -342,7 +367,7 @@ import { useMessage } from 'naive-ui'
 
 import VerdictBanner from '@renderer/components/ui/VerdictBanner.vue'
 import LoadingComponent from '@renderer/components/LoadingComponent.vue'
-import SubteamCard from '@renderer/components/gaming/SubteamCard.vue'
+import RosterRow from '@renderer/components/gaming/RosterRow.vue'
 import BestPicksPanel from '@renderer/components/gaming/BestPicksPanel.vue'
 import MayhemDraftPanel from '@renderer/components/gaming/MayhemDraftPanel.vue'
 import TeamStrengthBar from '@renderer/components/gaming/TeamStrengthBar.vue'
@@ -370,11 +395,13 @@ import {
 } from '@renderer/services/opgg'
 import { useOpggTier } from '@renderer/composables/useOpggTier'
 import { buildRuleDraft } from '@renderer/features/gaming/services/bpRuleDraft'
+import { buildRoster, type RosterSide } from '@renderer/features/gaming/services/roster'
+import { isMayhemQueue } from '@renderer/features/mayhem/queues'
 import { normalizeLcuPosition } from '@renderer/features/gaming/services/counterIntel'
 import { getChampionName, loadChampionNames } from '@renderer/services/ai/champion-names'
 import { getThreatRatings, type ThreatRating } from '@renderer/services/scouting'
 import type { Position, PickRule, BanRule } from '@renderer/types/rules'
-import type { ChampSelect, Subteam } from '@renderer/types/domain/gaming'
+import type { ChampSelect } from '@renderer/types/domain/gaming'
 import type { championOption } from '@renderer/types/domain/champion'
 
 /** 选人阶段 stepper 的四步定义，顺序与展示文案固定 */
@@ -386,7 +413,7 @@ const STAGE_STEPS: Array<{ key: string; label: string }> = [
 ]
 
 const { sessionData, requestSessionData } = useSessionSync()
-const isMayhemQueue = computed(() => [2400, 2410, 2450].includes(sessionData.queueId))
+const isMayhem = computed(() => isMayhemQueue(sessionData.queueId))
 const tiersBySubteam = useSessionTiers(sessionData)
 const { getChampionUrl } = useAssetUrl()
 const { isConnected, summoner: mySummoner, currentPhase } = useGameState()
@@ -418,11 +445,79 @@ const mySummonerName = computed(() => {
   return s?.gameName ? `${s.gameName}#${s.tagLine ?? ''}` : ''
 })
 
-const density = computed<'normal' | 'compact'>(() =>
-  sessionData.isMultiTeam ? 'compact' : 'normal'
-)
+/* ================= 名册（Akari 式名册优先布局） ================= */
 
-const expectedSubteamSize = computed(() => (sessionData.isMultiTeam ? 2 : 5))
+/**
+ * 名册行密度。
+ *
+ * - `full`：身份 + 近期表现 + 最近对局缩略条
+ * - `normal`：身份 + 近期表现（窄窗或大乱斗，人数多时先保可读）
+ * - `minimal`：仅身份行（极窄窗兜底）
+ */
+const rosterDensity = computed<'full' | 'normal' | 'minimal'>(() => {
+  if (viewportWidth.value < 900) return 'minimal'
+  if (isMayhem.value || roster.value.members.length > 12) return 'normal'
+  if (viewportWidth.value < 1200) return 'normal'
+  return 'full'
+})
+
+/** 视口宽度：名册密度断点用，挂载时取一次并监听 resize */
+const viewportWidth = ref(typeof window === 'undefined' ? 1280 : window.innerWidth)
+onMounted(() => {
+  const onResize = (): void => {
+    viewportWidth.value = window.innerWidth
+  }
+  window.addEventListener('resize', onResize)
+  onUnmounted(() => window.removeEventListener('resize', onResize))
+})
+
+/**
+ * 名册数据出口。
+ *
+ * `buildRoster` 是纯函数，这里只负责喂 `sessionData` 与自己的 puuid。
+ * 注意它内部读的是响应式 `sessionData.subteams`，`useSessionSync` 原地 mutate
+ * 也能触发重算；不需要自己再 deep watch 一份副本。
+ */
+const roster = computed(() => buildRoster(sessionData, mySummonerPuuid.value, matchCount.value))
+
+/**
+ * 每名成员的段位展示。
+ *
+ * 优先按 puuid 检索，匿名时回退组内索引（选人期敌方无身份，同序即唯一对应）。
+ * 做成 puuid/索引双键 Map，避免模板里做查找。
+ */
+const tierByMemberKey = computed(() => {
+  const out = new Map<string, { imgUrl: string; tierCn: string }>()
+  for (const group of roster.value.groups) {
+    const tiers = tiersBySubteam.value[group.subteamId] ?? []
+    const byPuuid = new Map<string, (typeof tiers)[number]>()
+    group.members.forEach((m, i) => {
+      const key = m.player.summoner.puuid
+      if (key && !byPuuid.has(key)) byPuuid.set(key, tiers[i])
+    })
+    for (const m of group.members) {
+      const key = m.player.summoner.puuid
+      out.set(m.key, (key ? byPuuid.get(key) : undefined) ?? tiers[m.index])
+    }
+  }
+  return out
+})
+
+/** CHERRY 下非我方小队算「其他」阵营，CLASSIC 保留我方/敌方 */
+function rosterSideOf(subteamId: number): RosterSide {
+  if (subteamId === sessionData.mySubteamId) return 'mine'
+  return roster.value.isMultiTeam ? 'other' : 'enemy'
+}
+
+/** 占位行：人数不足期望值时补空位（选人期未满员 / 中途离开） */
+function placeholderCount(groupSize: number): number {
+  return Math.max(0, roster.value.expectedSize - groupSize)
+}
+
+/** 我方小队玩家列表，供 MayhemDraftPanel 复用（不再硬取 subteams[0]） */
+const mySubteamPlayers = computed(
+  () => sessionData.subteams.find(s => s.subteamId === sessionData.mySubteamId)?.players ?? []
+)
 
 const orderedSubteams = computed(() => {
   // 我方排第一格；其它按 subteamId 升序
@@ -434,15 +529,14 @@ const orderedSubteams = computed(() => {
 })
 
 /**
- * 推荐条落列规则：敌方已锁 ≥2 → 显示在敌方列（对位视角）；敌方未锁/不足但
- * 我方队友已亮 ≥1 → 显示在我方列（纯协同视角）。两态互斥，避免面板重复。
+ * 推荐条是否出现（原先是「落哪一列」，名册布局下统一收到名册上方，故退化为布尔）。
+ *
+ * 敌方已锁 ≥2 → 对位视角；敌方未锁/不足但我方队友已亮 ≥1 → 纯协同视角。
+ * 两态互斥，避免面板重复。
  */
-const panelForColumn = (st: Subteam): boolean => {
-  if (st.subteamId === sessionData.mySubteamId) {
-    return enemyLockedIds.value.length < 2 && teammatePickedIds.value.length >= 1
-  }
-  return enemyLockedIds.value.length >= 2
-}
+const showBestPicksPanel = computed(
+  () => enemyLockedIds.value.length >= 2 || teammatePickedIds.value.length >= 1
+)
 
 /**
  * 我方已亮队友英雄 id（含 intent/picking/locked，排除 ban 态与我自己）：
@@ -923,387 +1017,4 @@ onMounted(async () => {
 })
 </script>
 
-<style lang="css" scoped>
-.gaming-page {
-  padding: var(--space-16);
-  height: 100%;
-  box-sizing: border-box;
-  position: relative;
-  overflow-y: auto;
-}
-
-/* ---- 右下 dock（v3）：常态可见的操作区 ---- */
-.gaming-dock {
-  position: fixed;
-  right: 18px;
-  bottom: 18px;
-  z-index: var(--z-dock);
-  display: flex;
-  gap: var(--space-8);
-}
-.dock-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-6);
-  height: 36px;
-  padding: 0 var(--space-16);
-  border: none;
-  cursor: pointer;
-  clip-path: var(--clip-notch);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  color: var(--text-secondary);
-  background: var(--bg-raised);
-  border: 1px solid var(--border-strong);
-  transition:
-    filter var(--dur-fast) var(--ease-expo),
-    color var(--dur-fast) var(--ease-expo),
-    border-color var(--dur-fast) var(--ease-expo);
-}
-.dock-btn:hover:not(:disabled) {
-  color: var(--text-primary);
-  border-color: var(--brand-border);
-  box-shadow: var(--glow-brand);
-}
-.dock-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.dock-btn--ai {
-  background: var(--brand-gradient);
-  border-color: transparent;
-  color: var(--text-on-brand);
-  box-shadow: var(--glow-brand);
-}
-.dock-btn--ai:hover:not(:disabled) {
-  filter: brightness(1.08);
-  color: var(--text-on-brand);
-}
-
-/* ---- 情报舱（v3）：单一容器三区结构 ---- */
-.intel-bay {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  clip-path: var(--clip-corner-md);
-  padding: var(--space-12) var(--space-16) var(--space-8);
-  margin-bottom: var(--space-12);
-}
-.intel-bay__verdict {
-  display: flex;
-  align-items: stretch;
-  gap: var(--space-10);
-}
-.intel-verdict {
-  flex: 1;
-  min-width: 0;
-}
-.intel-tier {
-  width: 96px;
-  flex: none;
-  align-self: center;
-}
-.intel-save-rule {
-  flex: none;
-  align-self: center;
-  height: 30px;
-  padding: 0 var(--space-12);
-  border: 1px solid var(--warn-border);
-  background: var(--warn-soft);
-  color: var(--warn);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
-  cursor: pointer;
-  clip-path: var(--clip-notch);
-}
-.intel-save-rule:hover {
-  filter: brightness(1.1);
-}
-
-.intel-bay__stage {
-  margin-top: var(--space-10);
-  padding-top: var(--space-8);
-  border-top: 1px solid var(--border-subtle);
-}
-.intel-stage-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-16);
-}
-
-.intel-sigs {
-  margin-top: var(--space-10);
-  padding-top: var(--space-8);
-  border-top: 1px solid var(--border-subtle);
-}
-.intel-sigs__tabs {
-  display: flex;
-  gap: 2px;
-  border-bottom: 1px solid var(--border-subtle);
-}
-.sig-tab {
-  position: relative;
-  border: none;
-  background: transparent;
-  color: var(--text-tertiary);
-  font-size: var(--font-size-sm);
-  padding: 7px 14px;
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-  transition:
-    color var(--dur-fast) var(--ease-expo),
-    border-color var(--dur-fast) var(--ease-expo);
-}
-.sig-tab:hover {
-  color: var(--text-secondary);
-}
-.sig-tab--on {
-  color: var(--brand);
-  border-bottom-color: var(--brand);
-}
-.sig-badge {
-  font-family: var(--font-num);
-  font-size: var(--font-size-2xs); /* debug6:禁9px，10px起步 */
-  color: var(--info);
-  margin-left: 3px;
-}
-.intel-sigs__pane {
-  padding-top: var(--space-10);
-  min-height: 40px;
-}
-.intel-empty {
-  text-align: center;
-  padding: var(--space-8) 0;
-}
-
-.gaming-config-hint {
-  font-size: var(--font-size-sm);
-  color: var(--text-tertiary);
-}
-
-.banner-meta {
-  white-space: nowrap;
-}
-
-/* 横幅是辅助信息密度，下拉必须收窄，否则压垮整行版式 */
-.banner-tier-select {
-  display: inline-block;
-  width: 96px;
-  margin-left: var(--space-8);
-  vertical-align: middle;
-}
-
-.banner-stale {
-  /* 品牌 token 名为 --semantic-loss（无对应 --semantic-lose 定义） */
-  color: var(--semantic-loss);
-}
-
-/* ---- 阶段 stepper：预选/禁用/选人/确认，当前步高亮，切换带 transition ---- */
-.stage-stepper {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.stage-step {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--text-tertiary);
-  font-size: 12px;
-  transition: color var(--dur-normal) var(--ease-expo);
-}
-
-.stage-step-active {
-  color: var(--semantic-win);
-  font-weight: 600;
-}
-
-.stage-step-done {
-  color: var(--text-secondary, var(--text-tertiary));
-}
-
-.stage-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--text-tertiary);
-  transition:
-    background-color var(--dur-normal) var(--ease-expo),
-    box-shadow var(--dur-normal) var(--ease-expo);
-}
-
-.stage-step-active .stage-dot {
-  background: var(--semantic-win);
-  box-shadow: 0 0 6px 1px rgba(61, 155, 122, 0.55);
-}
-
-.stage-step-done .stage-dot {
-  background: var(--semantic-win);
-  opacity: 0.5;
-}
-
-.stage-connector {
-  width: 16px;
-  height: 1px;
-  background: var(--border-subtle);
-  transition: background-color var(--dur-normal) var(--ease-expo);
-}
-
-.stage-connector-done {
-  background: var(--semantic-win);
-  opacity: 0.5;
-}
-
-/* ---- 双方 ban 条：位于 stepper 下、grid 上 ---- */
-.ban-bar {
-  display: flex;
-  gap: var(--space-24);
-  margin-top: var(--space-8);
-  font-size: 12px;
-}
-
-.ban-group {
-  display: flex;
-  align-items: center;
-  gap: var(--space-8);
-}
-
-.ban-group-label {
-  color: var(--text-tertiary);
-  white-space: nowrap;
-}
-
-.ban-group-empty {
-  color: var(--text-tertiary);
-}
-
-.ban-icons {
-  display: flex;
-  gap: 4px;
-}
-
-.ban-icon {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  object-fit: cover;
-  filter: grayscale(1) brightness(0.7);
-  border: 1px solid rgba(196, 92, 92, 0.5);
-  /* 新 ban 弹入：仅在元素首次挂载时播放一次（列表增长时旧图标不会重新触发） */
-  animation: ban-pop 0.24s var(--ease-expo) both;
-}
-
-@keyframes ban-pop {
-  from {
-    opacity: 0;
-    transform: scale(0.75);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .ban-icon {
-    animation: none;
-  }
-}
-
-.ai-result-content {
-  padding: var(--space-16);
-  line-height: 1.8;
-  font-size: var(--font-size-md);
-  max-height: 600px;
-  overflow-y: auto;
-}
-
-/* 首块文本到达前的占位：与 MatchAIPanel 的骨架屏同一形态 */
-.ai-result-skeleton {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-8);
-  padding: var(--space-16);
-}
-
-.ai-result-skeleton-label {
-  font-size: var(--font-size-md);
-  color: var(--text-secondary);
-  padding-bottom: var(--space-6);
-}
-
-.ai-result-empty {
-  padding: var(--space-24) var(--space-16);
-  text-align: center;
-  color: var(--text-secondary);
-}
-
-/* 对局中 tab：实时数据更新的提示条（轮询是自管的，这里只做状态展示） */
-.ai-live-hint {
-  padding: var(--space-8) var(--space-16);
-  font-size: var(--font-size-sm);
-  color: var(--text-secondary);
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-/* 报告内容样式（章节着色 / hero / 数字名字高亮）由共享 styles/ai-report.css 提供，
-   容器同时挂了 class `ai-report`，此处只保留弹窗布局。 */
-
-.gaming-grid {
-  height: 100%;
-  display: grid;
-  /* auto-fit: 窄屏 (<1000px) 自动堆 1 列, 宽屏 2 列, 自适应 */
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 480px), 1fr));
-  /* 整体居中, 4K 下 2600 max 保证 card 有横向空间放大 */
-  max-width: 2600px;
-  margin: 0 auto;
-  gap: var(--space-16);
-}
-
-/* 每列：BestPicksPanel 置于 SubteamCard 正上方，纵向排布撑满 */
-.subteam-col {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-  min-height: 0;
-  height: 100%;
-}
-
-.subteam-col > :last-child {
-  flex: 1;
-  min-height: 0;
-}
-
-.gaming-grid-multi {
-  height: auto;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 480px), 1fr));
-  grid-auto-rows: minmax(220px, auto);
-  max-width: 2600px;
-}
-
-.matchup-hints {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin-top: 4px;
-}
-
-.matchup-hint {
-  font-size: 11px;
-  color: var(--text-tertiary);
-  padding: 1px 8px;
-  border-radius: 6px;
-  background: var(--glass-bg-mid);
-}
-
-.jungle-pattern {
-  font-size: 11px;
-  color: var(--text-tertiary);
-  padding: 1px 8px;
-  margin-top: 4px;
-  border-radius: 6px;
-  background: var(--glass-bg-mid);
-  border-left: 2px solid var(--accent, rgba(255, 200, 80, 0.6));
-}
-</style>
+<style scoped src="./Gaming.styles.css"></style>

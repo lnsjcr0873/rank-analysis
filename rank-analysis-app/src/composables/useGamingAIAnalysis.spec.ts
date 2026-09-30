@@ -270,8 +270,8 @@ describe('useGamingAIAnalysis', () => {
     await nextTick()
     expect(result.result.value).toContain('game-A-report')
 
-    // A 局结束 → Lobby → B 局选人
-    sessionData.phase = 'Lobby'
+    // A 局结束 → 离开选人（后端对非白名单阶段下发 phase: ''，见 session.rs valid_phases）→ B 局选人
+    sessionData.phase = ''
     await nextTick()
     sessionData.phase = 'ChampSelect'
     await nextTick()
@@ -294,8 +294,8 @@ describe('useGamingAIAnalysis', () => {
     const stale = captured.champSelect!
     expect(mockChampSelect).toHaveBeenCalledTimes(1)
 
-    // 请求还在跑时进入 B 局选人
-    sessionData.phase = 'Lobby'
+    // 请求还在跑时离开选人（后端对非白名单阶段下发 phase: ''，见 session.rs valid_phases）
+    sessionData.phase = ''
     await nextTick()
     sessionData.phase = 'ChampSelect'
     await nextTick()
