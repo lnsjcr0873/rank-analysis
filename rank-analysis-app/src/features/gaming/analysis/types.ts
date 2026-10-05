@@ -23,6 +23,8 @@ export interface BasicInfo {
   gameDuration: number
   gameType: string
   queueId: number
+  /** 队列中文名（后端 `enrich_info_cn` 已本地化，前端不另建映射表） */
+  queueName: string
   gameMode: string
   mapId: number
   /** `gameMode === 'CHERRY'`（斗魂多队模式） */

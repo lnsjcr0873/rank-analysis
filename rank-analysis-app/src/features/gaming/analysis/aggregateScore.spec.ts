@@ -99,6 +99,7 @@ function makeGame(over: Partial<SingleSummaryAnalysis> = {}): PreparedGame {
       gameDuration: 1800,
       gameType: 'MATCHED_GAME',
       queueId: 420,
+      queueName: '单双排',
       gameMode: 'CLASSIC',
       mapId: 11,
       isCherrySubteam: false

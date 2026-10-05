@@ -108,6 +108,7 @@ function makeGame(
       gameDuration: 1800,
       gameType: 'MATCHED_GAME',
       queueId: gameMode === 'CHERRY' ? 1750 : 420,
+      queueName: gameMode === 'CHERRY' ? '斗魂竞技场' : '单双排',
       gameMode,
       mapId: 11,
       isCherrySubteam: gameMode === 'CHERRY'

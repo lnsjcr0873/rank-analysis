@@ -102,6 +102,8 @@ export function toBasicInfo(game: Game): BasicInfo {
     gameDuration: game.gameDuration,
     gameType: game.gameType,
     queueId: game.queueId,
+    // 后端 `enrich_info_cn` 已把 queueName 本地化成中文，直接用，不在前端另建映射
+    queueName: game.queueName,
     gameMode: game.gameMode,
     mapId: game.mapId,
     isCherrySubteam: game.gameMode === 'CHERRY'

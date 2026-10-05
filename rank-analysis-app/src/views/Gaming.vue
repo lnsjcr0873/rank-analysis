@@ -312,6 +312,20 @@
         </div>
       </div>
 
+      <!-- ================= 名册墙：Akari 情报卡（历史画像深度） =================
+           插在 .intel-bay 之后、.roster 之前（设计文档 ADR-4）。
+           与下方 .roster 定位不同：本 band 答「他是谁」，.roster 答「本局该怎么做」。 -->
+      <RosterWall
+        v-if="rosterWallVisible"
+        class="roster-wall-band"
+        :ally="rosterWallAlly"
+        :enemy="rosterWallEnemy"
+        :champion-name="getChampionName"
+        :self-puuid="mySummonerPuuid"
+        :density="rosterWallDensity"
+        @open-game="onRosterWallOpenGame"
+      />
+
       <!-- ================= 名册：全模式共用同一外壳（选人期 / 局内 / 大乱斗） ================= -->
       <div
         class="roster"
@@ -368,6 +382,7 @@ import { useMessage } from 'naive-ui'
 import VerdictBanner from '@renderer/components/ui/VerdictBanner.vue'
 import LoadingComponent from '@renderer/components/LoadingComponent.vue'
 import RosterRow from '@renderer/components/gaming/RosterRow.vue'
+import RosterWall from '@renderer/components/gaming/roster-wall/RosterWall.vue'
 import BestPicksPanel from '@renderer/components/gaming/BestPicksPanel.vue'
 import MayhemDraftPanel from '@renderer/components/gaming/MayhemDraftPanel.vue'
 import TeamStrengthBar from '@renderer/components/gaming/TeamStrengthBar.vue'
@@ -396,6 +411,11 @@ import {
 import { useOpggTier } from '@renderer/composables/useOpggTier'
 import { buildRuleDraft } from '@renderer/features/gaming/services/bpRuleDraft'
 import { buildRoster, type RosterSide } from '@renderer/features/gaming/services/roster'
+import { analyzeRoster } from '@renderer/features/gaming/services/playerAnalysis'
+import {
+  toRosterWallMember,
+  type RosterWallMember
+} from '@renderer/features/gaming/roster-wall/member'
 import { isMayhemQueue } from '@renderer/features/mayhem/queues'
 import { normalizeLcuPosition } from '@renderer/features/gaming/services/counterIntel'
 import { getChampionName, loadChampionNames } from '@renderer/services/ai/champion-names'
@@ -512,6 +532,79 @@ function rosterSideOf(subteamId: number): RosterSide {
 /** 占位行：人数不足期望值时补空位（选人期未满员 / 中途离开） */
 function placeholderCount(groupSize: number): number {
   return Math.max(0, roster.value.expectedSize - groupSize)
+}
+
+/* ================================================================
+   名册墙（Akari 情报卡）：历史画像深度 band
+   设计文档 docs/superpowers/specs/2026-10-05-gaming-roster-wall-design.md
+   ================================================================ */
+
+/** 名册墙可见性：仅 CLASSIC 排位显示（ADR-4 密度档；大乱斗由 MayhemDraftPanel 接管） */
+const rosterWallVisible = computed(() => {
+  if (sessionData.gameMode !== 'CLASSIC') return false
+  // 窄窗不显示：此时 .roster 已是最小密度，名册墙会把页面推得过长
+  return window.innerWidth >= 1400
+})
+
+/** 名册墙密度：与既有 rosterDensity 判据同源，避免两处规则漂移 */
+const rosterWallDensity = computed<'full' | 'slim'>(() =>
+  rosterDensity.value === 'full' ? 'full' : 'slim'
+)
+
+/** puuid → 该玩家的段位列表（`useSessionTiers` 按 subteam 给，需按 puuid 重索引） */
+const tiersByPuuid = computed(() => {
+  const out = new Map<string, { imgUrl: string; tierCn: string }[]>()
+  for (const group of roster.value.groups) {
+    const tiers = tiersBySubteam.value[group.subteamId] ?? []
+    group.members.forEach((m, i) => {
+      const puuid = m.player.summoner?.puuid
+      if (puuid && tiers[i] && !out.has(puuid)) out.set(puuid, tiers)
+    })
+  }
+  return out
+})
+
+/** 名册墙成员：复用 analyzeRoster 的批量分析与降级结果 */
+const rosterWallMembers = computed<RosterWallMember[]>(() => {
+  const players = sessionData.subteams.flatMap(s => s.players)
+  if (players.length === 0) return []
+
+  const results = analyzeRoster(players, { nowMs: Date.now(), limit: matchCount.value * 10 })
+  const tierMap = tiersByPuuid.value
+  const members: RosterWallMember[] = []
+  for (const p of players) {
+    const puuid = p.summoner?.puuid ?? ''
+    if (!puuid) continue
+    const analysis = results.get(puuid)
+    if (!analysis) continue
+    members.push(toRosterWallMember(p, analysis, mySummonerPuuid.value, tierMap))
+  }
+
+  // 排序：预组队优先（像 Akari 的 orderPlayerBy='premade-team'）
+  return members.sort((a, b) => {
+    if (!!a.premadeGroup !== !!b.premadeGroup) return a.premadeGroup ? -1 : 1
+    return (b.analysis.profile?.score.total ?? 0) - (a.analysis.profile?.score.total ?? 0)
+  })
+})
+
+const rosterWallAlly = computed(() =>
+  rosterWallMembers.value.filter(m => rosterSideOf(subteamIdOf(m.puuid)) === 'mine')
+)
+const rosterWallEnemy = computed(() =>
+  rosterWallMembers.value.filter(m => rosterSideOf(subteamIdOf(m.puuid)) !== 'mine')
+)
+
+/** puuid → subteamId（名册墙只按 puuid 拿到成员，需反查阵营） */
+function subteamIdOf(puuid: string): number {
+  for (const s of sessionData.subteams) {
+    if (s.players.some(p => p.summoner?.puuid === puuid)) return s.subteamId
+  }
+  return -1
+}
+
+/** 名册墙点开对局：复用战绩页的就地展开（后续 P6 接 openGame 事件总线） */
+function onRosterWallOpenGame(_gameId: number, _puuid: string): void {
+  // TODO(P6): 接入 record 页的就地展开（openGame 事件），当前仅占位避免静默无响应
 }
 
 /** 我方小队玩家列表，供 MayhemDraftPanel 复用（不再硬取 subteams[0]） */

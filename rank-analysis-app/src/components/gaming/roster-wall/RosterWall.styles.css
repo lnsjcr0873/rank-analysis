@@ -1,0 +1,31 @@
+/* 名册墙容器样式（外置，见 CLAUDE.md 大段样式外置约定）。
+   切角用 --clip-corner-md，与同屏 .intel-bay 保持同一档容器切角。 */
+
+.roster-wall {
+  padding: var(--space-12) var(--space-16) var(--space-8);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  clip-path: var(--clip-corner-md);
+}
+
+.roster-wall-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-8);
+  margin-bottom: var(--space-12);
+  padding-bottom: var(--space-6);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.roster-wall-title {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-black);
+  letter-spacing: var(--tracking-wide);
+  color: var(--text-primary);
+}
+
+.roster-wall-note {
+  font-family: var(--font-num);
+  font-size: var(--font-size-2xs);
+  color: var(--text-tertiary);
+}

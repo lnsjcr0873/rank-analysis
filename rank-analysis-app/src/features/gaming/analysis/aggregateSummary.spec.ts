@@ -106,6 +106,7 @@ function makeGame(
       gameDuration: DURATION_SEC,
       gameType: 'MATCHED_GAME',
       queueId: 420,
+      queueName: '单双排',
       gameMode: 'CLASSIC',
       mapId: 11,
       isCherrySubteam: false
