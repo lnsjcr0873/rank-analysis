@@ -149,6 +149,8 @@ export function toSelfGameStats(
     visionScore: stats.visionScore ?? null,
     // 非斗魂局为 0，归一为 null 以免把 0 当成"第 0 名"
     subteamPlacement: stats.subteamPlacement > 0 ? stats.subteamPlacement : null,
+    // 斗魂小队 ID；非斗魂为 0，保留原值供「小队总数」推算
+    subteamId: stats.playerSubteamId ?? 0,
     spell1Id: participant.spell1Id ?? null,
     spell2Id: participant.spell2Id ?? null,
     // SGP 独有字段：rank 的 ParticipantStats 无 soloKills / 敌方消失信号，

@@ -35,6 +35,7 @@ function makeStats(over: Partial<SelfGameStats> = {}): SelfGameStats {
     totalHeal: 1000,
     visionScore: 40,
     subteamPlacement: null,
+    subteamId: 0,
     spell1Id: 4,
     spell2Id: 7,
     soloKills: null,

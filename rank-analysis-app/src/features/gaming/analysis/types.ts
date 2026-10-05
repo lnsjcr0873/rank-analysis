@@ -299,6 +299,8 @@ export interface SelfGameStats {
   visionScore: number | null
   /** 斗魂名次；非斗魂为 null */
   subteamPlacement: number | null
+  /** 斗魂小队 ID（`stats.playerSubteamId`；非斗魂局为 0）。用于推算该局小队总数 */
+  subteamId: number
   /** 召唤师技能 ID；数据缺失时为 null */
   spell1Id: number | null
   spell2Id: number | null
