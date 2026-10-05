@@ -524,7 +524,73 @@ cd src-tauri && cargo test
 
 ---
 
-## 9. 参考：Akari 对标文件索引
+## 10. 实现状态（2026-10-05）
+
+分支 `feat/gaming-roster-wall`。P0 与 P2 已完成并提交；P1/P3/P4/P5/P6 待做。
+
+| 里程碑 | 状态 | 提交 | 规模 | 备注 |
+|---|---|---|---|---|
+| P0 修 `scouting` 队级聚合 | ✅ | `c5d9b38` | +169/−10 | 本机无 linker，编译与测试执行由 CI 兜底；已用等价实现做数值双向验证 |
+| P2 TS summary 分析引擎 | ✅ | `acecb5a` `28ab2ac` `5f7a960` `0fc16e0` `f3b78e5` | ~2,000 | 8 模块 + 接入层，207 测试 |
+| P1 Rust 批量 timeline 管道 | ⬜ | — | ~250 | 需 CI；命令 `get_player_timelines(region, game_ids)` |
+| P3 Rust frames 分析 | ⬜ | — | ~500 | 打野路径 / 前期死亡 / 目标节奏 |
+| P4 名册墙 UI | ⬜ | — | ~1,700 | 13 文件 + 结构金丝雀测试 |
+| P5 打野路径卡 + 9 设置项 | ⬜ | — | ~350 | 依赖 P1+P3 |
+| P6 收尾 | ⬜ | — | ~200 | 密度三档 / 性能 / 覆盖率 |
+
+### P2 已交付模块
+
+| 文件 | 职责 |
+|---|---|
+| `analysis/constants.ts` | 9 维权重与基线、PvE 队列白名单 |
+| `analysis/utils.ts` | `noZero` / `avg*` / `standardize` / CV / IQR |
+| `analysis/types.ts` | 类型契约（含 `AggregateScore` vs `PlayerScore` 同名不同量警示） |
+| `analysis/gameAdapter.ts` | rank `Game` → 归一化；字段改名与「缺失≠0」在此层收敛 |
+| `analysis/singleSummary.ts` | 单局占比/比率；**理应贡献比的唯一产地** |
+| `analysis/aggregateSummary.ts` | 跨局汇总、胜负（时钟注入）、teamSide、spells |
+| `analysis/aggregateScore.ts` | 跨局 9 维综合分（ADR-2 的 TS 侧产出） |
+| `analysis/positions.ts` | 分路分布、斗魂三分桶、英雄分桶 |
+| `analysis/index.ts` | `analyzePlayerProfile` 编排入口（含 PvE 过滤、倒序截断） |
+| `services/playerAnalysis.ts` | 指纹缓存、降级批量、时钟透传 |
+
+### P2 期间修正的实现细节（后续接手须知）
+
+1. **`SessionSummoner` 顶层没有 `puuid`**，它在 `summoner.puuid`。按顶层写会全量 typecheck 失败。
+2. **TS `Participant` 接口未声明 `timeline`**（Rust `model.rs` 有且经 IPC 透传）。
+   本目录沿用 `services/ai/shared/snapshot.ts` 既有的 cast 约定。
+   全仓已积累 4 处 `as unknown as` 绕行 —— **建议后续独立重构把该字段补进共享类型**。
+3. **rank 的 `ParticipantStats` 没有** `totalDamageShieldedOnTeammates`、`soloKills`、
+   敌方消失信号 ⇒ 相关占比/均值**删掉而非补 0**。
+4. **Akari `aggregate/win-loss.ts` 直接调 `Date.now()`** ⇒ 本实现改为 `nowMs` 注入，
+   测试可完整复现。
+5. **Akari 用 MobX reaction 判断「details 有无变化」来跳过昂贵 timeline 计算**，
+   rank 无对应物 ⇒ P2 只做纯函数；到 P1/P3 时需要在此层之上另加 memo。
+
+### 已验证的关键不变量
+
+| 不变量 | 验证手段 |
+|---|---|
+| TS 跨局分与 Rust 单局分**共用同一套权重** | 单局场景下两者总分必须相等（期望值 2.6244744，独立按 Rust 公式手算）；改任一侧权重即红 |
+| 理应贡献比**只看队内相对份额** | 整队同倍放大不变；只放大**敌方**时不变而 `RatioToMax` 变；只放大**队友**时会变 |
+| 5v5 均衡局每人恰好 1.0 / 独吞时 5.0 | 单测 |
+| 降级纪律不产生 `NaN`/`Infinity` | 单人队、队总为 0、时长为 0、视野缺失、小数数为 0 四类构造 |
+| 筛选口径排除 PvE | `PVE_QUEUE_IDS`（450/300/900/1000/700）+ 非 `MATCHED_GAME` |
+| **先倒序再截断**（否则留下最旧的 N 局） | 单测 |
+| 分路 `null` 跳过而非计入 `NONE` | 单测 |
+| 斗魂队伍数判不出时**不猜默认值** | 单测（曾用 8/2 硬编码，已否掉） |
+| 缓存指纹**不含 `championId`** | 单测（否则选人期每秒重算 10 人画像） |
+| 单玩家失败不影响其余玩家 | 单测（畸形数据 + 批处理） |
+
+### P2 期间发现的既有缺口（未在本次修复）
+
+| 缺口 | 影响 | 建议 |
+|---|---|---|
+| TS `Participant` 缺 `timeline` 声明 | 4 处 cast 绕行 | 独立重构补进 `types/domain/match.ts` |
+| `get_threat_ratings` 的 `recent_performance` 此前只由 KDA+刀分+胜负驱动 | 威胁评级区分度不足 | **P0 已修**（`c5d9b38`） |
+
+---
+
+## 11. 参考：Akari 对标文件索引
 
 | Akari 文件 | 行数 | 去向 |
 |---|---|---|
