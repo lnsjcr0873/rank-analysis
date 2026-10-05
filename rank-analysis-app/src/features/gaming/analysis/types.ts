@@ -101,7 +101,8 @@ export interface SingleSummaryAnalysis {
  */
 export interface AggregateScore {
   kdaScore: number
-  winScore: number
+  /** 跨局胜率的斜坡得分（**不是** Rust 单局分的 0/1 二值，见 `aggregateScore.ts` 对照表） */
+  winRateScore: number
   damageScore: number
   damageTakenScore: number
   healingScore: number
@@ -172,12 +173,10 @@ export interface AggregatedSummaryAnalysis {
   /** 跨局胜率 0..1 */
   winRate: number
 
-  /** 平均单杀数；**SGP 独有字段**，任一局缺失即 null */
+  /** 平均单杀数；**SGP 独有字段**，任一局缺失即 null（rank 走 LCU 摘要时恒为 null） */
   avgSoloKills: number | null
   /** 平均「敌方消失」信号数；**SGP 独有字段**，任一局缺失即 null */
   avgEnemyMissingPings: number | null
-  /** 平均总信号数；**SGP 独有字段**，任一局缺失即 null */
-  avgPings: number | null
 }
 
 /** 胜负聚合（含连胜/连跪） */
