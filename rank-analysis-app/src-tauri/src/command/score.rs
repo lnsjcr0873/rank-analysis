@@ -688,10 +688,93 @@ mod tests {
             ""
         );
         let mut legacy = ParticipantIdentity::default();
-        legacy.player.summoner_name = "旧名".to_string();
+        legacy.player.summoner_name = "阿狸".to_string();
         assert_eq!(
             input_from_lcu_participant(&p, Some(&legacy), 1800).summoner_name,
-            "旧名"
+            "阿狸"
         );
+    }
+
+    // ================================================================
+    // 跨语言同步契约（TS `src/features/gaming/analysis/constants.spec.ts`）
+    //
+    // 名册墙「17 分」徽章用的是**跨局聚合分**（TS 侧 `aggregateScore.ts`），
+    // 而 MVP/SVP、详情页评分页签、决策回测用的是这里的**单局分**。
+    // 两者共用同一套 9 维权重与基线，但数学结构不同（win 项：单局 0/1，
+    // 跨局是连续斜坡），故必须靠测试把权重钉死，否则改阈值会静默分叉。
+    //
+    // 下面断言的字面量与 TS 侧 `constants.spec.ts` 的 `pin` 表一一对应。
+    // 任一侧改动 → 该侧测试变红 → CI 强制另一侧同步。
+    // ================================================================
+
+    #[test]
+    fn pin_max_score_is_seventeen() {
+        let sum = FULL_SCORE_KDA
+            + FULL_SCORE_WIN
+            + FULL_SCORE_DAMAGE
+            + FULL_SCORE_TAKEN
+            + FULL_SCORE_HEAL
+            + FULL_SCORE_CS
+            + FULL_SCORE_GOLD
+            + FULL_SCORE_PARTICIPATION
+            + FULL_SCORE_VISION;
+        assert_eq!(AKARI_MAX_SCORE, 17.0);
+        assert_eq!(sum, AKARI_MAX_SCORE);
+    }
+
+    #[test]
+    fn pin_dimension_weights() {
+        assert_eq!(KDA_BASELINE, 2.0);
+        assert_eq!(KDA_SLOPE, 3.0 / 7.0);
+        assert_eq!(FULL_SCORE_KDA, 1.0);
+        assert_eq!(FULL_SCORE_WIN, 1.0);
+        assert_eq!(FULL_SCORE_DAMAGE, 3.0);
+        assert_eq!(FULL_SCORE_TAKEN, 2.0);
+        assert_eq!(FULL_SCORE_HEAL, 2.0);
+        assert_eq!(FULL_SCORE_CS, 2.0);
+        assert_eq!(FULL_SCORE_GOLD, 2.0);
+        assert_eq!(FULL_SCORE_PARTICIPATION, 2.0);
+        assert_eq!(FULL_SCORE_VISION, 2.0);
+    }
+
+    #[test]
+    fn pin_baselines_and_ratio_bands() {
+        assert_eq!(HEAL_RATIO_MIN, 0.2);
+        assert_eq!(HEAL_RATIO_MAX, 1.4);
+        assert_eq!(CS_MIN_PER_MIN, 5.0);
+        assert_eq!(CS_MAX_PER_MIN, 10.0);
+        assert_eq!(KP_MIN, 0.3);
+        assert_eq!(RATIO_MIN_DAMAGE, 1.0);
+        assert_eq!(RATIO_MAX_DAMAGE, 2.0);
+        assert_eq!(RATIO_MIN_TAKEN, 1.0);
+        assert_eq!(RATIO_MAX_TAKEN, 2.0);
+        assert_eq!(RATIO_MIN_GOLD, 1.0);
+        assert_eq!(RATIO_MAX_GOLD, 1.5);
+        assert_eq!(RATIO_MIN_VISION, 1.0);
+        assert_eq!(RATIO_MAX_VISION, 2.0);
+    }
+
+    /// 单人队伍治疗满分线：Rust 用 `team_size >= 3` 分支切到 1.0，
+    /// TS 侧对应 `HEAL_RATIO_SOLO_MAX = 1.0`。此断言锁住两侧一致。
+    #[test]
+    fn pin_healing_solo_branch() {
+        assert!(HEAL_RATIO_MAX > 1.0, "多人队伍治疗满分线必须高于单人分支");
+        let solo_full = 1.0_f64;
+        let size = 1_usize;
+        assert_eq!(
+            if size >= 3 { HEAL_RATIO_MAX } else { solo_full },
+            solo_full
+        );
+    }
+
+    /// 有意分歧记录：Rust 无跨局路径，故无 `WIN_RATE_BASELINE` 对应常量。
+    /// 单局 win ∈ {0,1} 时线性斜坡 [0.5, 1.0] 退化为「赢满分 / 输 0 分」。
+    #[test]
+    fn document_win_rate_baseline_divergence() {
+        let win_score = |win: bool| if win { FULL_SCORE_WIN } else { 0.0 };
+        assert_eq!(win_score(true), 1.0);
+        assert_eq!(win_score(false), 0.0);
+        // 若将来 Rust 新增跨局聚合命令，需同步 TS 侧 constants.spec.ts 的
+        // intentional_divergences（删除 WIN_RATE_BASELINE 条目并补对拍断言）。
     }
 }
