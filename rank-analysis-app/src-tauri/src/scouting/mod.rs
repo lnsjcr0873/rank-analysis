@@ -74,16 +74,48 @@ pub struct ThreatRating {
 
 /// 按 puuid 在单局中定位参与者（口径同 insight::my_participant）。
 ///
-/// 通过 `game_detail.participant_identities` 找到该 puuid 在列表中的索引，
-/// 再在 `game_detail.participants` 中按 `participant_id == idx + 1` 精确匹配；
+/// 通过 `game_detail.participant_identities` 中该 puuid 的下标推出其
+/// `participant_id`（LCU 约定 `participant_id == identity 下标 + 1`）。
+///
 /// debug6 去掉同索引回退，对不上即 None（防串人进威胁评估）。
-fn find_participant<'a>(game: &'a Game, puuid: &str) -> Option<&'a Participant> {
+fn participant_id_of(game: &Game, puuid: &str) -> Option<i32> {
     let identities = &game.game_detail.participant_identities;
     let idx = identities.iter().position(|i| i.player.puuid == puuid)?;
+    Some(idx as i32 + 1)
+}
+
+/// 按 `participant_id` 在 `game_detail.participants` 中精确定位该 puuid 的参与者。
+fn find_participant<'a>(game: &'a Game, puuid: &str) -> Option<&'a Participant> {
+    let pid = participant_id_of(game, puuid)?;
     game.game_detail
         .participants
         .iter()
-        .find(|p| p.participant_id == idx as i32 + 1)
+        .find(|p| p.participant_id == pid)
+}
+
+/// 在单局中为指定参与者计算 17 分制总分（**队级聚合**）。
+///
+/// 关键约束：必须把该局**全队**的评分输入喂给 `score_participants`。
+/// 17 分制里伤害/承伤/经济/视野/参团共 11 分是 team-relative 维度 ——
+/// `score_participants` 内部按 `team_id` 分组求和后才算占比。若只传单元素切片，
+/// `contribution_ratio(x, x, 1) ≡ 1.0`，那 6 个维度全部退化为常数，
+/// 敌方威胁评级实际只剩 KDA + 刀分 + 胜负三个信号。
+///
+/// `participant` 必须是本局内已定位到的参与者（`find_participant` 产出）。
+fn participant_score_in_game(game: &Game, participant: &Participant) -> Option<f64> {
+    let inputs: Vec<PlayerScoreInput> = game
+        .game_detail
+        .participants
+        .iter()
+        .map(|p| participant_to_score_input(p, game.game_detail.game_duration))
+        .collect();
+    if inputs.is_empty() {
+        return None;
+    }
+    score_participants(&inputs)
+        .iter()
+        .find(|s| s.participant_id == participant.participant_id)
+        .map(|s| s.total)
 }
 
 /// 从单局中提取玩家评分输入。
@@ -357,12 +389,13 @@ pub fn assess_team_threats_with_games(
         };
 
         for game in &games {
-            if let Some(p) = find_participant(game, &enemy.puuid) {
-                let input = participant_to_score_input(p, game.game_detail.game_duration);
-                let scores = score_participants(&[input]);
-                let score = scores.first().map(|s| s.total).unwrap_or(0.0);
-                style.add_game(p, score);
-            }
+            let Some(p) = find_participant(game, &enemy.puuid) else {
+                continue;
+            };
+            let Some(score) = participant_score_in_game(game, p) else {
+                continue;
+            };
+            style.add_game(p, score);
         }
 
         let encounter_summary = crate::meet_db::query_summary(&enemy.puuid);
@@ -443,6 +476,132 @@ fn threat_level_ord(level: ThreatLevel) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::lcu::api::game_detail::{
+        GameDetail, GameDetailParticipantIdentity, GameDetailPlayer,
+    };
+    use crate::lcu::api::model::Stats;
+
+    /// 构造一个 5v5 的 `Game`。
+    ///
+    /// identities 按 `puuid = "p-{pid}"` 排序，使 `participant_id_of`（identities
+    /// 下标 + 1）能把每个 puuid 正确定位到 `participant_id`。
+    ///
+    /// **关键设计**：同队 5 人除 `dmg` 外所有字段完全一致（击杀/死亡/助攻/补刀/
+    /// 视野/经济/承伤/治疗/胜负全同）。这样两名玩家之间的分数差异**只可能**来自
+    /// team-relative 维度，从而使本模块的回归测试真正能捕获「只传单元素切片」
+    /// 这一 bug —— 若各人 KDA 或经济也有差异，KDA 等非 team-relative 维度会掩盖问题。
+    fn make_game(blue_damage: [i32; 5], red_damage: [i32; 5]) -> Game {
+        let mut identities = Vec::new();
+        let mut participants = Vec::new();
+
+        for (team_id, damages) in [(100i32, blue_damage), (200i32, red_damage)] {
+            for (i, dmg) in damages.iter().enumerate() {
+                let pid = (team_id - 100) * 5 + i as i32 + 1;
+                identities.push(GameDetailParticipantIdentity {
+                    player: GameDetailPlayer {
+                        account_id: pid as i64,
+                        puuid: format!("p-{pid}"),
+                        platform_id: "TENCENT-1".to_string(),
+                        summoner_name: format!("P{pid}"),
+                        game_name: format!("P{pid}"),
+                        tag_line: "T".to_string(),
+                        summoner_id: pid as i64,
+                    },
+                });
+                participants.push(Participant {
+                    participant_id: pid,
+                    champion_id: pid,
+                    team_id,
+                    stats: Stats {
+                        win: team_id == 100,
+                        kills: 4,
+                        deaths: 3,
+                        assists: 4,
+                        gold_earned: 10_000,
+                        total_damage_dealt_to_champions: *dmg,
+                        total_damage_taken: 20_000,
+                        total_heal: 1_000,
+                        total_minions_killed: 180,
+                        neutral_minions_killed: 20,
+                        vision_score: 30,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                });
+            }
+        }
+
+        identities.sort_by(|a, b| a.player.puuid.cmp(&b.player.puuid));
+        participants.sort_by_key(|p| p.participant_id);
+
+        Game {
+            game_detail: GameDetail {
+                game_duration: 1800,
+                participants,
+                participant_identities: identities,
+                ..Default::default()
+            },
+            ..Default::default()
+        }
+    }
+
+    fn score_of(game: &Game, puuid: &str) -> f64 {
+        let p = find_participant(game, puuid).expect("puuid 应在本局");
+        participant_score_in_game(game, p).expect("应算出总分")
+    }
+
+    /// 回归测试：17 分制必须对**整队**聚合，而不是只对该参与者。
+    ///
+    /// 修复前 `assess_team_threats_with_games` 给 `score_participants` 传的是
+    /// 单元素切片，`contribution_ratio(x, x, 1) ≡ 1.0`，于是伤害/承伤/经济/视野/
+    /// 参团这 11 分对每个人都相同 —— 队内输出最高者与最低者得分**完全相等**。
+    ///
+    /// 本断言在修复前必然失败（已用等价实现数值验证：修复前两人同为 4.0166）。
+    #[test]
+    fn should_score_team_relative_dimensions_against_whole_team() {
+        let game = make_game([50_000, 10_000, 7_500, 5_000, 2_500], [20_000; 5]);
+
+        let top = score_of(&game, "p-1");
+        let low = score_of(&game, "p-2");
+
+        assert!(
+            top > low,
+            "队内输出最高的玩家({top}) 应严格高于次低者({low})；\
+             相等说明 score_participants 只收到了单元素切片，team-relative 维度已退化为常数"
+        );
+    }
+
+    /// 同一队伍内，总分应随输出占比递减而单调不增，且首尾严格递减。
+    ///
+    /// 允许中间并列：`linear(ratio, 1.0, 2.0, 3)` 在 ratio ≤ 1.0 时一律记 0 分，
+    /// 占比过低的玩家会并列在 0 分地板上，这是公式的既定行为而非缺陷。
+    /// 但「修复前 5 人全同」会让首尾相等，故首尾严格递减仍是有效断言。
+    #[test]
+    fn should_rank_teammates_by_damage_share() {
+        let game = make_game([40_000, 30_000, 20_000, 10_000, 5_000], [20_000; 5]);
+
+        let scores: Vec<f64> = ["p-1", "p-2", "p-3", "p-4", "p-5"]
+            .iter()
+            .map(|puuid| score_of(&game, puuid))
+            .collect();
+
+        for w in scores.windows(2) {
+            assert!(w[0] >= w[1], "输出占比递减时总分不应上升，实得 {scores:?}");
+        }
+        assert!(
+            scores[0] > scores[4],
+            "队内输出 40000 与 5000 的两名队友不应同分（并列即退化），实得 {scores:?}"
+        );
+    }
+
+    #[test]
+    fn should_return_none_when_participant_not_in_game() {
+        let game = make_game([20_000; 5], [20_000; 5]);
+        assert!(
+            find_participant(&game, "p-999").is_none(),
+            "不存在的 puuid 不应被定位"
+        );
+    }
 
     #[test]
     fn should_return_low_threat_when_no_games() {
