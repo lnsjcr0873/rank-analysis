@@ -89,6 +89,37 @@
   --font-weight-black: 800;
   --font-num: Bahnschrift, 'Segoe UI', sans-serif;
 
+  /* ---------- 画像 Tag 语义层（名册墙） ----------
+     21 个玩家 Tag 收敛到 8 个语义色调族，而不是 21 个任意色：
+     颜色是**辅助**信息，Tag 的主要载体是文字本身。映射表见
+     features/gaming/roster-wall/playerTags.ts（该文件不得出现任何 hex）。
+     归属原则：
+       neutral = 身份/关系/数据指标   info = 预组/遇见过
+       win     = 正向趋势             brand = 实力结论（金，克制使用）
+       loss    = 负向趋势             warn = 风险提示
+       danger  = 强负面/需警惕         muted = 补充说明 */
+  --tag-neutral: #2a3444;
+  --tag-on-neutral: #dfe6f0;
+  --tag-info: #1f4b6e;
+  --tag-on-info: #d6ecff;
+  --tag-win: #1d5340;
+  --tag-on-win: #d6f5e7;
+  --tag-loss: #5a2a2a;
+  --tag-on-loss: #fbdede;
+  --tag-brand: var(--brand-deep);
+  --tag-on-brand: #fdf6e6;
+  --tag-warn: #6b4413;
+  --tag-on-warn: #ffeacd;
+  --tag-danger: #6d2020;
+  --tag-on-danger: #ffe0e0;
+  --tag-muted: #262c36;
+  --tag-on-muted: #9aa4b4;
+  /* 英雄使用环：按该英雄胜率（>= 50% 蓝 / < 50% 红） */
+  --champ-ring-win: #2368ca;
+  --champ-ring-loss: #c94f4f;
+  /* 熟练度星标 */
+  --champ-mastery: #fff838;
+
   /* ---------- 阴影/辉光/层级 ---------- */
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.45);
@@ -142,6 +173,27 @@
   --border-strong: rgba(60, 50, 30, 0.2);
   --surface-card: rgba(35, 40, 46, 0.045);
   --surface-raised: rgba(255, 255, 255, 0.6);
+
+  /* 浅色下 Tag 实心底需更深以保证对比（文字统一近白/浅色） */
+  --tag-neutral: #4a5462;
+  --tag-on-neutral: #f7f9fc;
+  --tag-info: #2f6a92;
+  --tag-on-info: #f2faff;
+  --tag-win: #2c7359;
+  --tag-on-win: #f2fbf6;
+  --tag-loss: #a34545;
+  --tag-on-loss: #fef4f4;
+  --tag-brand: #6b4a10;
+  --tag-on-brand: #fffaef;
+  --tag-warn: #8a5a17;
+  --tag-on-warn: #fff8ec;
+  --tag-danger: #932929;
+  --tag-on-danger: #fff0f0;
+  --tag-muted: #6a7280;
+  --tag-on-muted: #f2f4f7;
+  --champ-ring-win: #2a6fc4;
+  --champ-ring-loss: #c85a5a;
+  --champ-mastery: #b8a200;
 
   --shadow-1: 0 1px 2px rgba(60, 50, 30, 0.08);
   --shadow-2: 0 4px 12px rgba(60, 50, 30, 0.1);
