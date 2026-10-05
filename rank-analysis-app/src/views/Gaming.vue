@@ -539,11 +539,24 @@ function placeholderCount(groupSize: number): number {
    设计文档 docs/superpowers/specs/2026-10-05-gaming-roster-wall-design.md
    ================================================================ */
 
-/** 名册墙可见性：仅 CLASSIC 排位显示（ADR-4 密度档；大乱斗由 MayhemDraftPanel 接管） */
+/** 名册墙最小视口宽度：低于此值 .roster 已是 minimal，名册墙不再重复 */
+const ROSTER_WALL_MIN_WIDTH = 1400
+
+/**
+ * 名册墙可见性（ADR-4 密度档）。
+ *
+ * 三道门：
+ * - 非大乱斗：大乱斗已有 MayhemDraftPanel 承担「选谁」，名册墙是历史画像，会打架
+ * - 非多队：名册墙只有「我方 / 敌方」两栏，斗魂（CHERRY）三方平铺无法映射
+ * - 视口 ≥1400：窄窗下 .roster 已是最小密度，名册墙会把页面推得过长
+ *
+ * 用本文件既有的响应式 viewportWidth（挂载时取一次 + 监听 resize），不用裸 window.innerWidth，
+ * 否则缩放窗口时这道门不会重算。
+ */
 const rosterWallVisible = computed(() => {
-  if (sessionData.gameMode !== 'CLASSIC') return false
-  // 窄窗不显示：此时 .roster 已是最小密度，名册墙会把页面推得过长
-  return window.innerWidth >= 1400
+  if (isMayhem.value) return false
+  if (sessionData.isMultiTeam) return false
+  return viewportWidth.value >= ROSTER_WALL_MIN_WIDTH
 })
 
 /** 名册墙密度：与既有 rosterDensity 判据同源，避免两处规则漂移 */
