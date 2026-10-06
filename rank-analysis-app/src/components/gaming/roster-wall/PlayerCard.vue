@@ -60,7 +60,6 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'toggle-history'): void
   (e: 'toggle-tags'): void
-  (e: 'open-game', gameId: number): void
 }>()
 
 const ctx = computed<TagContext>(() => ({
@@ -155,7 +154,6 @@ const collapsedRows = computed(() => (props.density === 'slim' ? 3 : 5))
       :collapsed-rows="collapsedRows"
       :expanded="historyExpanded"
       @toggle-expand="emit('toggle-history')"
-      @open-game="emit('open-game', $event)"
     />
   </div>
 </template>

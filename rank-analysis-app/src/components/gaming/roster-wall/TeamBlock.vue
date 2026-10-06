@@ -28,7 +28,6 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  (e: 'open-game', gameId: number, puuid: string): void
   (e: 'toggle-history', puuid: string): void
   (e: 'toggle-tags', puuid: string): void
 }>()
@@ -93,7 +92,6 @@ const teamSummary = computed(() => {
           :density="density"
           :history-expanded="historyExpanded?.has(m.puuid)"
           :tags-expanded="tagsExpanded?.has(m.puuid)"
-          @open-game="emit('open-game', $event, m.puuid)"
           @toggle-history="emit('toggle-history', m.puuid)"
           @toggle-tags="emit('toggle-tags', m.puuid)"
         />

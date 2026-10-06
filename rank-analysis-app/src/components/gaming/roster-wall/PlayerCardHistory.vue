@@ -8,11 +8,20 @@
  * （设计文档风险 R4）。
  *
  * 底部渐隐遮罩让被裁掉的半行读作「下面还有」而非渲染 bug。
+ *
+ * 点击行 = 打开该局详情。名册墙展示的是**任意玩家**（我方 + 敌方）的对局，
+ * 这些 gameId 大多不在自己的战绩列表里，所以不能用 record 页的就地展开，
+ * 改为按 gameId 直接取详情弹窗——沿用 `MettingPlayersCard.openGameDetail`
+ * 的成熟做法（`getGameById` + `NModal` + `MatchDetailInline`，零新增后端 command）。
  */
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
+import { NModal } from 'naive-ui'
 
 import type { PreparedGame } from '@renderer/features/gaming/analysis/types'
 import { useAssetUrl } from '@renderer/composables/useAssetUrl'
+import { getGameById } from '@renderer/features/record/services/gameById'
+import MatchDetailInline from '@renderer/components/record/MatchDetailInline.vue'
+import type { Game } from '@renderer/types/domain/match'
 
 const props = defineProps<{
   games: PreparedGame[]
@@ -24,7 +33,6 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'toggle-expand'): void
-  (e: 'open-game', gameId: number): void
 }>()
 
 const { getChampionUrl } = useAssetUrl()
@@ -34,6 +42,44 @@ const visible = computed(() =>
   props.expanded ? props.games : props.games.slice(0, collapsed.value)
 )
 const overflow = computed(() => props.games.length - visible.value.length)
+
+/* ---------------- 对局详情弹窗 ---------------- */
+
+const showDetail = ref(false)
+const selectedGame = ref<Game | null>(null)
+const loadingGameId = ref<number | null>(null)
+/** 拉取失败提示：宁可显式告诉用户点不动，也不能静默无响应 */
+const loadError = ref<string | null>(null)
+
+/**
+ * 打开某局详情。
+ *
+ * `getGameById` 内部已带模块级 LRU 缓存且失败时返回 null（不抛），
+ * 所以这里只需处理 null 分支——按「取不到」降级，不让整卡崩掉。
+ */
+async function openGameDetail(gameId: number): Promise<void> {
+  loadError.value = null
+  loadingGameId.value = gameId
+  const game = await getGameById(gameId)
+  loadingGameId.value = null
+  if (!game) {
+    loadError.value = '该局详情加载失败'
+    return
+  }
+  selectedGame.value = game
+  showDetail.value = true
+}
+
+/**
+ * 关闭弹窗后释放已选对局。
+ *
+ * 用 watcher 而非 `@close`：naive-ui 的 `close` 只在组件自己关闭（X/遮罩/ESC）时
+ * 触发，程序化置 `show=false` 不走它——残留的 Game 引用会让每张卡都长期攥住一份
+ * 完整对局数据（10 张卡 × 全量对局）。watcher 覆盖全部关闭路径。
+ */
+watch(showDetail, open => {
+  if (!open) selectedGame.value = null
+})
 
 /** 队列中文名；后端未给时退回「对局」（不显示 undefined） */
 function queueName(game: PreparedGame): string {
@@ -78,7 +124,8 @@ function fmtDate(ms: number): string {
       class="mh-row"
       :class="`mh-row--${resultTone(g)}`"
       type="button"
-      @click="emit('open-game', g.gameId)"
+      :disabled="loadingGameId === g.gameId"
+      @click="openGameDetail(g.gameId)"
     >
       <img class="mh-champ" :src="getChampionUrl(g.self.championId)" alt="" />
       <span class="mh-meta">
@@ -91,6 +138,8 @@ function fmtDate(ms: number): string {
       <span class="mh-kda">{{ g.self.kills }} / {{ g.self.deaths }} / {{ g.self.assists }}</span>
     </button>
 
+    <p v-if="loadError" class="mh-load-error" role="alert">{{ loadError }}</p>
+
     <button v-if="overflow > 0" class="mh-more" type="button" @click="emit('toggle-expand')">
       其余 {{ overflow }} 场 ▾
     </button>
@@ -102,6 +151,16 @@ function fmtDate(ms: number): string {
     >
       收起 ▴
     </button>
+
+    <NModal
+      v-model:show="showDetail"
+      preset="card"
+      :style="{ width: 'min(1360px, 90vw)' }"
+      :bordered="false"
+      class="mh-detail-modal"
+    >
+      <MatchDetailInline :game="selectedGame" />
+    </NModal>
   </div>
 </template>
 
@@ -149,15 +208,15 @@ function fmtDate(ms: number): string {
 }
 
 .mh-row--win {
-  background: rgba(59, 130, 246, 0.22);
+  background: var(--win-soft);
 }
 
 .mh-row--loss {
-  background: rgba(224, 92, 92, 0.2);
+  background: var(--loss-soft);
 }
 
 .mh-row--neutral {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--bg-sunken);
 }
 
 .mh-champ {
@@ -195,10 +254,10 @@ function fmtDate(ms: number): string {
 }
 
 .mh-result--win {
-  color: #93c5fd;
+  color: var(--win-bright);
 }
 .mh-result--loss {
-  color: #fca5a5;
+  color: var(--loss-bright);
 }
 .mh-result--neutral {
   color: var(--text-secondary);
@@ -209,6 +268,22 @@ function fmtDate(ms: number): string {
   font-family: var(--font-num);
   font-size: var(--font-size-2xs);
   color: var(--text-secondary);
+}
+
+/* 拉取失败：显式反馈，避免「点了没反应」 */
+.mh-load-error {
+  flex: none;
+  margin: 0;
+  padding: 2px var(--space-4);
+  font-size: var(--font-size-2xs);
+  color: var(--loss-bright);
+  background: var(--loss-soft);
+  border-radius: 3px;
+}
+
+.mh-row:disabled {
+  opacity: 0.55;
+  cursor: progress;
 }
 
 .mh-more {

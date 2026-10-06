@@ -29,10 +29,6 @@ const props = defineProps<{
   contentWidth?: number
 }>()
 
-const emit = defineEmits<{
-  (e: 'open-game', gameId: number, puuid: string): void
-}>()
-
 const container = ref<HTMLElement | null>(null)
 const measuredWidth = ref(0)
 
@@ -68,10 +64,6 @@ function toggleTags(puuid: string): void {
   const next = new Set(tagsExpanded.value)
   next.has(puuid) ? next.delete(puuid) : next.add(puuid)
   tagsExpanded.value = next
-}
-
-function onOpenGame(gameId: number, puuid: string): void {
-  emit('open-game', gameId, puuid)
 }
 
 /* 实测容器宽度（resize 去抖 180ms，避免拖窗时反复重排） */
@@ -119,7 +111,6 @@ onBeforeUnmount(() => {
       :density="density"
       :history-expanded="historyExpanded"
       :tags-expanded="tagsExpanded"
-      @open-game="onOpenGame"
       @toggle-history="toggleHistory"
       @toggle-tags="toggleTags"
     />

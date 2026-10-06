@@ -323,7 +323,6 @@
         :champion-name="getChampionName"
         :self-puuid="mySummonerPuuid"
         :density="rosterWallDensity"
-        @open-game="onRosterWallOpenGame"
       />
 
       <!-- ================= 名册：全模式共用同一外壳（选人期 / 局内 / 大乱斗） ================= -->
@@ -613,11 +612,6 @@ function subteamIdOf(puuid: string): number {
     if (s.players.some(p => p.summoner?.puuid === puuid)) return s.subteamId
   }
   return -1
-}
-
-/** 名册墙点开对局：复用战绩页的就地展开（后续 P6 接 openGame 事件总线） */
-function onRosterWallOpenGame(_gameId: number, _puuid: string): void {
-  // TODO(P6): 接入 record 页的就地展开（openGame 事件），当前仅占位避免静默无响应
 }
 
 /** 我方小队玩家列表，供 MayhemDraftPanel 复用（不再硬取 subteams[0]） */
