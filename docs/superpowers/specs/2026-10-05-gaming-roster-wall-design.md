@@ -524,19 +524,58 @@ cd src-tauri && cargo test
 
 ---
 
-## 10. 实现状态（2026-10-05）
+## 10. 实现状态（2026-10-07）
 
-分支 `feat/gaming-roster-wall`。P0 与 P2 已完成并提交；P1/P3/P4/P5/P6 待做。
+分支 `feat/gaming-roster-wall`。P0 / P2 / P4 / P6 已完成并提交；P1 / P3 / P5 待做。
+P1/P3/P5 依赖 Rust 侧，而本机缺 MSVC `link.exe`（proc-macro / build-script 均需链接），
+编译与测试一律交 GitHub Actions，**不要在本机装 Build Tools**。
 
 | 里程碑 | 状态 | 提交 | 规模 | 备注 |
 |---|---|---|---|---|
 | P0 修 `scouting` 队级聚合 | ✅ | `c5d9b38` | +169/−10 | 本机无 linker，编译与测试执行由 CI 兜底；已用等价实现做数值双向验证 |
 | P2 TS summary 分析引擎 | ✅ | `acecb5a` `28ab2ac` `5f7a960` `0fc16e0` `f3b78e5` | ~2,000 | 8 模块 + 接入层，207 测试 |
+| P4 名册墙 UI + 接线 | ✅ | `aba20c3` `2ca225a` `d3b97ca` | ~2,400 | 9 组件 + 3 feature 模块 + 接线测试 51 例；结构金丝雀 4 组 |
+| P6 对局详情弹窗 | ✅ | `518b5e0` | +230/−27 | 复用 `getGameById` + `MatchDetailInline`，零新增后端 command |
 | P1 Rust 批量 timeline 管道 | ⬜ | — | ~250 | 需 CI；命令 `get_player_timelines(region, game_ids)` |
 | P3 Rust frames 分析 | ⬜ | — | ~500 | 打野路径 / 前期死亡 / 目标节奏 |
-| P4 名册墙 UI | ⬜ | — | ~1,700 | 13 文件 + 结构金丝雀测试 |
 | P5 打野路径卡 + 9 设置项 | ⬜ | — | ~350 | 依赖 P1+P3 |
-| P6 收尾 | ⬜ | — | ~200 | 密度三档 / 性能 / 覆盖率 |
+
+### P4 已交付模块
+
+| 文件 | 职责 |
+|---|---|
+| `features/gaming/roster-wall/playerTags.ts` | 21 个 Tag 语义定义 + KDA IQR 离群判定 + Tag 阈值 |
+| `features/gaming/roster-wall/columns.ts` | 列数公式单点实现（复刻 Akari 并补 gap 折算） |
+| `features/gaming/roster-wall/member.ts` | `RosterWallMember` 展示模型（session + 分析结果 → 视图） |
+| `components/gaming/roster-wall/PlayerTagChip.vue` | 8 语义色调族 + 条件 detail popover |
+| `components/gaming/roster-wall/PlayerCardHeader.vue` | 头像/等级/昵称/段位双芯片 + 4 个头部 Tag |
+| `components/gaming/roster-wall/PlayerCardStats.vue` | 胜率 / 跨局 KDA（IQR 离群染色）/ 分路 |
+| `components/gaming/roster-wall/PlayerCardChampions.vue` | 英雄使用环，环色按该英雄胜率 |
+| `components/gaming/roster-wall/PlayerCardHistory.vue` | 最近对局列表（折叠 5 行）+ 对局详情弹窗 |
+| `components/gaming/roster-wall/PlayerCard.vue` | 240×375px 固定卡外壳（Akari 契约） |
+| `components/gaming/roster-wall/TeamBlock.vue` | 队伍块 + 「无画像」空态卡 |
+| `components/gaming/roster-wall/RosterWall.vue` | 上下堆叠容器 + ResizeObserver 实测列宽 |
+
+### P4/P6 期间踩到的坑（后续接手须知）
+
+1. **`Game` 域模型有两套形状**，写 fixture 前必须分清：
+   - puuid **只在** `participantIdentities[].player.puuid`，`Participant` 上没有 puuid；
+   - `gameType` 口径是 `'MATCHED_GAME'`（对齐后端 `sgp.rs` / `db.rs`），不是 `'MATCHED'`。
+   两者任一写错，`shouldIncludeGame` / `normalizeGame` 会**全量剔除**，
+   结果是名册墙对所有人显示「无画像」——且不报错，只是静默降级。
+2. **`useSessionSync` 的 `sessionData` 是模块级 `reactive` 单例**
+   （`composables/useSessionSync.ts`）。同一测试文件内多次挂载会共享状态，
+   用例之间会串数据。故每个用例用自增 tag 生成唯一 puuid/昵称，
+   让「串数据」当场变成昵称断言失败而不是静默通过。
+3. **列数公式不能照抄 Akari**：Akari 的 `columnsNeed` **不含 gap 折算**，
+   短宽度下会多算一列。本实现在 `columns.ts` 里补了 gap 项，并用
+   「宽度恰好卡在边界」的用例把这条修正钉住。
+4. **档位门禁必须用响应式宽度**：读裸 `window.innerWidth` 的 computed
+   在缩放窗口时不会重算，名册墙该消失时不消失。用本文件既有的 `viewportWidth`。
+5. **`.pcard` / `.rw-team` 才是真实 class 名**（`.rw-card` / `.rw-team--ally` 是错的）。
+6. **naive-ui `NModal` 的 `@close` 只在组件自己关闭时触发**，程序化置
+   `show=false` 不走它。清理选中态要用 `watch(showDetail)`，否则残留引用
+   让 10 张卡各长期攥一份完整对局数据。
 
 ### P2 已交付模块
 
