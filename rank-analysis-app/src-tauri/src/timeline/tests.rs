@@ -29,6 +29,7 @@ fn champ_kill(victim: i32, killers: Vec<i32>) -> SgpFrameEvent {
         } else {
             None
         },
+        position: Some(SgpFramePosition { x: 5000, y: 5000 }),
         ..Default::default()
     }
 }
@@ -38,15 +39,20 @@ fn camp_kill(monster: &str, killer: i32) -> SgpFrameEvent {
         r#type: Some("MONSTER_KILL".into()),
         monster_type: Some(monster.to_string()),
         participant_id: Some(killer),
+        position: Some(SgpFramePosition { x: 4000, y: 6000 }),
         ..Default::default()
     }
 }
 
+/// 造一帧：事件 + 一条参与者坐标。
+///
+/// 事件本身也各带坐标（champ_kill / camp_kill 内部已填），所以
+/// 「有可信坐标」的前置校验对绝大多数用例天然成立；只有专门测降级的
+/// 用例才会用 `frame_without_any_position` 把两侧都清空。
 fn frame(ts_ms: i64, events: Vec<SgpFrameEvent>) -> SgpFrame {
     SgpFrame {
         timestamp: Some(ts_ms),
         events,
-        // 造一个带坐标的参与者帧，满足「有可信坐标」的前置校验
         participant_frames: HashMap::from([(
             1,
             SgpFrameParticipantStats {
@@ -119,7 +125,9 @@ fn frames_without_any_position_degrade() {
 fn positions_from_participant_frames_alone_are_enough() {
     // participant_frames 有坐标而事件没有 => 仍应正常分析（这是 SGP 常见形态）
     let mut f = frame(60_000, vec![champ_kill(1, vec![2])]);
-    f.events[0].position = None;
+    for e in f.events.iter_mut() {
+        e.position = None;
+    }
     let t = analyze(vec![f], Some(11));
     assert_eq!(t.degraded, None, "仅参与者坐标也应通过前置校验");
     assert_eq!(t.players.len(), 1);
@@ -130,18 +138,20 @@ fn positions_from_events_alone_are_enough() {
     // 事件有坐标而 participant_frames 为空 => 也应正常分析
     let mut f = frame(60_000, vec![champ_kill(1, vec![2])]);
     f.participant_frames.clear();
-    f.events[0].position = Some(SgpFramePosition { x: 5000, y: 5000 });
     let t = analyze(vec![f], Some(11));
     assert_eq!(t.degraded, None, "仅事件坐标也应通过前置校验");
 }
 
 /// 全帧无任何可信坐标（事件与参与者两侧都清空）。
+/// 全帧无任何可信坐标（事件与参与者两侧都清空）。
+///
+/// 单独抽出是因为这类夹具很容易漏掉一侧——漏了就会让「测降级」的用例
+/// 意外通过前置校验，退化成测别的分支。
 fn frame_without_any_position(ts_ms: i64, events: Vec<SgpFrameEvent>) -> SgpFrame {
     let mut f = frame(ts_ms, events);
     for stats in f.participant_frames.values_mut() {
         stats.position = None;
     }
-    // 事件上的坐标也要清掉，否则仍会被判为「有坐标」
     for e in f.events.iter_mut() {
         e.position = None;
     }
@@ -150,12 +160,40 @@ fn frame_without_any_position(ts_ms: i64, events: Vec<SgpFrameEvent>) -> SgpFram
 
 #[test]
 fn absurd_kill_count_trips_dirty_frames() {
-    let events: Vec<SgpFrameEvent> = (0..MAX_PLAUSIBLE_KILL_EVENTS + 5)
-        .map(|i| champ_kill(1, vec![2 + (i % 5) as i32]))
+    // 注意：击杀事件**分散到多帧**，不能全塞进一帧。
+    // 前置校验的坐标检查只看是否有可信坐标，与击杀数无关；
+    // 真正触发熔断的是 count_champion_kills 的总量，与帧数无关。
+    let events_per_frame = MAX_PLAUSIBLE_KILL_EVENTS + 5;
+    let frames: Vec<SgpFrame> = (0..2)
+        .map(|i| {
+            frame(
+                60_000 * (i as i64 + 1),
+                (0..events_per_frame)
+                    .map(|j| champ_kill(1, vec![2 + (j % 5) as i32]))
+                    .collect(),
+            )
+        })
         .collect();
-    let t = analyze(vec![frame(60_000, events)], Some(11));
+    let t = analyze(frames, Some(11));
     assert_eq!(t.degraded.as_deref(), Some(Degraded::DirtyFrames.message()));
     assert!(t.players.is_empty());
+}
+
+#[test]
+fn kill_count_just_under_threshold_is_accepted() {
+    // 边界：恰好等于阈值不算脏数据
+    let frames: Vec<SgpFrame> = (0..2)
+        .map(|i| {
+            frame(
+                60_000 * (i as i64 + 1),
+                (0..MAX_PLAUSIBLE_KILL_EVENTS / 2)
+                    .map(|j| champ_kill(1, vec![2 + (j % 5) as i32]))
+                    .collect(),
+            )
+        })
+        .collect();
+    let t = analyze(frames, Some(11));
+    assert_eq!(t.degraded, None, "阈值内不应熔断");
 }
 
 #[test]

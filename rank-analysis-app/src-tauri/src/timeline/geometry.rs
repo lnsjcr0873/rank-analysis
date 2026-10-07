@@ -220,10 +220,11 @@ mod tests {
 
     #[test]
     fn jungle_splits_by_map_center() {
-        // 蓝方野区（左下）：x+y < MAP_SIZE，且不在中路/河道带内
+        // 蓝方野区（左下）：x+y < MAP_SIZE，且与主对角线、副对角线都拉开距离
         assert_eq!(classify_map_zone(3000, 5000), MapZone::BlueJungle);
-        // 红方野区（右上）
-        assert_eq!(classify_map_zone(12000, 12200), MapZone::RedJungle);
+        // 红方野区（右上）：同理需避开两条轴线，否则会被中/河道吞掉
+        assert_eq!(classify_map_zone(12000, 10500), MapZone::RedJungle);
+        assert_eq!(classify_map_zone(10500, 12000), MapZone::RedJungle);
     }
 
     #[test]
