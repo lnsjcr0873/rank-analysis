@@ -85,6 +85,7 @@ const teamSummary = computed(() => {
           :mastery-by-champion="masteryByChampion?.[m.puuid]"
           :premade-group="m.premadeGroup"
           :met-total="m.metTotal"
+          :timeline="m.timeline"
           :is-self="m.isSelf"
           :privacy="m.privacy"
           :masked="m.masked"

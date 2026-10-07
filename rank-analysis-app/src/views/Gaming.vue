@@ -415,6 +415,11 @@ import {
   toRosterWallMember,
   type RosterWallMember
 } from '@renderer/features/gaming/roster-wall/member'
+import {
+  fetchPlayerTimelines,
+  type PlayerTimelineSummary
+} from '@renderer/features/gaming/services/playerTimeline'
+import { getCurrentSgpRegion } from '@renderer/features/record/services/sgp'
 import { isMayhemQueue } from '@renderer/features/mayhem/queues'
 import { normalizeLcuPosition } from '@renderer/features/gaming/services/counterIntel'
 import { getChampionName, loadChampionNames } from '@renderer/services/ai/champion-names'
@@ -576,6 +581,57 @@ const tiersByPuuid = computed(() => {
   return out
 })
 
+/**
+ * 帧级画像（P1/P3）：C 类 Tag 的数据源。
+ *
+ * **不阻塞** summary 分析——名册墙先按现有数据渲染，帧级数据到位后
+ * 自动补上 C 类 Tag。让一个数秒级的网络请求卡住整页是本末倒置。
+ */
+const timelinesByPuuid = ref(new Map<string, PlayerTimelineSummary>())
+
+/** 本次要分析的 gameId：取各玩家近期对局的并集（去重），并按 P3 约定限量 */
+const timelineGameIds = computed<number[]>(() => {
+  if (!rosterWallVisible.value) return []
+  const ids = new Set<number>()
+  for (const s of sessionData.subteams) {
+    for (const p of s.players) {
+      for (const g of p.matchHistory?.games?.games ?? []) ids.add(g.gameId)
+    }
+  }
+  return [...ids].slice(0, TIMELINE_GAME_LIMIT)
+})
+
+/** 帧级分析只对「有历史对局」的玩家有意义，且限量避免拉太多局 */
+const TIMELINE_GAME_LIMIT = 6
+
+/** 拉取帧级画像；失败静默（playerTimeline 内部已降级为 null） */
+async function loadTimelines(): Promise<void> {
+  const gameIds = timelineGameIds.value
+  if (gameIds.length === 0) return
+
+  // SGP 只提供按 gameId 的帧端点，且帧里没有队伍字段 ⇒ 队伍由前端给
+  const players = sessionData.subteams.flatMap(s =>
+    s.players.map(p => ({
+      puuid: p.summoner?.puuid ?? '',
+      // CLASSIC 下 subteamId 即队伍；斗魂多队时名册墙本就不显示
+      teamId: s.subteamId
+    }))
+  )
+  const valid = players.filter(p => p.puuid)
+  if (valid.length === 0) return
+
+  try {
+    const region = await getCurrentSgpRegion()
+    if (!region) return
+    timelinesByPuuid.value = new Map(
+      Object.entries(await fetchPlayerTimelines(region, gameIds, valid))
+    )
+  } catch {
+    // 降级而非中断：留空 map，C 类 Tag 自动隐藏
+    timelinesByPuuid.value = new Map()
+  }
+}
+
 /** 名册墙成员：复用 analyzeRoster 的批量分析与降级结果 */
 const rosterWallMembers = computed<RosterWallMember[]>(() => {
   const players = sessionData.subteams.flatMap(s => s.players)
@@ -589,7 +645,17 @@ const rosterWallMembers = computed<RosterWallMember[]>(() => {
     if (!puuid) continue
     const analysis = results.get(puuid)
     if (!analysis) continue
-    members.push(toRosterWallMember(p, analysis, mySummonerPuuid.value, tierMap))
+    members.push(
+      toRosterWallMember(
+        p,
+        analysis,
+        mySummonerPuuid.value,
+        tierMap,
+        false,
+        // 帧级数据未就绪时为 null ⇒ C 类 Tag 自动隐藏（见 playerTimeline 降级纪律）
+        timelinesByPuuid.value.get(puuid) ?? null
+      )
+    )
   }
 
   // 排序：预组队优先（像 Akari 的 orderPlayerBy='premade-team'）
@@ -1108,6 +1174,8 @@ onMounted(async () => {
   // 导致 ban 阶段（尚无人 hover）整段时间决策带只能显示「英雄157」占位符。
   // 提前在页面挂载时触发一次，幂等（已加载时立即返回）。
   void loadChampionNames()
+  // 帧级画像（P1/P3）：不阻塞首屏，异步补 C 类 Tag
+  void loadTimelines()
 
   // OP.GG 数据兜底刷新：后端启动已预热，此处 fire-and-forget 兜底软件长开超 12h 未重启的场景。
   // 两个模式都刷新完成后，重新拉取当前模式状态以更新横幅（版本号/滞后标记跟着变化）。

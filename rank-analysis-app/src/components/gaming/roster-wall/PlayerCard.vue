@@ -11,6 +11,7 @@
 import { computed } from 'vue'
 
 import type { PlayerProfileAnalysis } from '@renderer/features/gaming/analysis/types'
+import type { PlayerTimelineSummary } from '@renderer/features/gaming/services/playerTimeline'
 import type { TagContext } from '@renderer/features/gaming/roster-wall/playerTags'
 import { buildPlayerTags, type KdaOutlier } from '@renderer/features/gaming/roster-wall/playerTags'
 import PlayerCardChampions from './PlayerCardChampions.vue'
@@ -47,6 +48,8 @@ const props = defineProps<{
   /** 预组队字母 A/B/C…；无预组为 null */
   premadeGroup: string | null
   metTotal: number
+  /** 帧级画像（P1/P3）；null 或未就绪 ⇒ C 类 Tag 隐藏 */
+  timeline?: PlayerTimelineSummary | null
   isSelf: boolean
   privacy?: boolean
   masked?: boolean
@@ -67,8 +70,9 @@ const ctx = computed<TagContext>(() => ({
   premadeGroup: props.premadeGroup,
   premadeThreshold: PREMADE_INFER_THRESHOLD,
   metTotal: props.metTotal,
-  // P1/P3 接入 SGP frames 后由上层传入；当前恒 undefined ⇒ C 类 Tag 静默
-  earlyDeathsWithEnemyJungler: undefined
+  // P1/P3 帧级数据：不可用时为 null，buildPlayerTags 据此隐藏 C 类 Tag
+  // （绝不用 0 兜底——0 会被判成「难抓」，是误导性结论）
+  earlyDeathsWithEnemyJungler: props.timeline?.earlyDeathsWithEnemyJungler ?? null
 }))
 
 const allTags = computed(() => buildPlayerTags(props.profile, ctx.value))

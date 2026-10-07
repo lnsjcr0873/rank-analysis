@@ -11,11 +11,14 @@
 import type { SessionSummoner } from '@renderer/types/domain/gaming'
 
 import type { PlayerAnalysis } from '../services/playerAnalysis'
+import type { PlayerTimelineSummary } from '../services/playerTimeline'
 
 /** 名册墙单个成员的完整展示契约 */
 export interface RosterWallMember {
   puuid: string
   analysis: PlayerAnalysis
+  /** 帧级画像（P1/P3）；不可用时为 null，C 类 Tag 据此隐藏 */
+  timeline: PlayerTimelineSummary | null
   /** 已做遮罩处理的显示名 */
   displayName: string
   tagLine: string
@@ -73,13 +76,15 @@ export function premadeGroupOf(
  * @param selfPuuid 本人 puuid（用于「我」标记）
  * @param tierMap puuid → 段位展示信息（来自 `useSessionTiers`）
  * @param streamerMode 直播模式：昵称遮罩
+ * @param timeline 帧级画像（P1/P3）；缺省或不可用时为 null
  */
 export function toRosterWallMember(
   player: SessionSummoner,
   analysis: PlayerAnalysis,
   selfPuuid: string,
   tierMap: Map<string, { imgUrl: string; tierCn: string }[]>,
-  streamerMode = false
+  streamerMode = false,
+  timeline: PlayerTimelineSummary | null = null
 ): RosterWallMember {
   const puuid = player.summoner?.puuid ?? ''
   const tiers = tierMap.get(puuid) ?? []
@@ -88,6 +93,7 @@ export function toRosterWallMember(
   return {
     puuid,
     analysis,
+    timeline,
     // 直播模式下用英雄名占位，避免在观战/转播场景泄露身份
     displayName: streamerMode
       ? `玩家 ${player.championId || '?'}`

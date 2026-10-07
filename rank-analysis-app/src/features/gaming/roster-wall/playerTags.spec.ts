@@ -397,3 +397,48 @@ describe('computeKdaOutliers', () => {
     expect([...map.values()].every(v => v === null)).toBe(true)
   })
 })
+
+/* ------------------------------------------------------------------ *
+ * C 类 Tag（P3 帧级数据接入）
+ *
+ * 这三个 Tag 在 P1/P3 之前是死代码——ctx 里恒为 undefined，永远不渲染。
+ * 本组用例锁住「数据到位就亮、数据不可用就完全不出现」，
+ * 尤其是**不可用时不能用 0 兜底**：0 会被判成「难抓」，是误导性结论。
+ * ------------------------------------------------------------------ */
+describe('buildPlayerTags · C 类（帧级）', () => {
+  const withGank = (early: number | null | undefined, isSelf = false) => ({
+    ...CTX,
+    isSelf,
+    earlyDeathsWithEnemyJungler: early
+  })
+
+  it('数据为 null ⇒ 三个抓人 Tag 都不出现', () => {
+    const ids = idsOf(buildPlayerTags(makeProfile(), withGank(null)))
+    expect(ids).not.toContain('veryEasyGank')
+    expect(ids).not.toContain('easyGank')
+    expect(ids).not.toContain('hardGank')
+  })
+
+  it('数据为 undefined（未接入）⇒ 同上，不产生误导性结论', () => {
+    const ids = idsOf(buildPlayerTags(makeProfile(), withGank(undefined)))
+    expect(ids).not.toContain('hardGank')
+    expect(ids).not.toContain('easyGank')
+  })
+
+  it('高值 ⇒ 极好抓', () => {
+    expect(idsOf(buildPlayerTags(makeProfile(), withGank(2.5)))).toContain('veryEasyGank')
+  })
+
+  it('中值 ⇒ 好抓', () => {
+    expect(idsOf(buildPlayerTags(makeProfile(), withGank(1.6)))).toContain('easyGank')
+  })
+
+  it('低值 ⇒ 难抓', () => {
+    expect(idsOf(buildPlayerTags(makeProfile(), withGank(0.5)))).toContain('hardGank')
+  })
+
+  it('本人不适用（自己不会被敌方打野抓）', () => {
+    const ids = idsOf(buildPlayerTags(makeProfile(), withGank(2.5, true)))
+    expect(ids).not.toContain('veryEasyGank')
+  })
+})
