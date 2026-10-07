@@ -140,36 +140,54 @@ pub enum Camp {
 /// 两个字段并做**子串包含**而非全等——匹配不上就返回 `None`（该次击杀不计入
 /// 营地序列），而不是猜一个最近的营地。
 pub fn camp_of_monster(monster_type: Option<&str>, monster_sub_type: Option<&str>) -> Option<Camp> {
-    let hay = format!(
-        "{}|{}",
-        monster_type.unwrap_or_default().to_ascii_lowercase(),
-        monster_sub_type.unwrap_or_default().to_ascii_lowercase()
-    );
-    // 顺序有讲究：先判带特征词的，避免 "redbuff" 被 "buff" 这类短词误吞，
-    // 也避免 herald 的 "blue" 前缀（虚空巢虫）误判成蓝buff。
+    // 归一化：统一小写并**去掉所有非字母数字字符**。
+    // 这一步是必需的——SGP 同一概念在不同端点/版本里写法不一致
+    // （`BlueSentinel` / `blue_sentinel` / `BLUE SENTINEL` / `RIFT_HERALD` / `RiftHerald`），
+    // 若只做小写化，`BlueSentinel` 匹配不上 `blue sentinel` 这类带空格的键。
+    let hay = normalize_token(monster_type.unwrap_or_default())
+        .into_iter()
+        .chain(normalize_token(monster_sub_type.unwrap_or_default()))
+        .collect::<String>();
+
+    // 键同样归一化后匹配，故此处全部写成无分隔符形式。
+    // 顺序有讲究：先判带特征词的，避免短词误吞更长概念
+    // （如 `riftcrab` 不应被 `crab` 之外的规则抢先命中，`nashor` 要早于泛化规则）。
     const TABLE: &[(&str, Camp)] = &[
+        ("bluesentinel", Camp::BlueBuff),
         ("bluebuff", Camp::BlueBuff),
-        ("blue sentinel", Camp::BlueBuff),
+        // 刻意**不**收录裸 "blue"/"red"：这两个词在 SGP 里也出现在
+        // 阵营/皮肤等无关上下文中，收进来会把非营地事件误判成 buff。
+        // 认不出就返回 None（不计入路径），比错判一个营地安全。
+        ("redbrambleback", Camp::RedBuff),
         ("redbuff", Camp::RedBuff),
-        ("red brambleback", Camp::RedBuff),
         ("krug", Camp::Krugs),
         ("gromp", Camp::Gromp),
         ("wolf", Camp::Wolves),
+        ("riftcrab", Camp::RiftScuttler),
         ("scuttle", Camp::RiftScuttler),
         ("crab", Camp::RiftScuttler),
+        ("riftherald", Camp::RiftHerald),
         ("herald", Camp::RiftHerald),
-        ("rift herald", Camp::RiftHerald),
-        ("baron", Camp::Baron),
+        ("baronnashor", Camp::Baron),
         ("nashor", Camp::Baron),
-        ("dragon", Camp::Dragon),
+        ("baron", Camp::Baron),
         ("infernal", Camp::Dragon),
         ("ocean", Camp::Dragon),
         ("mountain", Camp::Dragon),
-        ("cloud", Camp::Dragon),
         ("hextech", Camp::Dragon),
         ("elder", Camp::Dragon),
+        ("cloud", Camp::Dragon),
+        ("dragon", Camp::Dragon),
     ];
     TABLE.iter().find(|(k, _)| hay.contains(k)).map(|(_, c)| *c)
+}
+
+/// 归一化单个 monster 标识：小写 + 只保留字母数字。
+fn normalize_token(raw: &str) -> String {
+    raw.chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .map(|c| c.to_ascii_lowercase())
+        .collect()
 }
 
 /// 该营地是否为「前期节奏资源」（有明确节奏意义，非补刀）。
@@ -204,10 +222,17 @@ mod tests {
 
     #[test]
     fn jungle_splits_by_map_center() {
-        // 蓝方野区（左下）：x+y < MAP_SIZE
-        assert_eq!(classify_map_zone(7800, 7900), MapZone::BlueJungle);
+        // 蓝方野区（左下）：x+y < MAP_SIZE，且不在中路/河道带内
+        assert_eq!(classify_map_zone(3000, 5000), MapZone::BlueJungle);
         // 红方野区（右上）
         assert_eq!(classify_map_zone(12000, 12200), MapZone::RedJungle);
+    }
+
+    #[test]
+    fn jungle_adjacent_to_mid_still_counts_as_mid() {
+        // 中路带较宽，紧邻中路的点位按中路归桶而不是野区——这是有意的粗粒度取舍，
+        // 断言把它钉住，避免后人误以为野区边界更精确
+        assert_eq!(classify_map_zone(7800, 7900), MapZone::MidLane);
     }
 
     #[test]
@@ -246,10 +271,43 @@ mod tests {
             camp_of_monster(Some("BARON_NASHOR"), None),
             Some(Camp::Baron)
         );
-        // 大小写不敏感
         assert_eq!(
             camp_of_monster(Some("dragontype"), None),
             Some(Camp::Dragon)
+        );
+    }
+
+    #[test]
+    fn monster_ids_tolerate_separator_and_case_variants() {
+        // SGP 同一概念有多种写法：驼峰 / 下划线 / 全大写 / 带空格
+        for variant in [
+            "BlueSentinel",
+            "BLUE_SENTINEL",
+            "blue sentinel",
+            "Blue Sentinel",
+            "bluesentinel",
+        ] {
+            assert_eq!(
+                camp_of_monster(Some(variant), None),
+                Some(Camp::BlueBuff),
+                "写法 {variant} 未被识别"
+            );
+        }
+        for variant in ["RiftHerald", "RIFT_HERALD", "rift-herald", "Rift Herald"] {
+            assert_eq!(
+                camp_of_monster(Some(variant), None),
+                Some(Camp::RiftHerald),
+                "写法 {variant} 未被识别"
+            );
+        }
+    }
+
+    #[test]
+    fn scuttle_is_not_matched_as_blue_by_stale_prefix() {
+        // 河蟹的标识含 "riftcrab"，不应被 "blue" 之类的宽规则误判
+        assert_eq!(
+            camp_of_monster(Some("RIFT_CRAB"), None),
+            Some(Camp::RiftScuttler)
         );
     }
 

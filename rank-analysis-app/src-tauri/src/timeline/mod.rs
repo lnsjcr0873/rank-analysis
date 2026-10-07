@@ -110,13 +110,22 @@ fn detect_degraded(map_id: Option<i64>, frames: &[SgpFrame]) -> Option<Degraded>
     if frames.is_empty() {
         return Some(Degraded::NoFrames);
     }
-    // 帧里至少要有一个带坐标的点位，否则位置推断全无依据
+    // 帧里至少要有一个可信坐标，否则位置推断全无依据。
+    // 坐标有两个来源，**都要看**：事件坐标（事件发生处）与参与者逐分钟坐标（人在哪）。
+    // 只看事件坐标会把「有 participant_frames 但事件不带坐标」的合法帧误判为无坐标——
+    // 而「事件有坐标、participant_frames 为空」同样是合法形态（有些局只给其一）。
     let has_position = frames.iter().any(|f| {
-        f.events.iter().any(|e| {
+        let in_events = f.events.iter().any(|e| {
             e.position
                 .as_ref()
                 .is_some_and(|p| is_plausible_coord(p.x, p.y))
-        })
+        });
+        let in_participants = f.participant_frames.values().any(|s| {
+            s.position
+                .as_ref()
+                .is_some_and(|p| is_plausible_coord(p.x, p.y))
+        });
+        in_events || in_participants
     });
     if !has_position {
         return Some(Degraded::NoPositions);

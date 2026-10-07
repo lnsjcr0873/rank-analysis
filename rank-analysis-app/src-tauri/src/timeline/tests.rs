@@ -7,8 +7,8 @@
 
 use super::*;
 use crate::lcu::api::sgp::{
-    SgpDetailParticipant, SgpFrame, SgpFrameEvent, SgpFrameParticipantStats, SgpGameDetail,
-    SgpGameDetailResponse,
+    SgpDetailParticipant, SgpFrame, SgpFrameEvent, SgpFrameParticipantStats, SgpFramePosition,
+    SgpGameDetail, SgpGameDetailResponse,
 };
 use crate::timeline::geometry::Camp;
 
@@ -50,7 +50,7 @@ fn frame(ts_ms: i64, events: Vec<SgpFrameEvent>) -> SgpFrame {
         participant_frames: HashMap::from([(
             1,
             SgpFrameParticipantStats {
-                position: Some(crate::lcu::api::sgp::SgpFramePosition { x: 7800, y: 7900 }),
+                position: Some(SgpFramePosition { x: 7800, y: 7900 }),
                 ..Default::default()
             },
         )]),
@@ -105,19 +105,47 @@ fn non_summoners_rift_degrades_before_reading_frames() {
 
 #[test]
 fn frames_without_any_position_degrade() {
+    let t = analyze(
+        vec![frame_without_any_position(
+            60_000,
+            vec![champ_kill(1, vec![2])],
+        )],
+        Some(11),
+    );
+    assert_eq!(t.degraded.as_deref(), Some(Degraded::NoPositions.message()));
+}
+
+#[test]
+fn positions_from_participant_frames_alone_are_enough() {
+    // participant_frames 有坐标而事件没有 => 仍应正常分析（这是 SGP 常见形态）
     let mut f = frame(60_000, vec![champ_kill(1, vec![2])]);
-    // 清空所有坐标 => 无法做位置推断
+    f.events[0].position = None;
+    let t = analyze(vec![f], Some(11));
+    assert_eq!(t.degraded, None, "仅参与者坐标也应通过前置校验");
+    assert_eq!(t.players.len(), 1);
+}
+
+#[test]
+fn positions_from_events_alone_are_enough() {
+    // 事件有坐标而 participant_frames 为空 => 也应正常分析
+    let mut f = frame(60_000, vec![champ_kill(1, vec![2])]);
+    f.participant_frames.clear();
+    f.events[0].position = Some(SgpFramePosition { x: 5000, y: 5000 });
+    let t = analyze(vec![f], Some(11));
+    assert_eq!(t.degraded, None, "仅事件坐标也应通过前置校验");
+}
+
+/// 全帧无任何可信坐标（事件与参与者两侧都清空）。
+fn frame_without_any_position(ts_ms: i64, events: Vec<SgpFrameEvent>) -> SgpFrame {
+    let mut f = frame(ts_ms, events);
     for stats in f.participant_frames.values_mut() {
         stats.position = None;
     }
-    f.events.clear();
-    f.events.push(SgpFrameEvent {
-        r#type: Some("CHAMPION_KILL".into()),
-        victim_id: Some(1),
-        ..Default::default()
-    });
-    let t = analyze(vec![f], Some(11));
-    assert_eq!(t.degraded.as_deref(), Some(Degraded::NoPositions.message()));
+    // 事件上的坐标也要清掉，否则仍会被判为「有坐标」
+    for e in f.events.iter_mut() {
+        e.position = None;
+    }
+    f
 }
 
 #[test]
