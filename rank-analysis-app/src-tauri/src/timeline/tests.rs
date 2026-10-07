@@ -329,7 +329,6 @@ fn event_type_matching_tolerates_case_and_separators() {
         "champion_kill",
         "ChampionKill",
         "CHAMPIONKILL",
-        "PaRtIcIpAnT_KiLl",
     ] {
         let t = analyze(
             vec![frame(
@@ -345,6 +344,25 @@ fn event_type_matching_tolerates_case_and_separators() {
         );
         assert_eq!(t.players[0].early_deaths, 1, "kind={kind} 未被识别");
     }
+}
+
+#[test]
+fn event_type_matching_is_case_insensitive() {
+    // 逐字符混合大小写：单独覆盖，因为上面的循环只列了「统一大写/统一小写/驼峰」
+    // 三种规律性写法，混写（如 PaRtIcIpAnT_KiLl）容易被漏掉。
+    let t = analyze(
+        vec![frame(
+            300_000,
+            vec![SgpFrameEvent {
+                r#type: Some("PaRtIcIpAnT_KiLl".into()),
+                victim_id: Some(1),
+                position: Some(SgpFramePosition { x: 5000, y: 5000 }),
+                ..Default::default()
+            }],
+        )],
+        Some(11),
+    );
+    assert_eq!(t.players[0].early_deaths, 1, "逐字符混合大小写未被识别");
 }
 
 #[test]
