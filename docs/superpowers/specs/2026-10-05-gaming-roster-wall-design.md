@@ -536,7 +536,7 @@ P1/P3/P5 依赖 Rust 侧，而本机缺 MSVC `link.exe`（proc-macro / build-scr
 | P2 TS summary 分析引擎 | ✅ | `acecb5a` `28ab2ac` `5f7a960` `0fc16e0` `f3b78e5` | ~2,000 | 8 模块 + 接入层，207 测试 |
 | P4 名册墙 UI + 接线 | ✅ | `aba20c3` `2ca225a` `d3b97ca` | ~2,400 | 9 组件 + 3 feature 模块 + 接线测试 51 例；结构金丝雀 4 组 |
 | P6 对局详情弹窗 | ✅ | `518b5e0` | +230/−27 | 复用 `getGameById` + `MatchDetailInline`，零新增后端 command |
-| P1 Rust 批量 timeline 管道 | ⬜ | — | ~250 | 需 CI；命令 `get_player_timelines(region, game_ids)` |
+| P1 Rust 批量 timeline 管道 | ✅ | `a7a1cfc` `ff7a5c5` `c12f429` `0ad722d` `d4847da` `037f4c0` `fea4bf0` `50297fc` `c234913` | ~900 | 4 文件 + 80 测试；CI 全绿（750 Rust 测试） |
 | P3 Rust frames 分析 | ⬜ | — | ~500 | 打野路径 / 前期死亡 / 目标节奏 |
 | P5 打野路径卡 + 9 设置项 | ⬜ | — | ~350 | 依赖 P1+P3 |
 
@@ -555,6 +555,57 @@ P1/P3/P5 依赖 Rust 侧，而本机缺 MSVC `link.exe`（proc-macro / build-scr
 | `components/gaming/roster-wall/PlayerCard.vue` | 240×375px 固定卡外壳（Akari 契约） |
 | `components/gaming/roster-wall/TeamBlock.vue` | 队伍块 + 「无画像」空态卡 |
 | `components/gaming/roster-wall/RosterWall.vue` | 上下堆叠容器 + ResizeObserver 实测列宽 |
+
+### P1 已交付模块
+
+| 文件 | 职责 |
+|---|---|
+| `timeline/constants.rs` | `ANALYSIS_MINUTES=14` / `EARLY_LIMIT_MS` / `KILL_WEIGHT` / 脏数据熔断阈值 / `Degraded` 枚举 |
+| `timeline/geometry.rs` | 地图区域分桶 + 营地识别（`Camp`） |
+| `timeline/mod.rs` | 纯函数分析：清野路径 / 前期死亡 / 资源节奏 |
+| `timeline/tests.rs` | 26 例 |
+| `command/timeline.rs` | `get_player_timelines` + 批量/限流/熔断 |
+
+### P1 期间修正的实现细节（后续接手须知）
+
+**最重要的一条：营地靠 `monster_type` 识别，不靠像素坐标。**
+原计划是「移植 Akari 的营地坐标常量表」，但那套坐标一旦记错（版本间地形微调
+也会漂移）不会报错、只会让路径推断整体失真，且极难从测试里看出来。改为读帧事件
+自带的 `monster_type`/`monster_sub_type`（语义标识）——**读数据**而非**猜几何**。
+坐标只用于粗粒度分桶（半场/三条路/河道），阈值放宽。
+
+其余 5 条：
+
+| # | 问题 | 后果 | 修法 |
+|---|---|---|---|
+| 1 | **常量表键漏归一化**：`normalize_event_type` 把 `CHAMPION_KILL` 归一成 `championkill`，而表里写的是 `champion_kill` | **不报任何错**，所有击杀都识别不出；`early_deaths` 恒 0、路径恒空、脏数据熔断永不触发 | 键改归一化形式 + 新增「键必须归一化」的幂等断言 |
+| 2 | 坐标前置校验只看**事件**坐标 | 有 `participant_frames` 但事件不带坐标的合法帧（**线上常见形态**）被整局误判降级 | 两个来源都看，任一可信即通过 |
+| 3 | `GameDetail.participant_identities` 元素类型是 `model::ParticipantIdentity` | P0 提交时就编不过（本机无 linker，直到本次 CI 才暴露） | 修 P0 夹具 |
+| 4 | clippy `-D warnings`：`assertions_on_constants` / `for_kv_map` | CI 直接失败 | const 块 + `values_mut()` |
+| 5 | **`Game` 域模型有两套形状**（P2 时期踩过，P1 又踩） | fixture 写错时静默全量剔除 | 见 P2/P4 节的同款记录 |
+
+> 关于第 1 条的教训：**静默失效比崩溃危险**。这类"归一化后与常量表比对"的模式
+> 必须配一条幂等断言（对每个键跑一遍归一化函数，要求结果不变），
+> 否则常量表和归一化函数任何一侧的改动都会静默生效。
+
+---
+
+## 10.1 CI 验证闭环（本机无 linker 时的做法）
+
+本机缺 MSVC `link.exe`（proc-macro/build-script 均需链接），`cargo check/clippy/test`
+全部失败。仓库的 `quality-checks.yml` 留了 `workflow_dispatch`，注释写明
+「便于在 fork 上直接跑完整门禁」，闭环：
+
+```powershell
+git push fork <branch>
+gh workflow run quality-checks.yml --ref <branch> --repo lnsjcr0873/rank-analysis
+gh run watch <run-id> --repo lnsjcr0873/rank-analysis --exit-status
+gh run view <run-id> --repo lnsjcr0873/rank-analysis --log-failed   # 读错误
+```
+
+**必须带 `--repo`**：`gh` 会把仓库解析成 `origin`（上游），对非管理员账号返回 403。
+
+Rust 侧一轮约 5~8 分钟（要装 toolchain + 编译 Tauri 全量依赖）。P1 用了 7 轮收敛。
 
 ### P4/P6 期间踩到的坑（后续接手须知）
 
