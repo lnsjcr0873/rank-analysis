@@ -30,6 +30,7 @@ use tokio::sync::Semaphore;
 
 use crate::lcu::api::sgp;
 use crate::timeline;
+use crate::timeline::geometry::Camp;
 
 /// 局内并发度。
 const PER_GAME_CONCURRENCY: usize = 3;
@@ -72,7 +73,8 @@ fn trip_circuit(consecutive_failures: usize) {
 #[serde(rename_all = "camelCase")]
 pub struct PlayerTimelineEntry {
     pub frames_analyzed: u32,
-    pub jungle_path: Vec<String>,
+    /// 清野顺序（camelCase 枚举名，如 `blueBuff`）
+    pub jungle_path: Vec<Camp>,
     pub first_camp_at_ms: Option<i64>,
     pub invaded_before_3min: bool,
     pub early_deaths: u32,
@@ -188,7 +190,7 @@ async fn fetch_and_analyze(
             puuid.clone(),
             PlayerTimelineEntry {
                 frames_analyzed: pt.frames_analyzed,
-                jungle_path: pt.jungle_path.iter().map(|c| format!("{c:?}")).collect(),
+                jungle_path: pt.jungle_path.clone(),
                 first_camp_at_ms: pt.first_camp_at_ms,
                 invaded_before_3min: pt.invaded_before_3min,
                 early_deaths: pt.early_deaths,

@@ -12,6 +12,8 @@
 //! 坐标只用于粗粒度区域分桶（我方/敌方半场、三条路、河蟹区域），
 //! 且分桶阈值放宽，宁可粗一点也不假装精确。
 
+use serde::Serialize;
+
 use crate::timeline::constants::{MAP_COORD_MAX, MAP_COORD_MIN};
 
 /// 召唤师峡谷中心（地图约 15000×15000）。
@@ -107,7 +109,12 @@ pub fn classify_side(x: i32, y: i32) -> Side {
 }
 
 /// 野区营地（靠帧事件的 monster 标识识别）。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+///
+/// 对外序列化为 camelCase（`blueBuff` / `riftHerald`），前端直接消费，
+/// 不在调用层做 `format!("{:?}")` 之类的字符串拼装——那会让枚举改名时
+/// 悄悄改变前端契约。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub enum Camp {
     BlueBuff,
     RedBuff,
