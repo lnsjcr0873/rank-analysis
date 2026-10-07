@@ -12,13 +12,6 @@ use crate::lcu::api::sgp::{
 };
 use crate::timeline::geometry::Camp;
 
-fn event(kind: &str) -> SgpFrameEvent {
-    SgpFrameEvent {
-        r#type: Some(kind.to_string()),
-        ..Default::default()
-    }
-}
-
 fn champ_kill(victim: i32, killers: Vec<i32>) -> SgpFrameEvent {
     SgpFrameEvent {
         r#type: Some("CHAMPION_KILL".into()),
@@ -329,16 +322,72 @@ fn farm_camps_are_not_objectives() {
 
 #[test]
 fn event_type_matching_tolerates_case_and_separators() {
-    // 不同版本 SGP 的事件类型大小写/分隔符不一致
-    for kind in ["CHAMPION_KILL", "championKill", "champion_kill"] {
-        let t = analyze(vec![frame(300_000, vec![champ_kill(1, vec![2])])], Some(11));
+    // 不同版本/端点的 SGP 事件类型写法不一致（下划线大写、驼峰、无分隔符…）
+    for kind in [
+        "CHAMPION_KILL",
+        "championKill",
+        "champion_kill",
+        "ChampionKill",
+        "CHAMPIONKILL",
+        "PaRtIcIpAnT_KiLl",
+    ] {
+        let t = analyze(
+            vec![frame(
+                300_000,
+                vec![SgpFrameEvent {
+                    r#type: Some(kind.into()),
+                    victim_id: Some(1),
+                    position: Some(SgpFramePosition { x: 5000, y: 5000 }),
+                    ..Default::default()
+                }],
+            )],
+            Some(11),
+        );
         assert_eq!(t.players[0].early_deaths, 1, "kind={kind} 未被识别");
     }
-    let t = analyze(
-        vec![frame(300_000, vec![event("PaRtIcIpAnT_KiLl")])],
-        Some(11),
-    );
-    assert_eq!(t.players[0].early_deaths, 1);
+}
+
+#[test]
+fn camp_kill_type_variants_are_recognized() {
+    for kind in ["MONSTER_KILL", "monsterKill", "CAMP_KILL", "campKill"] {
+        let t = analyze(
+            vec![frame(
+                300_000,
+                vec![SgpFrameEvent {
+                    r#type: Some(kind.into()),
+                    monster_type: Some("BlueSentinel".into()),
+                    participant_id: Some(1),
+                    position: Some(SgpFramePosition { x: 4000, y: 6000 }),
+                    ..Default::default()
+                }],
+            )],
+            Some(11),
+        );
+        assert_eq!(
+            t.players[0].jungle_path,
+            vec![Camp::BlueBuff],
+            "kind={kind} 未被识别"
+        );
+    }
+}
+
+/// 常量表里的事件类型键必须已是归一化形式（无分隔符）。
+///
+/// 这条断言把本模块踩过的坑钉死：键若写成 `champion_kill`，而收到的
+/// `CHAMPION_KILL` 归一化成 `championkill`，子串匹配会**静默失败**——
+/// 所有击杀都识别不出，且不报任何错。
+#[test]
+fn event_type_constant_keys_are_already_normalized() {
+    for key in CHAMPION_KILL_EVENT_TYPES
+        .iter()
+        .chain(CAMP_KILL_EVENT_TYPES)
+    {
+        let normalized = normalize_event_type(Some(key));
+        assert_eq!(
+            key, &normalized,
+            "常量表键 {key:?} 未归一化，会与归一化后的实际值匹配失败（静默漏识别）"
+        );
+    }
 }
 
 #[test]

@@ -35,18 +35,23 @@ use geometry::{camp_of_monster, is_plausible_coord, Camp};
 /// 召唤师峡谷的 `mapId`。
 const MAP_ID_SUMMONERS_RIFT: i64 = 11;
 
-/// 清理野怪的帧事件类型（SGP 里不同版本大小写/命名不一致，故宽松匹配）。
-const CAMP_KILL_EVENT_TYPES: &[&str] = &["monster_kill", "camp_kill"];
+/// 清理野怪的帧事件类型（**已归一化**：小写且无分隔符）。
+const CAMP_KILL_EVENT_TYPES: &[&str] = &["monsterkill", "campkill"];
 
-/// 击杀事件的帧事件类型。
-const CHAMPION_KILL_EVENT_TYPES: &[&str] = &["champion_kill"];
+/// 击杀事件的帧事件类型（已归一化）。
+const CHAMPION_KILL_EVENT_TYPES: &[&str] = &["championkill"];
 
-/// 帧事件类型归一化：小写 + 去分隔符，便于宽松匹配。
+/// 帧事件类型归一化：小写 + 只保留字母数字。
+///
+/// **常量表里的每个键都必须写成归一化后的形式**（`championkill` 而非
+/// `champion_kill`）。否则收到的 `CHAMPION_KILL` 归一化成 `championkill` 后
+/// 与未归一化的键做子串匹配会**静默失败**——表现为「所有击杀都识别不出」，
+/// 没有任何报错。这是本模块踩过的坑，故在此显式写明。
 fn normalize_event_type(raw: Option<&str>) -> String {
     raw.unwrap_or_default()
-        .to_ascii_lowercase()
         .chars()
         .filter(|c| c.is_ascii_alphanumeric())
+        .map(|c| c.to_ascii_lowercase())
         .collect()
 }
 
