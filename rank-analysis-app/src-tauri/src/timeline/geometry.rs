@@ -145,9 +145,7 @@ pub fn camp_of_monster(monster_type: Option<&str>, monster_sub_type: Option<&str
     // （`BlueSentinel` / `blue_sentinel` / `BLUE SENTINEL` / `RIFT_HERALD` / `RiftHerald`），
     // 若只做小写化，`BlueSentinel` 匹配不上 `blue sentinel` 这类带空格的键。
     let hay = normalize_token(monster_type.unwrap_or_default())
-        .into_iter()
-        .chain(normalize_token(monster_sub_type.unwrap_or_default()))
-        .collect::<String>();
+        + &normalize_token(monster_sub_type.unwrap_or_default());
 
     // 键同样归一化后匹配，故此处全部写成无分隔符形式。
     // 顺序有讲究：先判带特征词的，避免短词误吞更长概念
