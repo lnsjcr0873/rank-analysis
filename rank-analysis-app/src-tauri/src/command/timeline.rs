@@ -25,7 +25,7 @@ use std::sync::{Arc, LazyLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use futures::stream::{self, StreamExt};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tokio::sync::Semaphore;
 
 use crate::lcu::api::sgp;
@@ -68,6 +68,17 @@ fn trip_circuit(consecutive_failures: usize) {
     }
 }
 
+/// 调用方传入的玩家身份（puuid + 队伍）。
+///
+/// **队伍必须由调用方给**：SGP 的 `DETAILS` 只给 `{participantId, puuid}`，
+/// 帧里也没有队伍字段，而「敌方打野在场」这个指标必须区分敌我。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TimelinePlayerInput {
+    pub puuid: String,
+    pub team_id: i32,
+}
+
 /// 单个玩家在一局的结论。
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -81,6 +92,10 @@ pub struct PlayerTimelineEntry {
     pub early_death_score: f64,
     pub all_early_deaths_solo: bool,
     pub contested_objectives: u32,
+    /// 因敌方打野在场的前期死亡次数（C 类 Tag 数据源）
+    pub early_deaths_with_enemy_jungler: u32,
+    /// 本局是否被推断为打野
+    pub inferred_jungle_role: bool,
 }
 
 /// 单局结果。
@@ -102,12 +117,16 @@ pub struct TimelineEntry {
 pub async fn get_player_timelines(
     region: String,
     game_ids: Vec<i64>,
-    puuids: Vec<String>,
+    players: Vec<TimelinePlayerInput>,
 ) -> HashMap<i64, Option<TimelineEntry>> {
     let mut out: HashMap<i64, Option<TimelineEntry>> = HashMap::new();
-    if game_ids.is_empty() || puuids.is_empty() {
+    let Some(first) = players.first() else {
+        return out;
+    };
+    if game_ids.is_empty() || first.puuid.is_empty() {
         return out;
     }
+    let puuids: Vec<String> = players.iter().map(|p| p.puuid.clone()).collect();
 
     // 按 gameId 去重：同局对 10 人只拉一次
     let mut unique = game_ids;
@@ -130,9 +149,10 @@ pub async fn get_player_timelines(
         let semaphore = Arc::clone(&semaphore);
         let consecutive = Arc::clone(&consecutive);
         let puuids = puuids.clone();
+        let players = players.clone();
         async move {
             let _permit = semaphore.acquire_owned().await;
-            match fetch_and_analyze(&region, gid, &puuids).await {
+            match fetch_and_analyze(&region, gid, &puuids, &players).await {
                 Ok(entry) => {
                     consecutive.store(0, Ordering::Relaxed);
                     (gid, Some(entry))
@@ -160,25 +180,30 @@ async fn fetch_and_analyze(
     region: &str,
     game_id: i64,
     puuids: &[String],
+    players: &[TimelinePlayerInput],
 ) -> Result<TimelineEntry, String> {
     let detail = sgp::fetch_match_detail(region, game_id).await?;
     let id_map = timeline::participant_ids_by_puuid(&detail);
 
-    let wanted: Vec<i32> = puuids
+    // 身份对齐：SGP participantId 与 LCU 不可比，一律经 puuid 中转（照 score/mod.rs）
+    let inputs: Vec<timeline::PlayerInput> = players
         .iter()
-        .filter_map(|p| id_map.get(p))
-        .copied()
+        .filter_map(|p| {
+            id_map.get(&p.puuid).map(|pid| timeline::PlayerInput {
+                participant_id: *pid,
+                team_id: p.team_id,
+            })
+        })
         .collect();
-    // 目标玩家一个都没匹配上不是错误（局可能已失效/换区），按降级处理
-    if wanted.is_empty() {
+    if inputs.is_empty() {
         return Ok(TimelineEntry {
             degraded: Some("未在帧数据中匹配到目标玩家".to_string()),
             players: HashMap::new(),
         });
     }
 
-    let analysis = timeline::analyze_game_timeline(game_id, None, &wanted, &detail);
-    let mut players = HashMap::new();
+    let analysis = timeline::analyze_game_timeline(game_id, None, &inputs, &detail);
+    let mut result = HashMap::new();
     for pt in &analysis.players {
         let Some(puuid) = puuids
             .iter()
@@ -186,7 +211,7 @@ async fn fetch_and_analyze(
         else {
             continue;
         };
-        players.insert(
+        result.insert(
             puuid.clone(),
             PlayerTimelineEntry {
                 frames_analyzed: pt.frames_analyzed,
@@ -197,19 +222,28 @@ async fn fetch_and_analyze(
                 early_death_score: pt.early_death_score,
                 all_early_deaths_solo: pt.all_early_deaths_solo,
                 contested_objectives: pt.contested_objectives,
+                early_deaths_with_enemy_jungler: pt.early_deaths_with_enemy_jungler,
+                inferred_jungle_role: pt.inferred_jungle_role,
             },
         );
     }
 
     Ok(TimelineEntry {
         degraded: analysis.degraded,
-        players,
+        players: result,
     })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn player(puuid: &str, team_id: i32) -> TimelinePlayerInput {
+        TimelinePlayerInput {
+            puuid: puuid.to_string(),
+            team_id,
+        }
+    }
 
     /// 熔断状态需要在用例间复位，否则会互相污染。
     fn reset_circuit() {
@@ -219,7 +253,7 @@ mod tests {
     #[tokio::test]
     async fn empty_game_ids_returns_empty_map() {
         reset_circuit();
-        let out = get_player_timelines("HN10".into(), vec![], vec!["p1".into()]).await;
+        let out = get_player_timelines("HN10".into(), vec![], vec![player("p1", 100)]).await;
         assert!(out.is_empty());
     }
 
@@ -238,7 +272,8 @@ mod tests {
         assert!(circuit_open());
 
         let out =
-            get_player_timelines("HN10".into(), vec![11, 12, 13, 14], vec!["p1".into()]).await;
+            get_player_timelines("HN10".into(), vec![11, 12, 13, 14], vec![player("p1", 100)])
+                .await;
 
         // 全部返回 None（而不是报错），且 key 齐全
         assert_eq!(out.len(), 4);

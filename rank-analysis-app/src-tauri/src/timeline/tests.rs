@@ -72,7 +72,34 @@ fn detail(frames: Vec<SgpFrame>) -> SgpGameDetailResponse {
 }
 
 fn analyze(frames: Vec<SgpFrame>, map_id: Option<i64>) -> GameTimeline {
-    analyze_game_timeline(1000, map_id, &[1], &detail(frames))
+    analyze_game_timeline(1000, map_id, &[input(1, 100)], &detail(frames))
+}
+
+/// 一个玩家输入（SGP pid + 队伍）。
+fn input(participant_id: i32, team_id: i32) -> PlayerInput {
+    PlayerInput {
+        participant_id,
+        team_id,
+    }
+}
+
+/// 造一帧，含指定各参与者的位置（其余为默认）。
+fn frame_with_positions(
+    ts_ms: i64,
+    events: Vec<SgpFrameEvent>,
+    positions: &[(i32, i32, i32, i32)],
+) -> SgpFrame {
+    let mut f = frame(ts_ms, events);
+    for (pid, x, y, _) in positions {
+        f.participant_frames.insert(
+            *pid,
+            SgpFrameParticipantStats {
+                position: Some(SgpFramePosition { x: *x, y: *y }),
+                ..Default::default()
+            },
+        );
+    }
+    f
 }
 
 #[test]
@@ -88,7 +115,7 @@ fn missing_json_body_degrades_as_no_frames() {
         metadata: None,
         json: None,
     };
-    let t = analyze_game_timeline(1000, Some(11), &[1], &empty);
+    let t = analyze_game_timeline(1000, Some(11), &[input(1, 100)], &empty);
     assert_eq!(t.degraded.as_deref(), Some(Degraded::NoFrames.message()));
 }
 
@@ -441,6 +468,149 @@ fn frames_analyzed_counts_only_early_window() {
         Some(11),
     );
     assert_eq!(t.players[0].frames_analyzed, 2);
+}
+
+/* ---------------- 敌方打野识别与「敌方打野在场」死亡 ---------------- */
+
+/// 造一局：1 号是队伍 100 的打野（清野最多），2 号是队伍 200 的打野，
+/// 3 号是队伍 100 的受害玩家。返回 (frames, inputs)。
+fn jungle_vs_jungle_setup(
+    victim_at: (i32, i32),
+    enemy_jungler_at: (i32, i32),
+    victim_team: i32,
+) -> (Vec<SgpFrame>, Vec<PlayerInput>) {
+    let frames = vec![
+        // 各自清野，让 1/2 被推断为打野
+        frame_with_positions(
+            60_000,
+            vec![camp_kill("BlueSentinel", 1), camp_kill("RIFT_HERALD", 2)],
+            &[
+                (1, 3000, 5000, 0),
+                (2, 12000, 10500, 0),
+                (3, victim_at.0, victim_at.1, 0),
+            ],
+        ),
+        // 一次前期死亡，发生在指定坐标
+        frame_with_positions(
+            300_000,
+            vec![champ_kill(3, vec![2])],
+            &[
+                (1, 3000, 5000, 0),
+                (2, enemy_jungler_at.0, enemy_jungler_at.1, 0),
+                (3, victim_at.0, victim_at.1, 0),
+            ],
+        ),
+    ];
+    let inputs = vec![input(1, 100), input(2, 200), input(3, victim_team)];
+    (frames, inputs)
+}
+
+#[test]
+fn death_near_enemy_jungler_is_counted() {
+    // 敌方打野就在附近 => 该次死亡计入
+    let (frames, inputs) = jungle_vs_jungle_setup((3000, 5000), (3500, 5200), 100);
+    let t = analyze_game_timeline(1000, Some(11), &inputs, &detail(frames));
+    assert_eq!(t.degraded, None);
+    let victim = t.players.iter().find(|p| p.participant_id == 3).unwrap();
+    assert_eq!(victim.early_deaths, 1);
+    assert_eq!(
+        victim.early_deaths_with_enemy_jungler, 1,
+        "敌方打野在附近时应计为「因敌方打野在场」"
+    );
+}
+
+#[test]
+fn death_far_from_enemy_jungler_is_not_counted() {
+    // 敌方打野远在另一头 => 只是一次普通死亡
+    let (frames, inputs) = jungle_vs_jungle_setup((3000, 5000), (12000, 10500), 100);
+    let t = analyze_game_timeline(1000, Some(11), &inputs, &detail(frames));
+    let victim = t.players.iter().find(|p| p.participant_id == 3).unwrap();
+    assert_eq!(victim.early_deaths, 1);
+    assert_eq!(
+        victim.early_deaths_with_enemy_jungler, 0,
+        "敌方打野不在附近时不应计入"
+    );
+}
+
+#[test]
+fn own_jungler_presence_does_not_count_as_enemy() {
+    // 附近的是**我方**打野（同队）=> 不应计入「敌方打野在场」
+    let (frames, inputs) = jungle_vs_jungle_setup((3000, 5000), (3100, 5100), 200);
+    // 让 victim 与 1 号同队（100），而附近的 2 号也在 100 队
+    let (frames, _) = jungle_vs_jungle_setup((3000, 5000), (3100, 5100), 100);
+    let t = analyze_game_timeline(
+        1000,
+        Some(11),
+        &[input(1, 100), input(2, 100), input(3, 100)],
+        &detail(frames),
+    );
+    let victim = t.players.iter().find(|p| p.participant_id == 3).unwrap();
+    // 2 号虽在附近但同队 => 只按敌方打野算
+    assert_eq!(victim.early_deaths, 1);
+    assert_eq!(victim.early_deaths_with_enemy_jungler, 0);
+}
+
+#[test]
+fn jungler_role_is_inferred_from_camp_kills() {
+    let (frames, inputs) = jungle_vs_jungle_setup((3000, 5000), (12000, 10500), 100);
+    let t = analyze_game_timeline(1000, Some(11), &inputs, &detail(frames));
+    let by_pid = |pid: i32| t.players.iter().find(|p| p.participant_id == pid).unwrap();
+    assert!(
+        by_pid(1).inferred_jungle_role,
+        "清野最多的 1 号应被判为打野"
+    );
+    assert!(
+        by_pid(2).inferred_jungle_role,
+        "清野最多的 2 号应被判为打野"
+    );
+    assert!(
+        !by_pid(3).inferred_jungle_role,
+        "没清野的 3 号不应被判为打野"
+    );
+}
+
+#[test]
+fn team_without_any_camp_kills_yields_no_jungler() {
+    // 只有一队清野 => 该队判出打野；另一队判不出
+    let frames = vec![frame_with_positions(
+        60_000,
+        vec![camp_kill("BlueSentinel", 1)],
+        &[(1, 3000, 5000, 0), (2, 12000, 10500, 0), (3, 3000, 5000, 0)],
+    )];
+    let inputs = vec![input(1, 100), input(2, 200), input(3, 200)];
+    let t = analyze_game_timeline(1000, Some(11), &inputs, &detail(frames));
+    let by_pid = |pid: i32| t.players.iter().find(|p| p.participant_id == pid).unwrap();
+    assert!(by_pid(1).inferred_jungle_role);
+    assert!(
+        !by_pid(2).inferred_jungle_role && !by_pid(3).inferred_jungle_role,
+        "未清野的队伍不应被随便挑一个人当打野"
+    );
+}
+
+#[test]
+fn jungler_paths_are_per_player_not_shared_within_team() {
+    // 同队两人都有清野记录时，路径必须各自独立（早期版本会给全队同一条路径）
+    let frames = vec![
+        frame_with_positions(
+            60_000,
+            vec![camp_kill("BlueSentinel", 1)],
+            &[(1, 3000, 5000, 0), (4, 3000, 5000, 0)],
+        ),
+        frame_with_positions(
+            180_000,
+            vec![camp_kill("WOLF", 4)],
+            &[(1, 3000, 5000, 0), (4, 3000, 5000, 0)],
+        ),
+    ];
+    let inputs = vec![input(1, 100), input(4, 100)];
+    let t = analyze_game_timeline(1000, Some(11), &inputs, &detail(frames));
+    let by_pid = |pid: i32| t.players.iter().find(|p| p.participant_id == pid).unwrap();
+    assert_eq!(by_pid(1).jungle_path, vec![Camp::BlueBuff]);
+    assert_eq!(
+        by_pid(4).jungle_path,
+        vec![Camp::Wolves],
+        "4 号的路径不应包含 1 号打的蓝buff"
+    );
 }
 
 #[test]

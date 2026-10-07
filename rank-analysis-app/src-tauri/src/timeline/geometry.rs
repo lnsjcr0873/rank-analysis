@@ -193,6 +193,26 @@ pub fn is_objective_camp(camp: Camp) -> bool {
     matches!(camp, Camp::Dragon | Camp::Baron | Camp::RiftHerald)
 }
 
+/// 两点间距离（地图单位）。
+pub fn distance(ax: i32, ay: i32, bx: i32, by: i32) -> f64 {
+    let dx = (ax - bx) as f64;
+    let dy = (ay - by) as f64;
+    (dx * dx + dy * dy).sqrt()
+}
+
+/// 判定「敌方打野在场」的半径阈值（地图单位）。
+///
+/// **这是一个粗略的代理量，不是精确判定。** SGP 帧是逐分钟聚合，
+/// 我们只有分钟级的位置快照，拿不到「打野正在赶来的路上」这类连续轨迹。
+/// 因此语义被刻意收窄为：
+///
+/// > 死亡发生的这一分钟，敌方打野的位置离死亡点足够近。
+///
+/// 阈值取 2000（约占地图宽度的 13%）——宁可保守（略过一些真 gank），
+/// 也不要激进（把路人经过算成打野支援），因为这个值直接决定
+/// 「极好抓/好抓/难抓」三个对外 Tag 的可信度。
+pub const GANK_PRESENCE_RADIUS: f64 = 2000.0;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -324,5 +344,21 @@ mod tests {
         assert!(is_objective_camp(Camp::RiftHerald));
         assert!(!is_objective_camp(Camp::BlueBuff));
         assert!(!is_objective_camp(Camp::Wolves));
+    }
+
+    #[test]
+    fn distance_is_symmetric_and_zero_on_self() {
+        assert_eq!(distance(100, 200, 100, 200), 0.0);
+        let a = distance(0, 0, 3000, 4000);
+        let b = distance(3000, 4000, 0, 0);
+        assert!((a - b).abs() < 1e-9, "距离必须对称");
+        assert!((a - 5000.0).abs() < 1e-9, "3-4-5 三角形");
+    }
+
+    #[test]
+    fn gank_radius_is_well_formed() {
+        // 阈值必须落在地图尺度内，且不至于大到失去区分度
+        assert!(GANK_PRESENCE_RADIUS > 0.0);
+        assert!(GANK_PRESENCE_RADIUS < MAP_SIZE as f64 * 0.25);
     }
 }

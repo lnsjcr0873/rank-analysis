@@ -91,6 +91,24 @@ pub struct PlayerTimeline {
     pub all_early_deaths_solo: bool,
     /// 是否参与过资源团
     pub contested_objectives: u32,
+    /// **因敌方打野在场**的前期死亡次数（C 类 Tag 的唯一数据源）
+    pub early_deaths_with_enemy_jungler: u32,
+    /// 本局是否被推断为打野（按清野数）
+    pub inferred_jungle_role: bool,
+}
+
+/// 玩家身份输入。
+///
+/// **SGP 的 `participantId` 与 LCU 的不一致，且 SGP 帧里也没有队伍字段**
+/// ——两者都必须由调用方传入（它持有 session/matchHistory，知道真实对应关系）。
+/// 这与 `score/mod.rs` 里「一律按 puuid 对齐」的既有纪律一致。
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlayerInput {
+    /// SGP `participantId`
+    pub participant_id: i32,
+    /// 队伍 id（如 100 / 200），用于判定「敌方」打野
+    pub team_id: i32,
 }
 
 /// 一局的分析产出：逐玩家结论 + 本局是否降级。
@@ -177,27 +195,36 @@ fn death_weight(e: &SgpFrameEvent) -> f64 {
     1.0 / (1.0 + helpers as f64)
 }
 
-/// 清野序列：按时间记录首次清理的营地，重复营地只记第一次。
-fn collect_jungle_path(frames: &[&SgpFrame]) -> Vec<(Camp, i64)> {
-    let mut path: Vec<(Camp, i64)> = Vec::new();
+/// 逐玩家的清野序列与首次清理时刻。
+///
+/// 早期版本这里只输出一条**全局**路径，导致同队的打野与辅助共用一条路径、
+/// 两人同时被打上「打野」标签。改为按 `participant_id` 分组后，
+/// 角色推断（`infer_junglers`）才有意义。
+///
+/// 返回 `(participantId -> 营地序列, participantId -> 首次清理时刻)`。
+fn collect_jungle_paths(frames: &[&SgpFrame]) -> (HashMap<i32, Vec<Camp>>, HashMap<i32, i64>) {
+    let mut camps: HashMap<i32, Vec<Camp>> = HashMap::new();
+    let mut first_camp: HashMap<i32, i64> = HashMap::new();
     for f in frames {
         let ts = f.timestamp.unwrap_or_default();
         for e in &f.events {
             if !is_camp_kill(e) {
                 continue;
             }
-            let Some(camp) =
-                camp_of_monster(e.monster_type.as_deref(), e.monster_sub_type.as_deref())
-            else {
+            let (Some(pid), Some(camp)) = (
+                e.participant_id,
+                camp_of_monster(e.monster_type.as_deref(), e.monster_sub_type.as_deref()),
+            ) else {
                 continue;
             };
-            if path.iter().any(|(c, _)| *c == camp) {
-                continue;
+            let entry = camps.entry(pid).or_default();
+            if !entry.contains(&camp) {
+                entry.push(camp);
             }
-            path.push((camp, ts));
+            first_camp.entry(pid).or_insert(ts);
         }
     }
-    path
+    (camps, first_camp)
 }
 
 /// 统计某参与者的前期死亡情况。
@@ -259,16 +286,116 @@ fn collect_objectives(frames: &[&SgpFrame], participant_id: i32) -> u32 {
     n
 }
 
+/// 推断各队的打野：按前期**清野数**取胜者。
+///
+/// 用清野数而不是位置/补刀数做依据：清野事件（`MONSTER_KILL` 带营地语义）
+/// 是「这个人去打了野」最直接的证据；而补刀数高的人未必是打野（射手也能补刀）。
+///
+/// **保守约定**：清野数为 0 的队伍**不产出**打野（返回空 vec），
+/// 而不是退化成「随便挑一个人当打野」——后者会让「敌方打野在场」
+/// 这个 Tag 变成随机噪声，比不给结论糟糕得多。
+fn infer_junglers(frames: &[&SgpFrame], team_of: &HashMap<i32, i32>) -> Vec<i32> {
+    let mut camps: HashMap<i32, Vec<Camp>> = HashMap::new();
+    for f in frames {
+        for e in &f.events {
+            if !is_camp_kill(e) {
+                continue;
+            }
+            let (Some(pid), Some(camp)) = (
+                e.participant_id,
+                camp_of_monster(e.monster_type.as_deref(), e.monster_sub_type.as_deref()),
+            ) else {
+                continue;
+            };
+            let entry = camps.entry(pid).or_default();
+            if !entry.contains(&camp) {
+                entry.push(camp);
+            }
+        }
+    }
+    // 每个队伍取清野最多的人；并列时取 participantId 较小者（保证结果确定可复现）
+    let mut best: HashMap<i32, (usize, i32)> = HashMap::new();
+    for (pid, path) in camps {
+        if path.is_empty() {
+            continue;
+        }
+        let Some(team) = team_of.get(&pid) else {
+            continue;
+        };
+        best.entry(*team)
+            .and_modify(|(n, best_pid)| {
+                if path.len() > *n || (path.len() == *n && pid < *best_pid) {
+                    *n = path.len();
+                    *best_pid = pid;
+                }
+            })
+            .or_insert((path.len(), pid));
+    }
+    best.into_values().map(|(_, pid)| pid).collect()
+}
+
+/// 统计某参与者「因敌方打野在场」的前期死亡次数。
+///
+/// 判定：死亡所在的那一分钟，敌方打野的 `participant_frames` 位置
+/// 落在 [`geometry::GANK_PRESENCE_RADIUS`] 之内。
+///
+/// 局限（有意接受）：SGP 是逐分钟聚合，拿不到连续轨迹，
+/// 因此只能表达「同一分钟内在附近」，无法表达「正在赶来」。
+fn count_deaths_with_enemy_jungler(
+    frames: &[&SgpFrame],
+    victim_id: i32,
+    enemy_junglers: &[i32],
+) -> u32 {
+    if enemy_junglers.is_empty() {
+        return 0;
+    }
+    let mut count = 0u32;
+    for f in frames {
+        let Some(ts) = f.timestamp else { continue };
+        if ts > EARLY_LIMIT_MS {
+            continue;
+        }
+        // 本帧该玩家的早期死亡事件（死亡点用事件自身坐标）
+        let deaths: Vec<(i32, i32)> = f
+            .events
+            .iter()
+            .filter(|e| is_champion_kill(e) && e.victim_id == Some(victim_id))
+            .filter_map(|e| e.position.as_ref().map(|p| (p.x, p.y)))
+            .collect();
+        if deaths.is_empty() {
+            continue;
+        }
+        // 本帧敌方打野的位置
+        let jungler_positions: Vec<(i32, i32)> = enemy_junglers
+            .iter()
+            .filter_map(|j| f.participant_frames.get(j))
+            .filter_map(|s| s.position.as_ref().map(|p| (p.x, p.y)))
+            .collect();
+        if jungler_positions.is_empty() {
+            continue;
+        }
+        for (dx, dy) in &deaths {
+            let near = jungler_positions.iter().any(|(jx, jy)| {
+                geometry::distance(*dx, *dy, *jx, *jy) <= geometry::GANK_PRESENCE_RADIUS
+            });
+            if near {
+                count += 1;
+            }
+        }
+    }
+    count
+}
+
 /// 分析一局，返回逐玩家结论。
 ///
 /// @param game_id 本局 gameId（回填用）
 /// @param map_id 本局地图 id；`None` 视为未知（不因此降级）
-/// @param player_ids 需要产出结论的 participantId 列表
+/// @param players 需要产出结论的玩家（含 SGP participantId 与真实队伍）
 /// @param detail 已取到的 SGP 详情
 pub fn analyze_game_timeline(
     game_id: i64,
     map_id: Option<i64>,
-    player_ids: &[i32],
+    players: &[PlayerInput],
     detail: &SgpGameDetailResponse,
 ) -> GameTimeline {
     // json 缺失与 frames 缺失同义（响应结构不完整）——都按「无帧」降级，
@@ -299,29 +426,51 @@ pub fn analyze_game_timeline(
     }
 
     let early = early_frames(frames);
-    let path = collect_jungle_path(&early);
 
-    let players = player_ids
+    // 队伍映射与打野推断。营地序列必须**按玩家**统计而非全局一条——
+    // 同队两名玩家（打野与辅助）共用一条路径会同时把两人标成打野角色。
+    let team_of: HashMap<i32, i32> = players
         .iter()
-        .map(|pid| {
-            let (early_deaths, score, all_solo) = collect_early_deaths(&early, *pid);
+        .map(|p| (p.participant_id, p.team_id))
+        .collect();
+    let junglers = infer_junglers(&early, &team_of);
+    let (camps_by_player, first_camp_by_player) = collect_jungle_paths(&early);
+    let results = players
+        .iter()
+        .map(|p| {
+            let pid = p.participant_id;
+            let (early_deaths, score, all_solo) = collect_early_deaths(&early, pid);
+            let my_camps = camps_by_player.get(&pid).cloned().unwrap_or_default();
+            let first_camp = first_camp_by_player.get(&pid).copied();
+            // 敌方打野 = 各队推断出的打野里、队伍与本队不同的那些
+            let enemy_junglers: Vec<i32> = junglers
+                .iter()
+                .copied()
+                .filter(|j| team_of.get(j) != Some(&p.team_id))
+                .collect();
             PlayerTimeline {
-                participant_id: *pid,
+                participant_id: pid,
                 frames_analyzed: early.len() as u32,
-                jungle_path: path.iter().map(|(c, _)| *c).collect(),
-                first_camp_at_ms: path.first().map(|(_, ts)| *ts),
-                invaded_before_3min: path.first().is_some_and(|(_, ts)| *ts <= 3 * 60 * 1000),
+                jungle_path: my_camps,
+                first_camp_at_ms: first_camp,
+                invaded_before_3min: first_camp.is_some_and(|ts| ts <= 3 * 60 * 1000),
                 early_deaths,
                 early_death_score: score,
                 all_early_deaths_solo: early_deaths == 0 || all_solo,
-                contested_objectives: collect_objectives(&early, *pid),
+                contested_objectives: collect_objectives(&early, pid),
+                early_deaths_with_enemy_jungler: count_deaths_with_enemy_jungler(
+                    &early,
+                    pid,
+                    &enemy_junglers,
+                ),
+                inferred_jungle_role: junglers.contains(&pid),
             }
         })
         .collect();
 
     GameTimeline {
         game_id,
-        players,
+        players: results,
         degraded: None,
     }
 }
