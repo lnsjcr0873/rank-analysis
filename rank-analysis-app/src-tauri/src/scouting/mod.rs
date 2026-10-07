@@ -476,10 +476,11 @@ fn threat_level_ord(level: ThreatLevel) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::lcu::api::game_detail::{
-        GameDetail, GameDetailParticipantIdentity, GameDetailPlayer,
-    };
-    use crate::lcu::api::model::Stats;
+    // 注意：`GameDetail.participant_identities` 的元素类型是 `model::ParticipantIdentity`
+    // （内含 `model::Player`），**不是** game_detail 模块里的同名近似结构——
+    // 两者字段几乎一样，写错不会立刻报错，只会在编译期给出 E0308。
+    use crate::lcu::api::game_detail::GameDetail;
+    use crate::lcu::api::model::{ParticipantIdentity, Player, Stats};
 
     /// 构造一个 5v5 的 `Game`。
     ///
@@ -497,8 +498,8 @@ mod tests {
         for (team_id, damages) in [(100i32, blue_damage), (200i32, red_damage)] {
             for (i, dmg) in damages.iter().enumerate() {
                 let pid = (team_id - 100) * 5 + i as i32 + 1;
-                identities.push(GameDetailParticipantIdentity {
-                    player: GameDetailPlayer {
+                identities.push(ParticipantIdentity {
+                    player: Player {
                         account_id: pid as i64,
                         puuid: format!("p-{pid}"),
                         platform_id: "TENCENT-1".to_string(),
