@@ -354,7 +354,7 @@ fn event_type_matching_is_case_insensitive() {
         vec![frame(
             300_000,
             vec![SgpFrameEvent {
-                r#type: Some("PaRtIcIpAnT_KiLl".into()),
+                r#type: Some("ChAmPiOn_KiLl".into()),
                 victim_id: Some(1),
                 position: Some(SgpFramePosition { x: 5000, y: 5000 }),
                 ..Default::default()
@@ -363,6 +363,28 @@ fn event_type_matching_is_case_insensitive() {
         Some(11),
     );
     assert_eq!(t.players[0].early_deaths, 1, "逐字符混合大小写未被识别");
+}
+
+/// 反向确认：`participant_kill` 不是 SGP 的事件类型，不应被当成击杀。
+///
+/// 这条与上面那条成对——上一条曾因把 `CHAMPION_KILL` 误写成
+/// `PARTICIPANT_KILL`（手滑打错一个字母）而误判为实现有 bug。
+/// 显式断言「未知类型不误判」，比只断言「已知类型能识别」更能防这类事故。
+#[test]
+fn unknown_event_type_is_not_mistaken_for_a_known_one() {
+    let t = analyze(
+        vec![frame(
+            300_000,
+            vec![SgpFrameEvent {
+                r#type: Some("PARTICIPANT_KILL".into()),
+                victim_id: Some(1),
+                position: Some(SgpFramePosition { x: 5000, y: 5000 }),
+                ..Default::default()
+            }],
+        )],
+        Some(11),
+    );
+    assert_eq!(t.players[0].early_deaths, 0, "未知事件类型不应被识别为击杀");
 }
 
 #[test]
