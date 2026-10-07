@@ -758,7 +758,9 @@ mod tests {
     /// TS 侧对应 `HEAL_RATIO_SOLO_MAX = 1.0`。此断言锁住两侧一致。
     #[test]
     fn pin_healing_solo_branch() {
-        assert!(HEAL_RATIO_MAX > 1.0, "多人队伍治疗满分线必须高于单人分支");
+        // 用 const 块表达「这是常量不变量」：clippy 的 assertions_on_constants
+        // 会把函数体内的 assert! 判为错误，而这是刻意钉住权重的编译期断言。
+        const { assert!(HEAL_RATIO_MAX > 1.0, "多人队伍治疗满分线必须高于单人分支") };
         let solo_full = 1.0_f64;
         let size = 1_usize;
         assert_eq!(

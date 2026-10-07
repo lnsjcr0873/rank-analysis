@@ -107,7 +107,7 @@ fn non_summoners_rift_degrades_before_reading_frames() {
 fn frames_without_any_position_degrade() {
     let mut f = frame(60_000, vec![champ_kill(1, vec![2])]);
     // 清空所有坐标 => 无法做位置推断
-    for (_, stats) in f.participant_frames.iter_mut() {
+    for stats in f.participant_frames.values_mut() {
         stats.position = None;
     }
     f.events.clear();
