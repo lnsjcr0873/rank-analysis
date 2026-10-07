@@ -534,9 +534,7 @@ fn death_far_from_enemy_jungler_is_not_counted() {
 
 #[test]
 fn own_jungler_presence_does_not_count_as_enemy() {
-    // 附近的是**我方**打野（同队）=> 不应计入「敌方打野在场」
-    let (frames, inputs) = jungle_vs_jungle_setup((3000, 5000), (3100, 5100), 200);
-    // 让 victim 与 1 号同队（100），而附近的 2 号也在 100 队
+    // 三人同属队伍 100：附近那位也是「自己人」，不该被算成敌方打野在场
     let (frames, _) = jungle_vs_jungle_setup((3000, 5000), (3100, 5100), 100);
     let t = analyze_game_timeline(
         1000,

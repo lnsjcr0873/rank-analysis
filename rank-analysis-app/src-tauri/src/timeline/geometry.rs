@@ -357,8 +357,10 @@ mod tests {
 
     #[test]
     fn gank_radius_is_well_formed() {
-        // 阈值必须落在地图尺度内，且不至于大到失去区分度
-        assert!(GANK_PRESENCE_RADIUS > 0.0);
-        assert!(GANK_PRESENCE_RADIUS < MAP_SIZE as f64 * 0.25);
+        // 常量不变量用 const 块表达（clippy assertions_on_constants）
+        const {
+            assert!(GANK_PRESENCE_RADIUS > 0.0);
+            assert!(GANK_PRESENCE_RADIUS < MAP_SIZE as f64 * 0.25);
+        }
     }
 }
