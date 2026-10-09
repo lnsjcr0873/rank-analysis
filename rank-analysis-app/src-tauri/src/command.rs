@@ -69,6 +69,7 @@ pub mod scouting;
 pub mod session;
 pub mod sgp;
 pub mod system;
+pub mod timeline;
 pub mod user_tag;
 pub mod user_tag_config;
 

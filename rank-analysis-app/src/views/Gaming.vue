@@ -312,6 +312,21 @@
         </div>
       </div>
 
+      <!-- ================= 名册墙：Akari 情报卡（历史画像深度） =================
+           插在 .intel-bay 之后、.roster 之前（设计文档 ADR-4）。
+           与下方 .roster 定位不同：本 band 答「他是谁」，.roster 答「本局该怎么做」。 -->
+      <RosterWall
+        v-if="rosterWallVisible"
+        class="roster-wall-band"
+        :ally="rosterWallAlly"
+        :enemy="rosterWallEnemy"
+        :champion-name="getChampionName"
+        :self-puuid="mySummonerPuuid"
+        :density="rosterWallDensity"
+        :show-jungle-pathing="rosterWallSettings.showJunglePathing"
+        :show-jungle-for-all="rosterWallSettings.showJungleForAll"
+      />
+
       <!-- ================= 名册：全模式共用同一外壳（选人期 / 局内 / 大乱斗） ================= -->
       <div
         class="roster"
@@ -368,6 +383,7 @@ import { useMessage } from 'naive-ui'
 import VerdictBanner from '@renderer/components/ui/VerdictBanner.vue'
 import LoadingComponent from '@renderer/components/LoadingComponent.vue'
 import RosterRow from '@renderer/components/gaming/RosterRow.vue'
+import RosterWall from '@renderer/components/gaming/roster-wall/RosterWall.vue'
 import BestPicksPanel from '@renderer/components/gaming/BestPicksPanel.vue'
 import MayhemDraftPanel from '@renderer/components/gaming/MayhemDraftPanel.vue'
 import TeamStrengthBar from '@renderer/components/gaming/TeamStrengthBar.vue'
@@ -396,6 +412,21 @@ import {
 import { useOpggTier } from '@renderer/composables/useOpggTier'
 import { buildRuleDraft } from '@renderer/features/gaming/services/bpRuleDraft'
 import { buildRoster, type RosterSide } from '@renderer/features/gaming/services/roster'
+import { analyzeRoster } from '@renderer/features/gaming/services/playerAnalysis'
+import {
+  toRosterWallMember,
+  type RosterWallMember
+} from '@renderer/features/gaming/roster-wall/member'
+import {
+  fetchPlayerTimelines,
+  type PlayerTimelineSummary
+} from '@renderer/features/gaming/services/playerTimeline'
+import { getCurrentSgpRegion } from '@renderer/features/record/services/sgp'
+import {
+  DEFAULTS as ROSTER_WALL_DEFAULTS,
+  loadRosterWallSettings as fetchRosterWallSettings,
+  type RosterWallSettings
+} from '@renderer/features/gaming/roster-wall/settings'
 import { isMayhemQueue } from '@renderer/features/mayhem/queues'
 import { normalizeLcuPosition } from '@renderer/features/gaming/services/counterIntel'
 import { getChampionName, loadChampionNames } from '@renderer/services/ai/champion-names'
@@ -512,6 +543,170 @@ function rosterSideOf(subteamId: number): RosterSide {
 /** 占位行：人数不足期望值时补空位（选人期未满员 / 中途离开） */
 function placeholderCount(groupSize: number): number {
   return Math.max(0, roster.value.expectedSize - groupSize)
+}
+
+/* ================================================================
+   名册墙（Akari 情报卡）：历史画像深度 band
+   设计文档 docs/superpowers/specs/2026-10-05-gaming-roster-wall-design.md
+   ================================================================ */
+
+/** 名册墙最小视口宽度：低于此值 .roster 已是 minimal，名册墙不再重复 */
+const ROSTER_WALL_MIN_WIDTH = 1400
+
+/**
+ * 名册墙可见性（ADR-4 密度档）。
+ *
+ * 三道门：
+ * - 非大乱斗：大乱斗已有 MayhemDraftPanel 承担「选谁」，名册墙是历史画像，会打架
+ * - 非多队：名册墙只有「我方 / 敌方」两栏，斗魂（CHERRY）三方平铺无法映射
+ * - 视口 ≥1400：窄窗下 .roster 已是最小密度，名册墙会把页面推得过长
+ *
+ * 用本文件既有的响应式 viewportWidth（挂载时取一次 + 监听 resize），不用裸 window.innerWidth，
+ * 否则缩放窗口时这道门不会重算。
+ */
+const rosterWallVisible = computed(() => {
+  // 设置项总开关（gaming.rosterWall.enabled）
+  if (!rosterWallSettings.value.enabled) return false
+  if (isMayhem.value) return false
+  if (sessionData.isMultiTeam) return false
+  return viewportWidth.value >= ROSTER_WALL_MIN_WIDTH
+})
+
+/** 名册墙密度：与既有 rosterDensity 判据同源，避免两处规则漂移 */
+const rosterWallDensity = computed<'full' | 'slim'>(() =>
+  rosterDensity.value === 'full' ? 'full' : 'slim'
+)
+
+/** puuid → 该玩家的段位列表（`useSessionTiers` 按 subteam 给，需按 puuid 重索引） */
+const tiersByPuuid = computed(() => {
+  const out = new Map<string, { imgUrl: string; tierCn: string }[]>()
+  for (const group of roster.value.groups) {
+    const tiers = tiersBySubteam.value[group.subteamId] ?? []
+    group.members.forEach((m, i) => {
+      const puuid = m.player.summoner?.puuid
+      if (puuid && tiers[i] && !out.has(puuid)) out.set(puuid, tiers)
+    })
+  }
+  return out
+})
+
+/** 名册墙设置（ADR-3 的 9 个 key）；读失败回落默认值，绝不因此阻断渲染 */
+const rosterWallSettings = ref<RosterWallSettings>(ROSTER_WALL_DEFAULTS)
+
+/** 读取设置；配置损坏时 normalize 会逐字段兜底 */
+async function loadRosterWallSettings(): Promise<void> {
+  // 注意：不 rethrow。设置读失败只是「用默认值」，不是页面级故障——
+  // 让它冒泡成 mounted hook 的 unhandled rejection 只会污染控制台，
+  // 且 Vue 会把它记为未处理错误。帧级画像同理（各自内部已降级）。
+  try {
+    rosterWallSettings.value = await fetchRosterWallSettings()
+  } catch (err) {
+    console.warn('[gaming] 名册墙设置读取失败，回落默认值', err)
+    rosterWallSettings.value = { ...ROSTER_WALL_DEFAULTS }
+  }
+}
+
+/**
+ * 帧级画像（P1/P3）：C 类 Tag 与打野路径卡的数据源。
+ *
+ * **不阻塞** summary 分析——名册墙先按现有数据渲染，帧级数据到位后
+ * 自动补上 C 类 Tag。让一个数秒级的网络请求卡住整页是本末倒置。
+ */
+const timelinesByPuuid = ref(new Map<string, PlayerTimelineSummary>())
+
+/** 本次要分析的 gameId：取各玩家近期对局的并集（去重），并按 P3 约定限量 */
+const timelineGameIds = computed<number[]>(() => {
+  if (!rosterWallVisible.value) return []
+  const ids = new Set<number>()
+  for (const s of sessionData.subteams) {
+    for (const p of s.players) {
+      for (const g of p.matchHistory?.games?.games ?? []) ids.add(g.gameId)
+    }
+  }
+  return [...ids].slice(0, TIMELINE_GAME_LIMIT.value)
+})
+
+/** 帧级分析只对「有历史对局」的玩家有意义，且限量避免拉太多局 */
+const TIMELINE_GAME_LIMIT = computed(() => rosterWallSettings.value.timelineGameCount)
+
+/** 拉取帧级画像；失败静默（playerTimeline 内部已降级为 null） */
+async function loadTimelines(): Promise<void> {
+  const gameIds = timelineGameIds.value
+  if (gameIds.length === 0) return
+
+  // SGP 只提供按 gameId 的帧端点，且帧里没有队伍字段 ⇒ 队伍由前端给
+  const players = sessionData.subteams.flatMap(s =>
+    s.players.map(p => ({
+      puuid: p.summoner?.puuid ?? '',
+      // CLASSIC 下 subteamId 即队伍；斗魂多队时名册墙本就不显示
+      teamId: s.subteamId
+    }))
+  )
+  const valid = players.filter(p => p.puuid)
+  if (valid.length === 0) return
+
+  try {
+    const region = await getCurrentSgpRegion()
+    if (!region) return
+    timelinesByPuuid.value = new Map(
+      Object.entries(await fetchPlayerTimelines(region, gameIds, valid))
+    )
+  } catch {
+    // 降级而非中断：留空 map，C 类 Tag 自动隐藏
+    timelinesByPuuid.value = new Map()
+  }
+}
+
+/** 名册墙成员：复用 analyzeRoster 的批量分析与降级结果 */
+const rosterWallMembers = computed<RosterWallMember[]>(() => {
+  const players = sessionData.subteams.flatMap(s => s.players)
+  if (players.length === 0) return []
+
+  const results = analyzeRoster(players, {
+    nowMs: Date.now(),
+    // 设置项 gaming.rosterWall.loadCount（默认 50，对齐 Akari matchHistoryLoadCount）
+    limit: rosterWallSettings.value.loadCount
+  })
+  const tierMap = tiersByPuuid.value
+  const members: RosterWallMember[] = []
+  for (const p of players) {
+    const puuid = p.summoner?.puuid ?? ''
+    if (!puuid) continue
+    const analysis = results.get(puuid)
+    if (!analysis) continue
+    members.push(
+      toRosterWallMember(
+        p,
+        analysis,
+        mySummonerPuuid.value,
+        tierMap,
+        false,
+        // 帧级数据未就绪时为 null ⇒ C 类 Tag 自动隐藏（见 playerTimeline 降级纪律）
+        timelinesByPuuid.value.get(puuid) ?? null
+      )
+    )
+  }
+
+  // 排序：预组队优先（像 Akari 的 orderPlayerBy='premade-team'）
+  return members.sort((a, b) => {
+    if (!!a.premadeGroup !== !!b.premadeGroup) return a.premadeGroup ? -1 : 1
+    return (b.analysis.profile?.score.total ?? 0) - (a.analysis.profile?.score.total ?? 0)
+  })
+})
+
+const rosterWallAlly = computed(() =>
+  rosterWallMembers.value.filter(m => rosterSideOf(subteamIdOf(m.puuid)) === 'mine')
+)
+const rosterWallEnemy = computed(() =>
+  rosterWallMembers.value.filter(m => rosterSideOf(subteamIdOf(m.puuid)) !== 'mine')
+)
+
+/** puuid → subteamId（名册墙只按 puuid 拿到成员，需反查阵营） */
+function subteamIdOf(puuid: string): number {
+  for (const s of sessionData.subteams) {
+    if (s.players.some(p => p.summoner?.puuid === puuid)) return s.subteamId
+  }
+  return -1
 }
 
 /** 我方小队玩家列表，供 MayhemDraftPanel 复用（不再硬取 subteams[0]） */
@@ -1008,6 +1203,12 @@ onMounted(async () => {
   // 导致 ban 阶段（尚无人 hover）整段时间决策带只能显示「英雄157」占位符。
   // 提前在页面挂载时触发一次，幂等（已加载时立即返回）。
   void loadChampionNames()
+  // 设置项先读，再拉帧级画像（timelineGameCount / loadCount 依赖它），同样不阻塞首屏。
+  // 两个函数各自内部已兜底，这里再兜一层：挂载期的 fire-and-forget 绝不能
+  // 冒泡成 mounted hook 的 unhandled rejection。
+  void loadRosterWallSettings()
+    .then(() => loadTimelines())
+    .catch(err => console.warn('[gaming] 名册墙异步初始化失败', err))
 
   // OP.GG 数据兜底刷新：后端启动已预热，此处 fire-and-forget 兜底软件长开超 12h 未重启的场景。
   // 两个模式都刷新完成后，重新拉取当前模式状态以更新横幅（版本号/滞后标记跟着变化）。
