@@ -323,6 +323,8 @@
         :champion-name="getChampionName"
         :self-puuid="mySummonerPuuid"
         :density="rosterWallDensity"
+        :show-jungle-pathing="rosterWallSettings.showJunglePathing"
+        :show-jungle-for-all="rosterWallSettings.showJungleForAll"
       />
 
       <!-- ================= 名册：全模式共用同一外壳（选人期 / 局内 / 大乱斗） ================= -->
@@ -420,6 +422,11 @@ import {
   type PlayerTimelineSummary
 } from '@renderer/features/gaming/services/playerTimeline'
 import { getCurrentSgpRegion } from '@renderer/features/record/services/sgp'
+import {
+  DEFAULTS as ROSTER_WALL_DEFAULTS,
+  loadRosterWallSettings as fetchRosterWallSettings,
+  type RosterWallSettings
+} from '@renderer/features/gaming/roster-wall/settings'
 import { isMayhemQueue } from '@renderer/features/mayhem/queues'
 import { normalizeLcuPosition } from '@renderer/features/gaming/services/counterIntel'
 import { getChampionName, loadChampionNames } from '@renderer/services/ai/champion-names'
@@ -558,6 +565,8 @@ const ROSTER_WALL_MIN_WIDTH = 1400
  * 否则缩放窗口时这道门不会重算。
  */
 const rosterWallVisible = computed(() => {
+  // 设置项总开关（gaming.rosterWall.enabled）
+  if (!rosterWallSettings.value.enabled) return false
   if (isMayhem.value) return false
   if (sessionData.isMultiTeam) return false
   return viewportWidth.value >= ROSTER_WALL_MIN_WIDTH
@@ -581,8 +590,24 @@ const tiersByPuuid = computed(() => {
   return out
 })
 
+/** 名册墙设置（ADR-3 的 9 个 key）；读失败回落默认值，绝不因此阻断渲染 */
+const rosterWallSettings = ref<RosterWallSettings>(ROSTER_WALL_DEFAULTS)
+
+/** 读取设置；配置损坏时 normalize 会逐字段兜底 */
+async function loadRosterWallSettings(): Promise<void> {
+  // 注意：不 rethrow。设置读失败只是「用默认值」，不是页面级故障——
+  // 让它冒泡成 mounted hook 的 unhandled rejection 只会污染控制台，
+  // 且 Vue 会把它记为未处理错误。帧级画像同理（各自内部已降级）。
+  try {
+    rosterWallSettings.value = await fetchRosterWallSettings()
+  } catch (err) {
+    console.warn('[gaming] 名册墙设置读取失败，回落默认值', err)
+    rosterWallSettings.value = { ...ROSTER_WALL_DEFAULTS }
+  }
+}
+
 /**
- * 帧级画像（P1/P3）：C 类 Tag 的数据源。
+ * 帧级画像（P1/P3）：C 类 Tag 与打野路径卡的数据源。
  *
  * **不阻塞** summary 分析——名册墙先按现有数据渲染，帧级数据到位后
  * 自动补上 C 类 Tag。让一个数秒级的网络请求卡住整页是本末倒置。
@@ -598,11 +623,11 @@ const timelineGameIds = computed<number[]>(() => {
       for (const g of p.matchHistory?.games?.games ?? []) ids.add(g.gameId)
     }
   }
-  return [...ids].slice(0, TIMELINE_GAME_LIMIT)
+  return [...ids].slice(0, TIMELINE_GAME_LIMIT.value)
 })
 
 /** 帧级分析只对「有历史对局」的玩家有意义，且限量避免拉太多局 */
-const TIMELINE_GAME_LIMIT = 6
+const TIMELINE_GAME_LIMIT = computed(() => rosterWallSettings.value.timelineGameCount)
 
 /** 拉取帧级画像；失败静默（playerTimeline 内部已降级为 null） */
 async function loadTimelines(): Promise<void> {
@@ -637,7 +662,11 @@ const rosterWallMembers = computed<RosterWallMember[]>(() => {
   const players = sessionData.subteams.flatMap(s => s.players)
   if (players.length === 0) return []
 
-  const results = analyzeRoster(players, { nowMs: Date.now(), limit: matchCount.value * 10 })
+  const results = analyzeRoster(players, {
+    nowMs: Date.now(),
+    // 设置项 gaming.rosterWall.loadCount（默认 50，对齐 Akari matchHistoryLoadCount）
+    limit: rosterWallSettings.value.loadCount
+  })
   const tierMap = tiersByPuuid.value
   const members: RosterWallMember[] = []
   for (const p of players) {
@@ -1174,8 +1203,12 @@ onMounted(async () => {
   // 导致 ban 阶段（尚无人 hover）整段时间决策带只能显示「英雄157」占位符。
   // 提前在页面挂载时触发一次，幂等（已加载时立即返回）。
   void loadChampionNames()
-  // 帧级画像（P1/P3）：不阻塞首屏，异步补 C 类 Tag
-  void loadTimelines()
+  // 设置项先读，再拉帧级画像（timelineGameCount / loadCount 依赖它），同样不阻塞首屏。
+  // 两个函数各自内部已兜底，这里再兜一层：挂载期的 fire-and-forget 绝不能
+  // 冒泡成 mounted hook 的 unhandled rejection。
+  void loadRosterWallSettings()
+    .then(() => loadTimelines())
+    .catch(err => console.warn('[gaming] 名册墙异步初始化失败', err))
 
   // OP.GG 数据兜底刷新：后端启动已预热，此处 fire-and-forget 兜底软件长开超 12h 未重启的场景。
   // 两个模式都刷新完成后，重新拉取当前模式状态以更新横幅（版本号/滞后标记跟着变化）。

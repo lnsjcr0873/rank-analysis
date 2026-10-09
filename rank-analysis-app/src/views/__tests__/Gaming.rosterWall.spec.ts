@@ -423,3 +423,91 @@ describe('Gaming.vue 名册墙接线', () => {
     expect(css).toContain('.roster-wall-band')
   })
 })
+describe('Gaming.vue 名册墙设置项接线', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    setActivePinia(createPinia())
+    for (const k of Object.keys(eventListeners)) delete eventListeners[k]
+    setWidth(1600)
+    mockGetConfig.mockResolvedValue(undefined)
+    mockPut.mockResolvedValue(undefined)
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'get_opgg_status') {
+        return {
+          mode: 'ranked',
+          patch: '16.12',
+          fetchedAt: Date.now(),
+          stale: false,
+          championCount: 5
+        }
+      }
+      return null
+    })
+  })
+
+  afterEach(() => setWidth(1600))
+
+  it('总开关 enabled=false ⇒ 整块 band 不渲染', async () => {
+    mockGetConfig.mockImplementation(async (key: string) => {
+      // mock 的是 getConfigByIpc 本身，解包已在被mock 的函数内部完成，故返回裸值
+      if (key === 'gaming.rosterWall.enabled') return false
+      return undefined
+    })
+    const { wrapper, unmount } = await mountGaming(session())
+    await flush(wrapper)
+    await flush(wrapper)
+    expect(wrapper.find('.roster-wall-band').exists()).toBe(false)
+    unmount()
+  })
+
+  it('loadCount 走设置值而非硬编码', async () => {
+    // 只断言设置被读到了（limit 的实际影响由 playerAnalysis 单测覆盖）
+    mockGetConfig.mockImplementation(async (key: string) => {
+      if (key === 'gaming.rosterWall.loadCount') return 30
+      return undefined
+    })
+    const { wrapper, unmount } = await mountGaming(session())
+    await flush(wrapper)
+    await flush(wrapper)
+    const keys = (mockGetConfig.mock.calls as unknown as [string][]).map(c => c[0])
+    expect(keys).toContain('gaming.rosterWall.loadCount')
+    unmount()
+  })
+
+  it('读取全部 9 个 ADR-3 设置 key', async () => {
+    const { wrapper, unmount } = await mountGaming(session())
+    await flush(wrapper)
+    await flush(wrapper)
+    const keys = (mockGetConfig.mock.calls as unknown as [string][]).map(c => c[0])
+    for (const k of [
+      'gaming.rosterWall.enabled',
+      'gaming.rosterWall.loadCount',
+      'gaming.rosterWall.timelineGameCount',
+      'gaming.rosterWall.showJunglePathing',
+      'gaming.rosterWall.showJungleForAll',
+      'gaming.rosterWall.showChampionUsage',
+      'gaming.rosterWall.orderPlayerBy',
+      'gaming.rosterWall.showMatchItemBorder',
+      'gaming.rosterWall.playerTags'
+    ]) {
+      expect(keys, `未读取设置 ${k}`).toContain(k)
+    }
+    unmount()
+  })
+
+  it('配置读取抛错时不阻断名册墙渲染', async () => {
+    // 只让**设置相关的 key** 抛错。整段 mock 都抛会让beforeEach 里
+    // `mockGetConfig.mockResolvedValue(undefined)` 失效，
+    // 且其他组件读配置也会炸——那样测的就不是「设置读失败」而是「配置系统坏了」。
+    mockGetConfig.mockImplementation(async (key: string) => {
+      if (key.startsWith('gaming.rosterWall.')) throw new Error('config broken')
+      return undefined
+    })
+    const { wrapper, unmount } = await mountGaming(session())
+    await flush(wrapper)
+    await flush(wrapper)
+    // 降级到默认值 ⇒ band 仍渲染
+    expect(wrapper.find('.roster-wall-band').exists()).toBe(true)
+    unmount()
+  })
+})

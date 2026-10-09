@@ -25,6 +25,10 @@ const props = defineProps<{
   masteryByChampion?: Record<string, Record<number, number>>
   selfPuuid: string
   density?: 'full' | 'slim'
+  /** 打野路径卡开关（设置项，默认开） */
+  showJunglePathing?: boolean
+  /** 非打野也显示路径卡（设置项，默认关） */
+  showJungleForAll?: boolean
   /** 容器参考宽度；缺省用 ResizeObserver 实测 */
   contentWidth?: number
 }>()
@@ -109,6 +113,8 @@ onBeforeUnmount(() => {
       :is-self-puuid="selfPuuid"
       :kda-outliers="kdaOutliers"
       :density="density"
+      :show-jungle-pathing="showJunglePathing"
+      :show-jungle-for-all="showJungleForAll"
       :history-expanded="historyExpanded"
       :tags-expanded="tagsExpanded"
       @toggle-history="toggleHistory"

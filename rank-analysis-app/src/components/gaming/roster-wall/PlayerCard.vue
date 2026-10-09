@@ -11,6 +11,7 @@
 import { computed } from 'vue'
 
 import type { PlayerProfileAnalysis } from '@renderer/features/gaming/analysis/types'
+import PlayerCardJungle from './PlayerCardJungle.vue'
 import type { PlayerTimelineSummary } from '@renderer/features/gaming/services/playerTimeline'
 import type { TagContext } from '@renderer/features/gaming/roster-wall/playerTags'
 import { buildPlayerTags, type KdaOutlier } from '@renderer/features/gaming/roster-wall/playerTags'
@@ -50,6 +51,12 @@ const props = defineProps<{
   metTotal: number
   /** 帧级画像（P1/P3）；null 或未就绪 ⇒ C 类 Tag 隐藏 */
   timeline?: PlayerTimelineSummary | null
+  /** 本局分路是否为打野（决定默认是否显示路径卡） */
+  isJunglePosition?: boolean
+  /** 打野路径卡开关（设置项 gaming.rosterWall.showJunglePathing，默认开） */
+  showJunglePathing?: boolean
+  /** 对非打野也显示路径卡（设置项 showJungleForAll，默认关） */
+  showJungleForAll?: boolean
   isSelf: boolean
   privacy?: boolean
   masked?: boolean
@@ -76,6 +83,20 @@ const ctx = computed<TagContext>(() => ({
 }))
 
 const allTags = computed(() => buildPlayerTags(props.profile, ctx.value))
+
+/**
+ * 是否渲染打野路径卡。
+ *
+ * 三道门：设置开关 → 本局分路是打野（或用户显式要求对所有人显示）→ 有帧级数据。
+ * 末位的 `gamesAnalyzed > 0` 让**无数据时不占位**——空态卡「无数据」在
+ * 名册墙上出现 10 次没有意义，不如让位给战绩行。
+ */
+const showJungleCard = computed(
+  () =>
+    props.showJunglePathing !== false &&
+    (props.isJunglePosition || props.showJungleForAll === true) &&
+    (props.timeline?.gamesAnalyzed ?? 0) > 0
+)
 const headTagIds = computed(() => new Set(allTags.value.slice(0, 4).map(t => t.id)))
 const bodyTags = computed(() => allTags.value.filter(t => !headTagIds.value.has(t.id)))
 const shownBodyTags = computed(() =>
@@ -151,6 +172,9 @@ const collapsedRows = computed(() => (props.density === 'slim' ? 3 : 5))
       :champion-name="championName"
       :mastery-by-champion="masteryByChampion"
     />
+
+    <!-- 打野路径（P5）：仅对本局分路为打野的成员显示，除非设置里开了「非打野也显示」 -->
+    <PlayerCardJungle v-if="showJungleCard" :timeline="timeline" :dense="density === 'slim'" />
 
     <PlayerCardHistory
       :games="profile.games"

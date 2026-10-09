@@ -63,6 +63,10 @@ export interface PlayerTimelineSummary {
   earlyDeathsWithEnemyJungler: number | null
   /** 打野路径出现最多的营地序列（按出现频次排序），空数组表示无数据 */
   topJunglePath: string[]
+  /** 首次清野的中位时刻（ms），null 表示无数据 */
+  medianFirstCampAtMs: number | null
+  /** 是否有样本在开局 3 分钟内开野（入侵信号） */
+  invadedEarlyRate: number | null
   /** 早期被单杀（无人协防）的比例，null 表示不可用 */
   soloDeathRate: number | null
   /** 参与资源节奏的场均次数，null 表示不可用 */
@@ -74,6 +78,8 @@ const UNAVAILABLE: PlayerTimelineSummary = {
   gamesAnalyzed: 0,
   earlyDeathsWithEnemyJungler: null,
   topJunglePath: [],
+  medianFirstCampAtMs: null,
+  invadedEarlyRate: null,
   soloDeathRate: null,
   avgContestedObjectives: null
 }
@@ -158,6 +164,14 @@ function dominantPath(paths: string[][]): string[] {
   return best[0].split('>')
 }
 
+/** 中位数：偶数个取中间两数的均值。空数组返回 null（不是 0——「没数据」≠「时刻为 0」） */
+function median(values: number[]): number | null {
+  if (values.length === 0) return null
+  const s = [...values].sort((a, b) => a - b)
+  const mid = s.length >> 1
+  return s.length % 2 === 1 ? s[mid] : (s[mid - 1] + s[mid]) / 2
+}
+
 /**
  * 跨局汇总。
  *
@@ -174,11 +188,17 @@ function summarize(entries: TimelineEntry[], puuid: string): PlayerTimelineSumma
   const soloDeaths = mine.filter(e => e.allEarlyDeathsSolo).length
   const withAnyDeath = mine.filter(e => e.earlyDeaths > 0).length
   const objectives = mine.reduce((s, e) => s + e.contestedObjectives, 0)
+  const firstCamps = mine
+    .map(e => e.firstCampAtMs)
+    .filter((v): v is number => typeof v === 'number')
+  const invaded = mine.filter(e => e.invadedBefore3min).length
 
   return {
     gamesAnalyzed: mine.length,
     earlyDeathsWithEnemyJungler: gankDeaths / mine.length,
     topJunglePath: dominantPath(mine.map(e => e.junglePath)),
+    medianFirstCampAtMs: median(firstCamps),
+    invadedEarlyRate: mine.length === 0 ? null : invaded / mine.length,
     // 没有死亡时也给 0（「无人死亡」是有效结论，不是不确定）
     soloDeathRate: withAnyDeath === 0 ? 0 : soloDeaths / withAnyDeath,
     avgContestedObjectives: objectives / mine.length

@@ -27,6 +27,8 @@ export interface RosterWallMember {
   championId: number
   /** 分路中文（由 `assignedPosition` 归一） */
   positionLabel: string
+  /** 本局分路是否为打野（驱动打野路径卡的默认可见性） */
+  isJunglePosition: boolean
   /** 本局是否系统自动分配（补位） */
   autofilled: boolean
   soloTierLabel: string | null
@@ -102,6 +104,8 @@ export function toRosterWallMember(
     summonerLevel: player.summoner?.summonerLevel ?? 0,
     championId: player.championId ?? 0,
     positionLabel: POSITION_CN[assigned.toUpperCase()] ?? '',
+    /** 本局分路是否为打野（驱动打野路径卡的默认可见性） */
+    isJunglePosition: assigned.toUpperCase() === 'JUNGLE',
     // 「本局分路与历史分析分路不一致」视为补位信号；此处由调用方按需覆盖
     autofilled: false,
     soloTierLabel: tiers[0]?.tierCn ?? null,

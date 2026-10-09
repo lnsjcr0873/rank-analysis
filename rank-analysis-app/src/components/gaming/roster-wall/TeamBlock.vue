@@ -17,6 +17,10 @@ const props = defineProps<{
   title: string
   /** 该队成员（已按设置排序） */
   members: RosterWallMember[]
+  /** 打野路径卡开关（透传给 PlayerCard） */
+  showJunglePathing?: boolean
+  /** 非打野也显示路径卡 */
+  showJungleForAll?: boolean
   columns: number
   championName: (id: number) => string
   masteryByChampion?: Record<string, Record<number, number>>
@@ -86,6 +90,9 @@ const teamSummary = computed(() => {
           :premade-group="m.premadeGroup"
           :met-total="m.metTotal"
           :timeline="m.timeline"
+          :is-jungle-position="m.isJunglePosition"
+          :show-jungle-pathing="showJunglePathing"
+          :show-jungle-for-all="showJungleForAll"
           :is-self="m.isSelf"
           :privacy="m.privacy"
           :masked="m.masked"
