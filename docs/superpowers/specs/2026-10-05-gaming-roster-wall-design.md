@@ -536,6 +536,7 @@ P1/P3/P5 依赖 Rust 侧，而本机缺 MSVC `link.exe`（proc-macro / build-scr
 | P2 TS summary 分析引擎 | ✅ | `acecb5a` `28ab2ac` `5f7a960` `0fc16e0` `f3b78e5` | ~2,000 | 8 模块 + 接入层，207 测试 |
 | P4 名册墙 UI + 接线 | ✅ | `aba20c3` `2ca225a` `d3b97ca` | ~2,400 | 9 组件 + 3 feature 模块 + 接线测试 51 例；结构金丝雀 4 组 |
 | P6 对局详情弹窗 | ✅ | `518b5e0` | +230/−27 | 复用 `getGameById` + `MatchDetailInline`，零新增后端 command |
+| P5 打野路径卡 + 设置项 | ✅ | `7402631` | +560 | 9 个设置 key 全落地；**偏离原设计：地图底图 → 纯序列**（见下） |
 | P1 Rust 批量 timeline 管道 | ✅ | `a7a1cfc` `ff7a5c5` `c12f429` `0ad722d` `d4847da` `037f4c0` `fea4bf0` `50297fc` `c234913` | ~900 | 4 文件 + 80 测试；CI 全绿（750 Rust 测试） |
 | P3 Rust frames 分析 | ⬜ | — | ~500 | 打野路径 / 前期死亡 / 目标节奏 |
 | P5 打野路径卡 + 9 设置项 | ⬜ | — | ~350 | 依赖 P1+P3 |
@@ -587,6 +588,45 @@ P1/P3/P5 依赖 Rust 侧，而本机缺 MSVC `link.exe`（proc-macro / build-scr
 > 关于第 1 条的教训：**静默失效比崩溃危险**。这类"归一化后与常量表比对"的模式
 > 必须配一条幂等断言（对每个键跑一遍归一化函数，要求结果不变），
 > 否则常量表和归一化函数任何一侧的改动都会静默生效。
+
+### P5 已交付模块
+
+| 文件 | 职责 |
+|---|---|
+| `features/gaming/roster-wall/settings.ts` | ADR-3 的 9 个 key + 逐字段校验（`normalizeRosterWallSettings`） |
+| `features/gaming/roster-wall/camps.ts` | 营地词典（与 Rust `Camp` 枚举一一对应）+ 格式化 |
+| `components/gaming/roster-wall/PlayerCardJungle.vue` | 打野路径卡（纯序列呈现） |
+
+### P5 偏离原设计：地图底图 → 纯序列
+
+原设计是 **74px 峡谷底图 + 帧热力格**，底图走 `assetPrefix + '/map/11'`。
+**没有这么做**，理由是可验证的事实而非偏好：
+
+1. `asset` 协议的分发在 `lcu/api/asset.rs:704`，只支持
+   `champion / item / perk / spell / profile`，**没有 `map` 分支**。
+2. 那套供给依赖 `ensure_caches_ready()` 从 LCU 预热图标清单，
+   而**地图图不在 LCU 图标清单里**（那是 League 客户端的资源目录）。
+
+补它等于**另写一条资产管道**（需要确定数据源：CDragon / Data Dragon / 内置打包），
+风险面从纯前端扩大到跨端，而收益只是"更有空间感"。
+故改为把后端算出的营地顺序直接排成一条链，外加首刷时刻与「3 分钟内开野」比例——
+数据全部来自既有帧级分析，零新增后端依赖。
+
+**取舍已在组件注释里写明**，避免后人误以为「地图底图漏做了」。
+
+### P5 期间的取舍
+
+| 取舍 | 理由 |
+|---|---|
+| 无数据时**整卡不渲染**（而非显示空态卡） | 空态卡在名册墙上出现 10 次没有意义，不如让位给战绩行 |
+| 未知营地**照常渲染并提示**，不丢弃 | 跳过会让用户看到的路径与服务端算出的不一致 |
+| 设置**逐字段**兜底而非整体回落 | 整体兜底会让「用户只改错 loadCount」变成「所有偏好被重置」 |
+| 挂载期 fire-and-forget 全部兜底到 `warn` | 冒泡成 mounted hook 的 unhandled rejection 会污染控制台且被 Vue 记为未处理错误 |
+
+### P5 已交付模块（设置项接线）
+
+`enabled` 控整块 band · `loadCount` 控画像局数 · `timelineGameCount` 控帧级场次 ·
+`showJunglePathing` / `showJungleForAll` 控路径卡可见性。
 
 ---
 
