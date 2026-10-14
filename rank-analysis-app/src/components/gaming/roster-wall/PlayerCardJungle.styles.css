@@ -1,0 +1,138 @@
+/* 打野路径卡（P5）
+   纯序列呈现，无地图底图——理由见 PlayerCardJungle.vue 的注释。
+   配色走 --tag-* / --champ-* 语义 token，不写死色值。 */
+
+.pjungle {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-6) var(--space-8);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.pjungle-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.pjungle-title {
+  font-size: var(--font-size-2xs);
+  color: var(--text-tertiary);
+}
+
+.pjungle-samples {
+  font-family: var(--font-num);
+  font-size: var(--font-size-2xs);
+  color: var(--text-tertiary);
+}
+
+/* ---- 路径序列 ---- */
+
+.pjungle-path {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pjungle-step {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 18px;
+  padding: 0 var(--space-4);
+  font-size: var(--font-size-2xs);
+  border-radius: 2px;
+  /* 序号间的连接线：用左侧细边框表示「下一步」 */
+  border-left: 1px solid var(--border-subtle);
+}
+
+.pjungle-step:first-child {
+  border-left: none;
+}
+
+.pjungle-step-label {
+  white-space: nowrap;
+}
+
+/* buff / 目标资源是路径的骨架，用语义色高亮；补刀营地保持中性，
+   避免整条链五颜六色反而看不出节奏 */
+.pjungle-step--buff {
+  color: var(--tag-on-warn);
+  background: var(--tag-warn);
+}
+
+.pjungle-step--objective {
+  color: var(--tag-on-info);
+  background: var(--tag-info);
+}
+
+.pjungle-step--farm {
+  color: var(--text-secondary);
+  background: var(--bg-sunken);
+}
+
+/* ---- 元信息 ---- */
+
+.pjungle-meta {
+  display: flex;
+  gap: var(--space-12);
+  margin: 0;
+}
+
+.pjungle-meta-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-4);
+}
+
+.pjungle-meta dt {
+  font-size: var(--font-size-2xs);
+  color: var(--text-tertiary);
+}
+
+.pjungle-meta dd {
+  margin: 0;
+  font-family: var(--font-num);
+  font-size: var(--font-size-2xs);
+  color: var(--text-secondary);
+}
+
+/* ---- 降级态 ---- */
+
+.pjungle-empty {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-6);
+  margin: 0;
+}
+
+.pjungle-empty-title {
+  font-size: var(--font-size-2xs);
+  color: var(--text-secondary);
+}
+
+.pjungle-empty-reason {
+  font-size: var(--font-size-2xs);
+  color: var(--text-tertiary);
+}
+
+/* 口径不一致提示：不是错误，但要让用户知道看到的路径未必完整 */
+.pjungle-hint {
+  margin: 0;
+  font-size: var(--font-size-2xs);
+  color: var(--tag-on-warn);
+}
+
+/* ---- slim 档：只留序列，纵向让给战绩行 ---- */
+
+.pjungle--dense {
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-8);
+}

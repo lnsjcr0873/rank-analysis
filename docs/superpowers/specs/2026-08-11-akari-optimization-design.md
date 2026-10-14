@@ -3,7 +3,7 @@
 > **本文档是后续一切开发的唯一权威参考。** 修改任何功能前先读本文档对应章节;
 > 计划变更时同步更新本文档并 bump `计划版本`。
 >
-> - 计划版本: v1.7(2026-08-17)
+> - 计划版本: v1.8(2026-10-05)
 > - 目标仓库: rank-analysis(Tauri 2 + Rust + Vue 3 + TS)
 > - 对标仓库: LeagueAkari(Electron + Vue + TS,本机 `D:\lolzhushou\LeagueAkari`)
 > - 两个仓库均已建立 codegraph 索引。**查代码一律用 codegraph**,不要 grep:
@@ -30,6 +30,7 @@
 11. [技术决策记录(ADR)](#11-技术决策记录adr)
 12. [风险清单](#12-风险清单)
 13. [参考:Akari 对标文件索引](#13-参考akari-对标文件索引)
+14. [方向 G:对局页名册墙(Akari 卡片墙移植)](#14-方向-g对局页名册墙akari-卡片墙移植)
 
 ---
 
@@ -721,6 +722,87 @@ D3/方向D AI 增强(独立推进,可与 C 并行)
 
 ---
 
+## 14. 方向 G:对局页名册墙(Akari 卡片墙移植)
+
+> **完整方案见独立文档:[`2026-10-05-gaming-roster-wall-design.md`](./2026-10-05-gaming-roster-wall-design.md)**
+> 效果图:`D:\lolzhushou\gaming-roster-prototype.html`(单文件,浏览器直开)
+>
+> 本节仅为总览索引,细节以独立文档为准。
+
+**背景**:方向 A–E 全部聚焦**战绩页/详情页**(`/Record` + `MatchDetailInline`),
+`/Gaming`(对局中)始终只有「情报湾 + 一行式名册」(`RosterRow`)。
+Akari 的 `ongoing-game` 面板在**历史画像深度**上远超我们:240px 情报卡内含
+50 场战绩列表 · 英雄使用环 · 完整打野路径 · 21 个玩家 Tag。
+
+**三个改变方案走向的尽调事实**(2026-10-05 codegraph + 源码实测):
+
+1. **50 场 summary + 全员 `game_detail` 已经在手** —— `command/session.rs` 的
+   `enrich_game_detail()`(并发 3)已把每局全 10 人 stats 填满并随
+   `session-player-update` 送到前端。⇒ **summary 类分析零新增 IPC、零新增网络请求**。
+2. **frames 类必须走 SGP 且成本被放大 6×** —— `position` / `damage_stats` 是 SGP-only;
+   `get_sgp_match_detail` 无批量;最坏 3 次传输重试 × 2 代 host/token。
+   ⇒ 只对 2 个打野位拉、默认 6 场、`buffer_unordered(3)` + `Semaphore(4)` + 熔断。
+3. **17 分制已有 Rust 权威实现** —— `command/score.rs::score_participants`(纯函数)
+   + 同步 IPC 入口 `compute_player_scores`(inputs 从 JS 传入)。
+   ⇒ Akari 的 `scoring.ts` / `akari.ts` **一行不移植**,否则会出现两个 17 分制。
+
+**核心 ADR**:
+
+| ADR | 决策 |
+|---|---|
+| G-1 | 分析分层:**summary 留前端 TS**(移植 ~1,000 行),**frames 下沉 Rust**(移植 ~530 行)。切分线是**数据可得性**,不是复杂度 |
+| G-2 | 17 分制唯一权威源在 Rust,前端只做跨局聚合薄壳 |
+| G-3 | 新增 IPC 仅 1 个:`get_player_timelines(region, game_ids)`(照抄 `get_sgp_ranks_by_puuids` 的三条不变式) |
+| G-4 | 布局:`Gaming.vue` L313 `.intel-bay` 之后新增全宽 band,**不动** `.roster`(定位不同:本 band = 历史画像墙,`.roster` = 本局决策行),靠密度档互斥 |
+| G-5 | **不新建 SQLite 表**,对齐 `2026-08-18-storage-schema-v2-design.md` §3(打野路径是由 `games.json_payload` 可完全重算的派生量,不落盘) |
+| G-6 | 列数直接复用 Akari 公式 `contentWidth > 240*(col+0.25)` |
+
+**21 Tag 可得性分级**(移植前必须先分清,否则会做出「有 tag 但数据是空的」假实现):
+
+| 级别 | 数量 | 内容 | 数据来源 |
+|---|---|---|---|
+| A 类 | 15 | 我/预组/遇见过/连胜/连跪/高胜率/卓越/17分/输出占比/承伤占比/经济占比/刀分/伤金/视野/人头怪·伤害型 | **已有数据纯前端算** |
+| B 类 | 2 | 单杀/敌人消失 | SGP summary 字段,LCU 路径为 null ⇒ tag 隐藏 |
+| C 类 | 4 | 极好抓/好抓/难抓/可疑闪现 | 需 SGP frames(P4 才有) |
+| 不可得 | 1 | 隐私 | LCU 不返回 `privacy`,**直接不做** |
+
+**里程碑**:
+
+| 里程碑 | 内容 | 状态 |
+|---|---|---|
+| P0 | 修 `scouting/mod.rs:362` 单元素切片 bug(17 分里 11 分 team-relative 维度当前恒为常数) | ⬜ 独立 PR,行为变更 |
+| P1 | Rust 批量 timeline 管道(`timeline/{mod,geometry,constants}.rs` + `command/timeline.rs` + golden corpus) | ⬜ |
+| P2 | TS summary 分析引擎(`features/gaming/analysis/` 12 文件,直接搬 Akari 6 个测试文件) | ⬜ |
+| P3 | Rust frames 分析接线(纯函数接真实 SGP 路径) | ⬜ |
+| P4 | 名册墙 UI(`components/gaming/roster-wall/` 13 文件 + 结构金丝雀测试) | ⬜ |
+| P5 | 打野路径卡 + 9 个设置项 | ⬜ |
+| P6 | 密度三档 + 性能 + 门禁收尾 | ⬜ |
+
+**规模**:新增 TS/Vue ~2,400 行 + Rust ~700 行 + 测试 ~1,500 行;
+新增 IPC 命令 1 个;新增 SQLite 表 **0**;新增依赖 **0**。
+
+**Akari 对标补充索引**(方向 G 用):
+
+| 我们的需求 | Akari 参照文件 | 借鉴点 |
+|---|---|---|
+| 情报卡骨架 | `renderer-shared/components/ongoing-game-panel/OngoingGamePanel.vue` + `OngoingGameTeam.vue` | `columnsNeed` 公式、上下堆叠、premade 描边 |
+| 240px 情报卡 | `.../player-info-card/PlayerInfoCard.vue` | 6 段式结构(头部/三栏/打野路径/Tag/英雄环/战绩列表) |
+| 三栏统计 | `.../PlayerInfoCardStats.vue` | 胜率 0.53·0.47 分档 + IQR 0.65 离群 KDA 染色 |
+| 英雄使用环 | `.../PlayerInfoCardChampionUsage.vue` | 胜率 ring(蓝/红)+ 熟练度 ≥60 加星 |
+| 50 场战绩行 | `.../PlayerInfoCardMatchHistory.vue` | 34px 行高、胜负底色、`NVirtualList` |
+| 打野路径 | `.../PlayerInfoCardJunglePathing.vue` + `renderer-shared/components/jungle-pathing-analysis/GankMap.vue` | 帧热力格(`KILL_WEIGHT=5`)、首刷/Lv3/Lv4 判定 |
+| 21 个 Tag | `.../player-card-tags/`(index/basic/akari-score/great-performance/met/suspicious-flash-position/tagged) | 阈值体系 + 每 tag 独立开关 |
+| summary 分析引擎 | `shared/data-adapter/analysis/player/`(1,517 行生产) | 拆:前端 ~1,000 / Rust ~530 |
+| 队伍聚合 | `shared/data-adapter/analysis/team/index.ts` | `akariScoreCv` / `akariScoreBsi` |
+| 对局设置 | `shared/shards/ongoing-game/settings.ts` | 9 个 key 语义对齐 |
+
+⚠️ **移植时的 3 个硬约束**:
+1. Akari 的 21 个 tag 色板是硬编码 hex(违反 `CODE_QUALITY.md` 设计系统禁令)⇒ 必须映射到 `--tag-*` 语义 token;Akari 的 9px 字号需上调到 10px 下限
+2. Akari 的 analysis 里有 **MobX reaction 缓存**(`previous.map[gameId]` 跳过昂贵 timeline 计算),rank 无对应物 ⇒ 改为**纯函数 + 上层按 gameId 集合 memo**
+3. Akari `aggregate/win-loss.ts` **直接调 `Date.now()`** ⇒ 移植时需注入时钟,否则测试不可确定
+
+---
+
 ## 附:文档维护约定
 
 - 本文档路径: `rank-analysis/docs/superpowers/specs/2026-08-11-akari-optimization-design.md`
@@ -746,3 +828,4 @@ D3/方向D AI 增强(独立推进,可与 C 并行)
 | v1.6.3 | 2026-08-14 | **成长报告接入分时画像(D-P3 完善)**:`summarizeMinuteCurve` 从场均分钟曲线提炼确定性特征(15/25 分钟累计补刀锚点、15 分钟前与全场累计死亡、死亡集中段=累计增速最快≤3 分钟、参团活跃段=每分钟参团击杀峰值、场均参团击杀/分钟)——原样而非长数组喂 LLM;生成报告前曲线未加载则先串行拉取(SGP 帧流,失败降级不带画像不阻塞报告);prompt 新增「分时画像」事实块(引用禁止改写),纪律区由「没有数据的维度(如分时曲线)一律不分析」改为「未提供的维度一律不分析」。单测 10 例(summarize 4 + prompt 3 + 组件 2 + 透传 1);全量 vitest 1086/1086;CI run `31818136851` |
 | v1.6.4 | 2026-08-15 | **战绩行参团率修复 + 行卡增强**:①参团率恒 0% 根因——Rust `calculate()` 算了金/伤/承/治占比却从未填充 `stats.group_rate`,现按同队总击杀补写((kills+assists)/teamKills,CHERRY 按 subteam 与 MVP 评分同分母,上限 100%,分母 0 保持 0)→ 前端战绩行不再恒显示 0%。②行卡增强:CS/分钟(含野怪,时长异常降级 0.0)、召唤师技能两枚小图标(头像左上竖排,MatchHistory 已预载 spell 资源)、模式短名(单双/灵活/极地/斗魂…未知 queueId 退回 queueName 前 4 字)、时长 hover 显示对局日期(MM-DD HH:mm)。新增 RecordCard 专属单测 9 例,前端全量 vitest 1095/1095;Rust 单测+2(参团率 100%/94% 截断与分母 0),CI run `31853244796` 全绿(win+mac 双矩阵) |
 | v1.7 | 2026-08-17 | **文档同步收尾(无代码改动)**:①补 §3 里程碑总览表 M4/M5 行(此前 v1.3 已新增里程碑但总览表未同步),并为 M0-M5 全部加「状态」列标记 ✅(对应实现版本);②头部「计划版本」从 v1.3 对齐到 v1.7;③方向 E 任务卡 E1-1..E5-1/E-测试 补 ✅(v1.4 已全部落地);④方向 F 任务卡 F1-1..F4-1/F-测试 补 ✅(v1.5 已全部落地,codegraph 复核 `fetch_match_detail`/`SGP_DETAIL_CACHE`/`collectSgpHistoryAll`/`services/sgp.ts` 均在);⑤§10 里程碑定义表补完成状态列 |
+| v1.8 | 2026-10-05 | **新增方向 G:对局页名册墙(Akari 卡片墙移植)** —— 补齐方向 A–E 唯一未覆盖的 `/Gaming` 历史画像深度差距。完整方案落独立文档 `2026-10-05-gaming-roster-wall-design.md`,本节仅索引。①三个改变方案走向的尽调事实:50 场 summary+全员 `game_detail` 已随 session 下发(summary 类零新增请求)/ frames 必须走 SGP 且最坏 6× 放大(只对 2 打野位×6 场)/ 17 分制已有 Rust 权威实现(Akari scoring 一行不移植);②6 条核心 ADR(分析按数据可得性分层 / 17 分制单一权威源 / 新增 IPC 仅 1 个 / 布局新增 band 不动 `.roster` / **不新建 SQLite 表**对齐 storage v2 / 复用 `columnsNeed` 公式);③21 Tag 的 A(15,零新增数据)/B(2,需 SGP summary)/C(4,需 SGP frames)/不可得(1,LCU 不返回 `privacy`)四级可得性分级;④P0–P6 里程碑(规模:TS/Vue ~2,400 + Rust ~700 + 测试 ~1,500 行);⑤**附带记录一个既有 bug**:`scouting/mod.rs:362` 传单元素切片给 `score_participants`,致 6 个 team-relative 维度(17 分里 11 分)对每个敌人恒为常数,敌方威胁评级实际只由 KDA+刀分+胜负驱动 —— 列为 P0 独立 PR(行为变更) |

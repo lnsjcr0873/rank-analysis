@@ -1,0 +1,90 @@
+/* 名册墙队伍块样式（外置）。
+   队伍块本身不给卡片壳——卡片壳在 PlayerCard 上，避免 10 张卡再套 2 层边框。 */
+
+.rw-team {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+/* 上下堆叠时两队之间留足呼吸：标题行 + 卡片行 */
+.rw-team + .rw-team {
+  margin-top: var(--space-16);
+}
+
+.rw-team-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.rw-team-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+}
+
+.rw-team-dot--ally {
+  background: var(--info);
+  box-shadow: 0 0 6px var(--info-border);
+}
+
+.rw-team-dot--enemy {
+  background: var(--loss);
+  box-shadow: 0 0 6px var(--loss-border);
+}
+
+.rw-team-title {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-black);
+  letter-spacing: var(--tracking-wide);
+  color: var(--text-primary);
+}
+
+.rw-team-meta {
+  font-family: var(--font-num);
+  font-size: var(--font-size-2xs);
+  color: var(--text-secondary);
+}
+
+.rw-team-empty {
+  margin-left: auto;
+  font-size: var(--font-size-2xs);
+  color: var(--warn);
+}
+
+/* 卡片网格：列数由 JS 注入 grid-template-columns */
+.rw-team-grid {
+  display: grid;
+  gap: var(--space-8);
+  align-items: start;
+}
+
+/* 无画像占位卡：与真卡同宽同高，保持网格节奏不塌 */
+.rw-card-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  width: 240px;
+  height: 268px;
+  padding: var(--space-8);
+  border: 1px dashed var(--border-subtle);
+  border-radius: 4px;
+  text-align: center;
+}
+
+.rw-card-empty-title {
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  color: var(--text-tertiary);
+}
+
+.rw-card-empty-reason {
+  font-size: var(--font-size-2xs);
+  color: var(--text-tertiary);
+  opacity: 0.8;
+}

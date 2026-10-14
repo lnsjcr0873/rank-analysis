@@ -1,0 +1,87 @@
+/* 名册墙情报卡样式（外置）。
+   见 CLAUDE.md：大段样式必须外置并以 <style scoped src> 引用，
+   且必须配套结构金丝雀测试（__tests__/PlayerCard.spec.ts）防止提交链路静默丢失。 */
+
+.pcard {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  width: 240px;
+  padding: var(--space-8);
+  overflow: hidden;
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  transition: filter var(--dur-fast) var(--ease-expo);
+}
+
+.pcard:hover {
+  filter: brightness(1.14);
+}
+
+/* 预组队：卡片描边取该组字母色（--pcard-premade 由父级 TeamBlock 注入） */
+.pcard--premade {
+  border-color: var(--pcard-premade, var(--info-border));
+}
+
+/* 本人：金色 8% 底衬，不与「预组」色标混淆 */
+.pcard--self {
+  background: color-mix(in srgb, var(--brand) 8%, var(--surface-card));
+}
+
+/* 预组队右上角菱形 */
+.pcard-deco {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 0;
+  width: 14px;
+  height: 14px;
+  transform: translate(50%, -50%) rotate(45deg);
+  background: var(--pcard-premade, var(--info));
+}
+
+.pcard-deco[data-group='A'] {
+  --pcard-premade: var(--tag-info);
+}
+.pcard-deco[data-group='B'] {
+  --pcard-premade: var(--tag-win);
+}
+.pcard-deco[data-group='C'] {
+  --pcard-premade: var(--tag-warn);
+}
+.pcard-deco[data-group='D'] {
+  --pcard-premade: var(--tag-neutral);
+}
+
+/* 标签区：与头部标签行（PlayerCardHeader 内）区分开，独立成块便于折行 */
+.pcard-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-bottom: var(--space-4);
+}
+
+.pcard-tags-more {
+  display: flex;
+  justify-content: center;
+  margin-bottom: var(--space-4);
+}
+
+.pcard-tags-toggle {
+  font: inherit;
+  font-family: var(--font-num);
+  font-size: var(--font-size-2xs);
+  color: var(--text-tertiary);
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: 2px;
+  padding: 0 var(--space-4);
+  cursor: pointer;
+}
+
+.pcard-tags-toggle:hover {
+  color: var(--text-secondary);
+  border-color: var(--border-strong);
+}

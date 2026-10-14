@@ -54,6 +54,15 @@
   color: var(--text-on-brand);
 }
 
+/* ---- 名册墙 band（Akari 情报卡）：插在情报舱与名册行之间 ----
+   只负责「带」级别的间距与横向留白；卡内样式全部归
+   components/gaming/roster-wall/*.styles.css 所有。 */
+.roster-wall-band {
+  margin-bottom: var(--space-12);
+  /* 全宽带：情报舱与名册行各自有背景，名册墙靠负边距与两侧对齐 */
+  padding: 0;
+  min-width: 0;
+}
 /* ---- 情报舱（v3）：单一容器三区结构 ---- */
 .intel-bay {
   background: var(--bg-surface);

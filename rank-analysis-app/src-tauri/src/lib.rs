@@ -27,3 +27,4 @@ pub mod score;
 pub mod scouting;
 pub mod shard;
 pub mod state;
+pub mod timeline;
